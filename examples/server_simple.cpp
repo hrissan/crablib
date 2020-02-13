@@ -1,18 +1,15 @@
 // Copyright (c) 2007-2019, Grigory Buteyko aka Hrissan
 // Licensed under the MIT License. See LICENSE for details.
 
-#include <algorithm>
 #include <iostream>
-#include <set>
-#include <sstream>
 
 #include <crab/crab.hpp>
 
-using namespace crab;
+namespace http = crab::http;
 
 int main() {
 	std::cout << "This is simple HTTP server" << std::endl;
-	RunLoop runloop;
+	crab::RunLoop runloop;
 
 	http::Server server("0.0.0.0", 7000);
 

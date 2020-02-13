@@ -1,13 +1,12 @@
 // Copyright (c) 2007-2019, Grigory Buteyko aka Hrissan
 // Licensed under the MIT License. See LICENSE for details.
 
-#include <algorithm>
 #include <iostream>
 #include <map>
 
 #include <crab/crab.hpp>
 
-using namespace crab;
+namespace http = crab::http;
 
 class ServerLongPollApp {
 public:
@@ -45,7 +44,7 @@ private:
 		}
 	}
 	http::Server server;
-	Timer timer;
+	crab::Timer timer;
 	size_t ticks_counter = 0;
 	std::map<http::Client *, size_t> waiting_clients;
 	std::map<size_t, http::Client *> waiting_clients_inv;
@@ -53,7 +52,7 @@ private:
 
 int main(int argc, char *argv[]) {
 	std::cout << "This server responds to requests approximately after 5 seconds" << std::endl;
-	RunLoop runloop;
+	crab::RunLoop runloop;
 
 	ServerLongPollApp app(7000);
 

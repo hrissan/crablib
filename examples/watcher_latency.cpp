@@ -1,7 +1,6 @@
 // Copyright (c) 2007-2020, Grigory Buteyko aka Hrissan
 // Licensed under the MIT License. See LICENSE for details.
 
-#include <algorithm>
 #include <iostream>
 #include <mutex>
 #include <thread>
@@ -9,7 +8,6 @@
 #include <crab/crab.hpp>
 
 using steady_clock = std::chrono::steady_clock;
-using namespace crab;
 
 class TestAsyncCallsApp {
 public:
@@ -31,9 +29,9 @@ private:
 		}
 	}
 	void thread_run() {
-		RunLoop r2;
-		std::unique_ptr<Timer> t2;
-		t2.reset(new Timer([&]() {
+		crab::RunLoop r2;
+		std::unique_ptr<crab::Timer> t2;
+		t2.reset(new crab::Timer([&]() {
 			{
 				std::unique_lock<std::mutex> lock(mut);
 				call_times.push_back(steady_clock::now());
@@ -46,18 +44,18 @@ private:
 	}
 	std::mutex mut;
 	std::vector<steady_clock::time_point> call_times;
-	Watcher ab;
+	crab::Watcher ab;
 
 	std::thread th;
 };
 
 int main(int argc, char *argv[]) {
-	RunLoop runloop;
+	crab::RunLoop runloop;
 	TestAsyncCallsApp app;
-	std::unique_ptr<Idle> idle;
+	std::unique_ptr<crab::Idle> idle;
 	if (argc == 2 && std::string(argv[1]) == "--idle") {
 		std::cout << "Testing with on_idle, use thread pinning for best results" << std::endl;
-		idle.reset(new Idle(([]() {})));
+		idle.reset(new crab::Idle(([]() {})));
 	}
 	runloop.run();
 	return 0;

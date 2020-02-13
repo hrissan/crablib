@@ -276,7 +276,7 @@ private:
 
 class DNSResolver {
 public:
-	typedef std::function<void(std::vector<std::string> names)> DNS_handler;
+	typedef std::function<void(const std::vector<std::string> &names)> DNS_handler;
 
 	explicit DNSResolver(DNS_handler &&handler);
 	~DNSResolver() { cancel(); }

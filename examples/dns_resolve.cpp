@@ -1,25 +1,20 @@
 // Copyright (c) 2007-2019, Grigory Buteyko aka Hrissan
 // Licensed under the MIT License. See LICENSE for details.
 
-#include <algorithm>
 #include <iostream>
-#include <set>
-#include <sstream>
 
 #include <crab/crab.hpp>
 
-using namespace crab;
-
 int main(int argc, char *argv[]) {
-	DNSWorker dns_worker;
-	RunLoop runloop;
+	crab::DNSWorker dns_worker;
+	crab::RunLoop runloop;
 
-	DNSResolver res([](std::vector<std::string> result) {
+	crab::DNSResolver res([](const std::vector<std::string> &result) {
 		std::cout << "names resolved" << std::endl;
-		for (auto na : result) {
+		for (const auto &na : result) {
 			std::cout << " name resolved=" << na << std::endl;
 		}
-		RunLoop::current()->cancel();
+		crab::RunLoop::current()->cancel();
 	});
 
 	//  Uncomment for some async dance

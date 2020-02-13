@@ -1,10 +1,8 @@
 // Copyright (c) 2007-2019, Grigory Buteyko aka Hrissan
 // Licensed under the MIT License. See LICENSE for details.
 
-#include <algorithm>
 #include <iostream>
 #include <set>
-#include <sstream>
 
 #include <crab/crab.hpp>
 
@@ -41,7 +39,7 @@ static const char HTML[] = R"zzz(
    </body></html>
 )zzz";
 
-using namespace crab;
+namespace http = crab::http;
 
 class ServerComplexApp {
 public:
@@ -55,7 +53,7 @@ public:
 				return true;
 			}
 			if (request.r.uri == "/quit") {
-				RunLoop::current()->cancel();
+				crab::RunLoop::current()->cancel();
 				return true;
 			}
 			if (request.r.uri == "/ws") {
@@ -74,7 +72,7 @@ public:
 			} else {
 				http::Server::write(who, http::WebMessage("Echo from Crab: " + message.body));
 			}
-			RunLoop::current()->print_records();
+			crab::RunLoop::current()->print_records();
 		};
 		stat_timer.once(1);
 	}
@@ -83,7 +81,7 @@ private:
 	void on_stat_timer() {
 		stat_timer.once(1);
 
-		const auto &st = RunLoop::get_stats();
+		const auto &st = crab::RunLoop::get_stats();
 		std::cout << " ---- req_counter=" << req_counter << " EPOLL_count=" << st.EPOLL_count
 		          << " EPOLL_size=" << st.EPOLL_size << std::endl;
 		std::cout << "RECV_count=" << st.RECV_count << " RECV_size=" << st.RECV_size << std::endl;
@@ -94,14 +92,14 @@ private:
 			                     " connected_clients=" + std::to_string(connected_sockets.size())));
 	}
 	http::Server server;
-	Timer stat_timer;
+	crab::Timer stat_timer;
 	size_t req_counter = 0;
 	std::set<http::Client *> connected_sockets;
 };
 
 int main(int argc, char *argv[]) {
 	std::cout << "This server has echo web-socket responder built-in. Open '/' in browser to play" << std::endl;
-	RunLoop runloop;
+	crab::RunLoop runloop;
 
 	ServerComplexApp app(7000);
 

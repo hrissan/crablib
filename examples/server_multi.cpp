@@ -1,18 +1,15 @@
 // Copyright (c) 2007-2019, Grigory Buteyko aka Hrissan
 // Licensed under the MIT License. See LICENSE for details.
 
-#include <algorithm>
 #include <iostream>
-#include <set>
-#include <sstream>
 
 #include <crab/crab.hpp>
 
-using namespace crab;
+namespace http = crab::http;
 
 int test_http(size_t num, uint16_t port) {
 	std::string body = "Hello, Crab " + std::to_string(num) + "!";
-	RunLoop runloop;
+	crab::RunLoop runloop;
 
 	http::Server server("0.0.0.0", port);
 	server.r_handler = [&](http::Client *who, http::RequestBody &&request, http::ResponseBody &response) -> bool {
