@@ -1,0 +1,43 @@
+// Copyright (c) 2007-2019, Grigory Buteyko aka Hrissan
+// Licensed under the MIT License. See LICENSE for details.
+
+#include <algorithm>
+#include <iostream>
+#include <set>
+#include <sstream>
+
+#include <crab/crab.hpp>
+
+using namespace crab;
+
+int test_http(size_t num, uint16_t port) {
+	std::string body = "Hello, Crab " + std::to_string(num) + "!";
+	RunLoop runloop;
+
+	http::Server server("0.0.0.0", port);
+	server.r_handler = [&](http::Client *who, http::RequestBody &&request, http::ResponseBody &response) -> bool {
+		response.r.status       = 200;
+		response.r.content_type = "text/plain; charset=utf-8";
+		response.set_body(std::string(body));
+		return true;
+	};
+
+	runloop.run();
+	return 0;
+}
+
+int main(int argc, char *argv[]) {
+	auto th_count = std::thread::hardware_concurrency();
+	std::cout << "This server uses " << th_count
+	          << " threads, your system must support binding several TCP acceptors to the same port" << std::endl;
+
+	std::vector<std::thread> ths;
+	for (size_t i = 1; i < th_count; ++i)
+		ths.emplace_back(&test_http, i, uint16_t(7000));
+	test_http(0, 7000);
+	while (!ths.empty()) {
+		ths.back().join();
+		ths.pop_back();
+	}
+	return 0;
+}
