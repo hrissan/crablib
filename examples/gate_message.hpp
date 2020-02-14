@@ -8,6 +8,8 @@
 #include <sstream>
 #include <string>
 
+#include <crab/crab.hpp>
+
 struct LatencyMessage {
 public:
 	LatencyMessage() = default;
@@ -54,4 +56,50 @@ public:
 			result += "|" + *id2;
 		return result + "\n" + std::to_string(creation_tp) + "\n" + lat + "\n" + body;
 	}
+};
+
+struct MDSettings {
+    std::string upstream_address = "127.0.0.1";
+    uint16_t upstream_tcp_port = 7000;
+    uint16_t upstream_http_port = 7001;
+
+    std::string md_gate_address = "127.0.0.1";
+    uint16_t md_gate_udp_a_port = 7002;
+    std::string md_gate_udp_a_address = "239.195.13.117";
+    uint16_t md_gate_udp_ra_port = 7003;
+    std::string md_gate_udp_ra_address = "239.195.14.117";
+    uint16_t md_gate_http_port = 7004;
+};
+
+struct Msg {
+    uint64_t seqnum = 0;
+    uint64_t payload = 0;
+    Msg() = default;
+    Msg(uint64_t seqnum, uint64_t payload) : seqnum(seqnum), payload(payload) {}
+    void write(crab::OStream * os) const {
+        os->write(reinterpret_cast<const uint8_t *>(&seqnum), sizeof(uint64_t));
+        os->write(reinterpret_cast<const uint8_t *>(&payload), sizeof(uint64_t));
+    }
+    void read(crab::IStream * is) {
+        is->read(reinterpret_cast<uint8_t *>(&seqnum), sizeof(uint64_t));
+        is->read(reinterpret_cast<uint8_t *>(&payload), sizeof(uint64_t));
+    }
+
+    static constexpr size_t size = sizeof(uint64_t) * 2;
+};
+
+struct MDRequest {
+    uint64_t begin = 0;
+    uint64_t end = 0;
+    MDRequest() = default;
+    MDRequest(uint64_t begin, uint64_t end) : begin(begin), end(end) {}
+    void write(crab::OStream * os) const {
+        os->write(reinterpret_cast<const uint8_t *>(&begin), sizeof(uint64_t));
+        os->write(reinterpret_cast<const uint8_t *>(&end), sizeof(uint64_t));
+    }
+    void read(crab::IStream * is) {
+        is->read(reinterpret_cast<uint8_t *>(&begin), sizeof(uint64_t));
+        is->read(reinterpret_cast<uint8_t *>(&end), sizeof(uint64_t));
+    }
+    static constexpr size_t size = sizeof(uint64_t) * 2;
 };

@@ -73,7 +73,7 @@ CRAB_INLINE void Server::on_client_handler(std::list<Client>::iterator it) {
 }
 
 CRAB_INLINE void Server::accept_all() {
-	while (la_socket.can_accept()) {  // clients.size() < max_incoming_connections &&
+	while (la_socket.can_accept()) {  // && clients.size() < max_incoming_connections &&
 		clients.emplace_back();
 		auto it = --clients.end();
 		it->set_handlers([this, it]() { on_client_handler(it); }, [this, it]() { on_client_disconnected(it); });

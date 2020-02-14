@@ -170,19 +170,47 @@ void Buffer::write(const char *val, size_t count) {
     write(reinterpret_cast<const uint8_t *>(val), count);
 }*/
 
-CRAB_INLINE size_t OMemoryStream::write_some(const uint8_t *val, size_t count) {
-	wimpl->insert(wimpl->end(), val, val + count);
-	return count;
+CRAB_INLINE size_t IMemoryStream::read_some(uint8_t *val, size_t count) {
+    size_t rc = std::min(count, si);
+    std::memcpy(val, data, rc);
+    data += rc;
+    si -= rc;
+    return rc;
 }
 
-CRAB_INLINE size_t IMemoryStream::read_some(uint8_t *val, size_t count) {
+CRAB_INLINE size_t IMemoryStream::write_to(OStream &out, size_t max_count) {
+    size_t total_count = 0;
+    while (true) {
+        size_t rc = std::min(size(), max_count);
+        if (rc == 0)
+            break;
+        size_t count = out.write_some(data, rc);
+        data += count;
+        si -= rc;
+        max_count -= count;
+        total_count += count;
+        if (count == 0)
+            break;
+    }
+    return total_count;
+}
+
+CRAB_INLINE size_t OMemoryStream::write_some(const uint8_t *val, size_t count) {
+    size_t rc = std::min(count, si);
+    std::memcpy(data, val, rc);
+    data += rc;
+    si -= rc;
+    return rc;
+}
+
+CRAB_INLINE size_t IVectorStream::read_some(uint8_t *val, size_t count) {
 	size_t rc = std::min(count, rimpl->size() - read_pos);
 	std::memcpy(val, rimpl->data() + read_pos, rc);
 	read_pos += rc;
 	return rc;
 }
 
-CRAB_INLINE size_t IMemoryStream::write_to(OStream &out, size_t max_count) {
+CRAB_INLINE size_t IVectorStream::write_to(OStream &out, size_t max_count) {
 	size_t total_count = 0;
 	while (true) {
 		size_t rc = std::min(size(), max_count);
@@ -198,9 +226,10 @@ CRAB_INLINE size_t IMemoryStream::write_to(OStream &out, size_t max_count) {
 	return total_count;
 }
 
-CRAB_INLINE size_t OStringStream::write_some(const uint8_t *val, size_t count) {
-	wimpl->insert(wimpl->end(), val, val + count);
-	return count;
+
+CRAB_INLINE size_t OVectorStream::write_some(const uint8_t *val, size_t count) {
+    wimpl->insert(wimpl->end(), val, val + count);
+    return count;
 }
 
 CRAB_INLINE size_t IStringStream::read_some(uint8_t *val, size_t count) {
@@ -224,6 +253,12 @@ CRAB_INLINE size_t IStringStream::write_to(OStream &out, size_t max_count) {
 			break;
 	}
 	return total_count;
+}
+
+
+CRAB_INLINE size_t OStringStream::write_some(const uint8_t *val, size_t count) {
+    wimpl->insert(wimpl->end(), val, val + count);
+    return count;
 }
 
 /*

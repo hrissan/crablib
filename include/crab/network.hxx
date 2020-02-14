@@ -7,6 +7,11 @@
 
 namespace crab {
 
+CRAB_INLINE void TCPSocket::set_handlers(Handler &&rw_handler, Handler &&d_handler) {
+    this->rw_handler = std::move(rw_handler);
+    this->d_handler = std::move(d_handler);
+}
+
 CRAB_INLINE void RunLoop::push_record(const char *event_type, size_t count) {
 	performance.emplace_back(std::chrono::steady_clock::now(), event_type, count);
 }

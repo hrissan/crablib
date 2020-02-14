@@ -62,11 +62,16 @@ else()
 endif(WIN32)
 
 add_executable(dns_resolve ${SOURCE_FILES} examples/dns_resolve.cpp)
-add_executable(server_simple ${SOURCE_FILES} examples/server_simple.cpp)
-add_executable(server_longpoll ${SOURCE_FILES} examples/server_longpoll.cpp)
-add_executable(server_multi ${SOURCE_FILES} examples/server_multi.cpp)
-add_executable(server_complex ${SOURCE_FILES} examples/server_complex.cpp)
 add_executable(watcher_latency ${SOURCE_FILES} examples/watcher_latency.cpp)
+
+add_executable(http_server_simple ${SOURCE_FILES} examples/http_server_simple.cpp)
+add_executable(http_server_longpoll ${SOURCE_FILES} examples/http_server_longpoll.cpp)
+add_executable(http_server_multi ${SOURCE_FILES} examples/http_server_multi.cpp)
+add_executable(http_server_complex ${SOURCE_FILES} examples/http_server_complex.cpp)
+
+add_executable(md_tcp_source ${SOURCE_FILES} examples/md_tcp_source.cpp)
+add_executable(md_gate ${SOURCE_FILES} examples/md_gate.cpp)
+add_executable(md_client ${SOURCE_FILES} examples/md_client.cpp)
 
 # low-level benchmarks and tests
 add_executable(udp_eagain ${SOURCE_FILES} examples/lowlevel/udp_eagain.cpp)

@@ -116,6 +116,13 @@ CRAB_INLINE Connection::Connection()
     , sock([this]() { advance_state(true); }, std::bind(&Connection::on_disconnect, this))
     , state(SHUTDOWN) {}
 
+CRAB_INLINE Connection::Connection(Handler &&r_handler, Handler &&d_handler)
+        : read_buffer(8192)
+        , sock([this]() { advance_state(true); }, std::bind(&Connection::on_disconnect, this))
+        , state(SHUTDOWN)
+        , r_handler(std::move(r_handler))
+        , d_handler(std::move(d_handler)){}
+
 CRAB_INLINE bool Connection::connect(const std::string &address, uint16_t port) {
 	close();
 	if (!sock.connect(address, port))
