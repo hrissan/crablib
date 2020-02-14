@@ -124,26 +124,27 @@ public:
 
 class IMemoryStream : public IFiniteStream {
 protected:
-    const uint8_t * data = nullptr;
-    size_t si = 0;
+	const uint8_t *data = nullptr;
+	size_t si           = 0;
 
 public:
-    IMemoryStream() = default;
-    explicit IMemoryStream(const uint8_t * data, size_t size) : data(data), si(size) {}
-    size_t read_some(uint8_t *val, size_t count) override;
-    size_t size() const override { return si; }
-    size_t write_to(OStream &out, size_t max_count) override;
-    using IFiniteStream::write_to;
+	IMemoryStream() = default;
+	explicit IMemoryStream(const uint8_t *data, size_t size) : data(data), si(size) {}
+	size_t read_some(uint8_t *val, size_t count) override;
+	size_t size() const override { return si; }
+	size_t write_to(OStream &out, size_t max_count) override;
+	using IFiniteStream::write_to;
 };
 
 class OMemoryStream : public OStream {
 protected:
-    uint8_t * data = nullptr;
-    size_t si = 0;
+	uint8_t *data = nullptr;
+	size_t si     = 0;
+
 public:
-    OMemoryStream() = default;
-    explicit OMemoryStream(uint8_t * data, size_t size) : data(data), si(size) {}
-    size_t write_some(const uint8_t *val, size_t count) override;
+	OMemoryStream() = default;
+	explicit OMemoryStream(uint8_t *data, size_t size) : data(data), si(size) {}
+	size_t write_some(const uint8_t *val, size_t count) override;
 };
 
 class IVectorStream : public IFiniteStream {

@@ -54,8 +54,8 @@ class Server;
 
 class Connection : private Nocopy {
 public:
-    explicit Connection();
-    explicit Connection(Handler &&r_handler, Handler &&d_handler);
+	explicit Connection();
+	explicit Connection(Handler &&r_handler, Handler &&d_handler);
 	void set_handlers(Handler &&r_handler, Handler &&d_handler) {
 		this->r_handler = std::move(r_handler);
 		this->d_handler = std::move(d_handler);
@@ -74,25 +74,26 @@ public:
 	bool read_next(ResponseBody &request);
 	bool read_next(WebMessage &);
 
-    enum State {
-        REQUEST_HEADER,          // Server side
-        REQUEST_BODY,            // Server side
-        REQUEST_READY,           // Server side
-        WAITING_WRITE_RESPONSE,  // Server side
+	enum State {
+		REQUEST_HEADER,          // Server side
+		REQUEST_BODY,            // Server side
+		REQUEST_READY,           // Server side
+		WAITING_WRITE_RESPONSE,  // Server side
 
-        WAITING_WRITE_REQUEST,  // Client side
-        RESPONSE_HEADER,        // Client side
-        RESPONSE_BODY,          // Client side
-        RESPONSE_READY,         // Client side
+		WAITING_WRITE_REQUEST,  // Client side
+		RESPONSE_HEADER,        // Client side
+		RESPONSE_BODY,          // Client side
+		RESPONSE_READY,         // Client side
 
-        WEB_UPGRADE_RESPONSE_HEADER,  // Client side of Web Socket
-        WEB_MESSAGE_HEADER,           // Both side of Web Socket
-        WEB_MESSAGE_BODY,             // Both side of Web Socket
-        WEB_MESSAGE_READY,            // Both side of Web Socket
-        SHUTDOWN                      // Both side of Web Socket
-    };
+		WEB_UPGRADE_RESPONSE_HEADER,  // Client side of Web Socket
+		WEB_MESSAGE_HEADER,           // Both side of Web Socket
+		WEB_MESSAGE_BODY,             // Both side of Web Socket
+		WEB_MESSAGE_READY,            // Both side of Web Socket
+		SHUTDOWN                      // Both side of Web Socket
+	};
 
-    State get_state()const { return state; }
+	State get_state() const { return state; }
+
 protected:
 	crab::Buffer read_buffer;
 

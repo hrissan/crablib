@@ -113,7 +113,7 @@ class TCPSocket : public IStream, public OStream, private RunLoopCallable {
 public:
 	explicit TCPSocket(Handler &&rw_handler, Handler &&d_handler)
 	    : rw_handler(std::move(rw_handler)), d_handler(std::move(d_handler)) {}
-    void set_handlers(Handler &&rw_handler, Handler &&d_handler);
+	void set_handlers(Handler &&rw_handler, Handler &&d_handler);
 
 	~TCPSocket() override { close(); }
 	void close();

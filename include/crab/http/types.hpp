@@ -121,14 +121,14 @@ struct RequestBody {
 	http::RequestHeader r;
 	std::string body;
 
-    RequestBody() = default;
-    RequestBody(const std::string & host, const std::string & method, const std::string & uri) {
-        r.http_version_major = 1;
-        r.http_version_minor = 1;
-        r.method = method;
-        r.uri = uri;
-        r.host = host;
-    }
+	RequestBody() = default;
+	RequestBody(const std::string &host, const std::string &method, const std::string &uri) {
+		r.http_version_major = 1;
+		r.http_version_minor = 1;
+		r.method             = method;
+		r.uri                = uri;
+		r.host               = host;
+	}
 	void set_body(std::string &&b) {
 		body             = std::move(b);
 		r.content_length = body.size();
