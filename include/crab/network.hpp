@@ -236,7 +236,6 @@ private:
 	friend struct TCPSocketImpl;
 	friend struct TCPAcceptorImpl;
 
-	//	static thread_local RunLoop *current_loop;
 	using CurrentLoop = details::StaticHolderTL<RunLoop *>;
 
 #if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL || CRAB_SOCKET_WINDOWS

@@ -40,7 +40,7 @@ private:
 			response.r.status       = 200;
 			response.r.content_type = "text/plain; charset=utf-8";
 			response.set_body("Hello, Crab " + std::to_string(ticks_counter) + "!");
-			server.write(who, std::move(response));
+			who->write(std::move(response));
 		}
 	}
 	http::Server server;

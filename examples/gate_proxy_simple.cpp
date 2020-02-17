@@ -34,7 +34,7 @@ int test_proxy(int num, uint16_t port, uint16_t upstream_port) {
 
 	server.r_handler = [&](http::Client *who, http::RequestBody &&request, http::ResponseBody &response) -> bool {
 		if (request.r.uri == "/latency") {
-			server.web_socket_upgrade(who, std::move(request));
+			who->web_socket_upgrade();
 			std::string id =
 			    std::to_string(rnd()) + std::to_string(rnd()) + std::to_string(rnd()) + std::to_string(rnd());
 
@@ -89,7 +89,7 @@ int test_proxy(int num, uint16_t port, uint16_t upstream_port) {
 			    http::WebMessage reply;
 			    reply.opcode = http::WebMessage::OPCODE_TEXT;
 			    reply.body   = lm.save();
-			    http::Server::write(it->second, std::move(reply));
+			    it->second->write(std::move(reply));
 			    runloop.print_records();
 		    }
 	    },

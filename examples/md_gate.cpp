@@ -30,7 +30,7 @@ public:
 	explicit UDPTransmitter(const std::string &addr, uint16_t port, Handler &&r_handler)
 	    : r_handler(std::move(r_handler)) {}
 
-	size_t write_datagram(const void *data, size_t size) { return 0; }
+	size_t write_datagram(const void *data, size_t size) { return size; }
 
 	~UDPTransmitter() = default;
 
@@ -49,6 +49,8 @@ private:
 
 }  // namespace crab
 
+enum { MAX_DATAGRAM_SIZE = 508 };
+
 class LowLatencyReceiver {
 public:
 	LowLatencyReceiver(const MDSettings &settings, std::function<void(Msg msg)> &&message_handler)
@@ -58,35 +60,57 @@ public:
 	    , incoming_socket_buffer(4096)
 	    , udp_a(settings.md_gate_udp_a_address, settings.md_gate_udp_a_port,
 	          [&]() {})  // We just skip packets if buffer is full in UDP line A
-	    , reconnect_timer([&]() { connect(); }) {
+	    , reconnect_timer([&]() { connect(); })
+	    , simulated_disconnect_timer([&]() { on_simulated_disconnect_timer(); }) {
 		connect();
+		simulated_disconnect_timer.once(1);
 	}
 
 private:
+	void simulated_disconnect() {
+		std::cout << "Simulated disconnected" << std::endl;
+		incoming_socket.close();
+		incoming_socket_buffer.clear();
+		reconnect_timer.once(2);
+	}
+	void on_simulated_disconnect_timer() {
+		simulated_disconnect_timer.once(1);
+		if (reconnect_timer.is_set())
+			return;  // Already disconnected
+		if (rand() % 10 == 0)
+			simulated_disconnect();
+	}
 	void on_incoming_socket_data() {
-		incoming_socket_buffer.read_from(incoming_socket_buffer);
-		size_t count = incoming_socket_buffer.size() / Msg::size;
-		crab::VectorStream vs;
-		incoming_socket_buffer.write_to(vs, count * Msg::size);
-		while (incoming_socket_buffer.size() >= Msg::size) {
-			uint8_t buffer[Msg::size];
-			incoming_socket_buffer.read(buffer, Msg::size);
-			if (!udp_a.write_datagram(buffer, Msg::size)) {
+		while (true) {
+			if (incoming_socket_buffer.size() < Msg::size)
+				incoming_socket_buffer.read_from(incoming_socket);
+			const size_t max_count = MAX_DATAGRAM_SIZE / Msg::size;
+			size_t count           = std::min(max_count, incoming_socket_buffer.size() / Msg::size);
+			if (count == 0)
+				break;
+			crab::VectorStream vs;
+			incoming_socket_buffer.write_to(vs, count * Msg::size);
+			if (udp_a.write_datagram(vs.get_buffer().data(), vs.get_buffer().size()) != vs.get_buffer().size()) {
 				std::cout << "UDP retransmission buffer full, dropping message" << std::endl;
 			}
-			crab::IMemoryStream ms(buffer, Msg::size);
-			Msg msg;
-			msg.read(&ms);
-			message_handler(msg);
+			while (vs.size() >= Msg::size) {
+				Msg msg;
+				msg.read(&vs);
+				message_handler(msg);
+			}
 		}
 	}
 	void on_incoming_socket_closed() {
 		incoming_socket_buffer.clear();
 		reconnect_timer.once(1);
+		std::cout << "Incoming socket disconnected" << std::endl;
 	}
 	void connect() {
-		if (!incoming_socket.connect(settings.upstream_address, settings.upstream_tcp_port))
+		if (!incoming_socket.connect(settings.upstream_address, settings.upstream_tcp_port)) {
 			reconnect_timer.once(1);
+		} else {
+			std::cout << "Incoming socket connect started" << std::endl;
+		}
 	}
 	const MDSettings settings;
 
@@ -96,6 +120,7 @@ private:
 
 	crab::UDPTransmitter udp_a;
 	crab::Timer reconnect_timer;
+	crab::Timer simulated_disconnect_timer;
 };
 
 class MDGate {
@@ -104,11 +129,13 @@ public:
 	    : settings(settings)
 	    , server("0.0.0.0", settings.md_gate_http_port)
 	    , udp_ra(settings.md_gate_udp_ra_address, settings.md_gate_udp_ra_port, [&]() { broadcast_retransmission(); })
+	    , stat_timer([&]() { on_stat_timer(); })
 	    , ab([&]() { on_fast_queue_changed(); })
 	    , th(&MDGate::generator_thread, this)
 	    , http_client([&]() { on_http_client_data(); }, [&]() { on_http_client_closed(); })
 	    , reconnect_timer([&]() { connect(); }) {
 		connect();
+		stat_timer.once(1);
 		server.r_handler = [&](http::Client *who, http::RequestBody &&request, http::ResponseBody &response) -> bool {
 			if (request.r.uri != "/messages")
 				return true;  // Default "not found"
@@ -121,13 +148,8 @@ public:
 				response.set_body("Invalid request range - inverted or empty!");
 				return true;
 			}
-			if (req.end - req.begin > MAX_RESPONSE_COUNT)
-				req.end = req.begin + MAX_RESPONSE_COUNT;
-			if (create_response(response, req.begin, req.end))
-				return true;
-			waiting_clients.emplace(who, req.end);
-			waiting_clients_inv.emplace(req.end, std::make_pair(req, who));
-			return false;
+			// TODO - add to data structure here
+			return true;
 		};
 	}
 
@@ -150,39 +172,56 @@ private:
 	}
 	void add_message_from_any_source(const Msg &msg) {
 		if (messages.empty()) {
+			std::cout << "First! " << msg.seqnum << std::endl;
 			messages.push_back(msg);
 			return;
 		}
-		if (chunks.empty()) {
-			auto next_seq = messages.back().seqnum + 1;
-			if (msg.seqnum < next_seq)
-				return;
-			if (msg.seqnum == next_seq) {
-				messages.push_back(msg);
-				// We could close the gap to the first chunk
-				if (!chunks.empty() && chunks.front().front().seqnum == msg.seqnum + 1) {
-					messages.insert(messages.end(), chunks.front().begin(), chunks.front().end());
-					chunks.pop_front();
-				}
-				return;
+		auto next_seq = messages.back().seqnum + 1;
+		if (msg.seqnum < next_seq)
+			return;
+		if (msg.seqnum == next_seq) {
+			//			std::cout << "Normal " << msg.seqnum << std::endl;
+			messages.push_back(msg);
+			// We could close the gap to the first chunk
+			if (!chunks.empty() && chunks.front().front().seqnum == msg.seqnum + 1) {
+				std::cout << "Closing gap  .." << chunks.front().back().seqnum << "]" << std::endl;
+				messages.insert(messages.end(), chunks.front().begin(), chunks.front().end());
+				chunks.pop_front();
 			}
+			return;
+		}
+		if (chunks.empty()) {
+			//			std::cout << "Created first chunk [" << msg.seqnum << ".." << std::endl;
 			chunks.emplace_back();
 			chunks.back().push_back(msg);
 			return;
 		}
 		// each chunk is also not empty
-		auto next_seq = chunks.back().back().seqnum + 1;
+		next_seq = chunks.back().back().seqnum + 1;
 		if (msg.seqnum < next_seq)
 			return;
-		if (msg.seqnum > next_seq)
+		if (msg.seqnum > next_seq) {
+			//			std::cout << "Created chunk [" << msg.seqnum << ".." << std::endl;
 			chunks.emplace_back();
+		} else {
+			//			std::cout << "Added to last chunk " << msg.seqnum << std::endl;
+		}
 		chunks.back().push_back(msg);
+	}
+	void on_stat_timer() {
+		if (!messages.empty())
+			std::cout << "[" << messages.front().seqnum << ".." << messages.back().seqnum << "]";
+		for (auto &c : chunks)
+			std::cout << " <--> [" << c.front().seqnum << ".." << c.back().seqnum << "]";
+		std::cout << std::endl;
+		stat_timer.once(1);
 	}
 	void broadcast_retransmission() {
 		if (http_client.get_state() == http::Connection::WAITING_WRITE_REQUEST && !chunks.empty()) {
 			MDRequest req;
 			req.begin = messages.back().seqnum + 1;
 			req.end   = chunks.front().front().seqnum;
+			std::cout << "Sending request for [" << req.begin << ".." << req.end << ")" << std::endl;
 			crab::StringStream os;
 			req.write(&os);
 
@@ -196,7 +235,7 @@ private:
 		while (http_client.read_next(response)) {
 			if (response.r.status == 200) {
 				crab::IStringStream is(&response.body);
-				while (is.size() > Msg::size) {
+				while (is.size() >= Msg::size) {
 					Msg msg;
 					msg.read(&is);
 					add_message_from_any_source(msg);
@@ -205,11 +244,15 @@ private:
 		}
 		broadcast_retransmission();
 	}
-	void on_http_client_closed() { reconnect_timer.once(1); }
+	void on_http_client_closed() {
+		std::cout << "Incoming http connect closed" << std::endl;
+		reconnect_timer.once(1);
+	}
 	void connect() {
 		if (!http_client.connect(settings.upstream_address, settings.upstream_http_port)) {
 			reconnect_timer.once(1);
 		} else {
+			std::cout << "Incoming http connect started" << std::endl;
 			broadcast_retransmission();
 		}
 	}
@@ -225,6 +268,8 @@ private:
 
 	http::Server server;
 	crab::UDPTransmitter udp_ra;
+
+	crab::Timer stat_timer;
 
 	crab::Watcher ab;
 

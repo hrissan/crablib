@@ -10,6 +10,7 @@
 #include <memory>
 #include <stdexcept>
 #include "../network.hpp"
+#include "connection.hpp"
 #include "types.hpp"
 
 namespace crab { namespace http {
@@ -21,7 +22,18 @@ public:
 	std::string realm;
 };
 
-class Client;
+class Server;
+
+class Client : protected Connection {  // So the type is opaque for users
+public:
+	using Connection::get_peer_address;
+	void write(ResponseBody &&response);
+	void write(WebMessage &&wm) { Connection::write(std::move(wm)); }
+	using Connection::web_socket_upgrade;
+
+private:
+	friend class Server;
+};
 
 class Server {
 public:
@@ -39,21 +51,17 @@ public:
 	// Unlike other parts of crab, you must not destroy server in handlers
 	// when destroying server, remove all Client * you remembered
 
-	const std::string &get_date() const;
-
-	void write(Client *, ResponseBody &&);
-
-	void web_socket_upgrade(Client *who, RequestBody &&);
-	static void write(Client *, WebMessage &&);
+	static const std::string &get_date();
 
 	R_handler r_handler;  // Request
 	D_handler d_handler;  // Disconnect
 	W_handler w_handler;  // Web Message
 private:
-	std::chrono::system_clock::time_point cached_time_point{};
-	std::string cached_date;
-
-	void set_date(const std::chrono::system_clock::time_point &now);
+	struct TimeCache {
+		std::chrono::system_clock::time_point cached_time_point{};
+		std::string cached_date;
+	};
+	using CurrentTimeCache = details::StaticHolderTL<TimeCache>;
 
 	TCPAcceptor la_socket;
 

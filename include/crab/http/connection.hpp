@@ -62,10 +62,11 @@ public:
 	}
 
 	bool connect(const std::string &address, uint16_t port);
-	void accept(TCPAcceptor &acceptor, std::string *accepted_addr = nullptr);
+	void accept(TCPAcceptor &acceptor);
 
 	void close();
 	bool is_open() const { return sock.is_open(); }
+	const std::string &get_peer_address() const { return peer_address; }
 
 	void write(ResponseBody &&resp);
 	void write(RequestBody &&resp);
@@ -73,6 +74,7 @@ public:
 	bool read_next(RequestBody &request);
 	bool read_next(ResponseBody &request);
 	bool read_next(WebMessage &);
+	void web_socket_upgrade();  // Will throw if not upgradable
 
 	enum State {
 		REQUEST_HEADER,          // Server side
@@ -118,6 +120,7 @@ protected:
 	BufferedTCPSocket sock;
 
 	State state;
+	std::string peer_address;
 };
 
 }  // namespace http

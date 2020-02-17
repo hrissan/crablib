@@ -20,7 +20,7 @@
 
 namespace http = crab::http;
 
-enum { MAX_RESPONSE_COUNT = 1000, MICROSECONDS_PER_MESSAGE = 1000 };
+enum { MAX_RESPONSE_COUNT = 10000, MICROSECONDS_PER_MESSAGE = 50 };
 
 class MDGenerator {
 public:
@@ -29,12 +29,12 @@ public:
 	    , la_socket("0.0.0.0", port, [&]() { accept_all(); })
 	    , idle([&]() { on_idle(); }) {}
 
-private:
 	void on_idle() {
 		auto now     = std::chrono::steady_clock::now();
 		size_t ticks = std::chrono::duration_cast<std::chrono::microseconds>(now - last_tick).count();
 		if (ticks == 0)
 			return;
+		last_tick = now;
 		total_ticks += ticks;
 		for (; total_ticks >= MICROSECONDS_PER_MESSAGE; total_ticks -= MICROSECONDS_PER_MESSAGE) {
 			seqnum += 1;
@@ -46,7 +46,7 @@ private:
 
 			for (auto it = clients.begin(); it != clients.end();) {
 				if ((*it)->write_some(buffer, sizeof(buffer)) != sizeof(buffer)) {
-					std::cout << "HTTP Client disconnected due to buffer full #=" << clients.size() << std::endl;
+					std::cout << "HTTP Client disconnected (or buffer full) #=" << clients.size() << std::endl;
 					it = clients.erase(it);
 				} else {
 					++it;
@@ -55,6 +55,8 @@ private:
 			message_handler(msg);
 		}
 	}
+
+private:
 	std::function<void(Msg msg)> message_handler;
 
 	crab::TCPAcceptor la_socket;
@@ -142,7 +144,7 @@ private:
 				throw std::logic_error("Invariant violated");
 			messages.push_back(fq.front());
 		}
-		while (waiting_clients_inv.begin()->first <= messages.back().seqnum) {
+		while (!waiting_clients_inv.empty() && waiting_clients_inv.begin()->first <= messages.back().seqnum) {
 			auto who = waiting_clients_inv.begin()->second.second;
 			auto req = waiting_clients_inv.begin()->second.first;
 			waiting_clients_inv.erase(waiting_clients_inv.begin());
@@ -150,7 +152,7 @@ private:
 
 			http::ResponseBody response;
 			create_response(response, req.begin, req.end);
-			server.write(who, std::move(response));
+			who->write(std::move(response));
 		}
 	}
 	bool create_response(http::ResponseBody &response, uint64_t begin, uint64_t end) {

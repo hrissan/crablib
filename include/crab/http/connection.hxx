@@ -127,14 +127,15 @@ CRAB_INLINE bool Connection::connect(const std::string &address, uint16_t port) 
 	close();
 	if (!sock.connect(address, port))
 		return false;
-	client_side = true;
-	state       = WAITING_WRITE_REQUEST;
+	peer_address = address;
+	client_side  = true;
+	state        = WAITING_WRITE_REQUEST;
 	return true;
 }
 
-CRAB_INLINE void Connection::accept(TCPAcceptor &acceptor, std::string *accepted_addr) {
+CRAB_INLINE void Connection::accept(TCPAcceptor &acceptor) {
 	close();
-	sock.accept(acceptor, accepted_addr);
+	sock.accept(acceptor, &peer_address);
 	client_side    = false;
 	request_parser = RequestParser{};
 	state          = REQUEST_HEADER;
@@ -144,6 +145,7 @@ CRAB_INLINE void Connection::close() {
 	state = SHUTDOWN;
 	read_buffer.clear();
 	sock.close();
+	peer_address.clear();
 }
 
 CRAB_INLINE bool Connection::read_next(RequestBody &req) {
@@ -177,6 +179,21 @@ CRAB_INLINE bool Connection::read_next(WebMessage &message) {
 	state            = WEB_MESSAGE_HEADER;
 	advance_state(false);
 	return true;
+}
+
+CRAB_INLINE void Connection::web_socket_upgrade() {
+	if (!request_parser.req.is_websocket_upgrade())
+		throw std::runtime_error("Attempt to upgrade non-upgradable connection");
+
+	ResponseBody response;
+
+	response.r.connection_upgrade = request_parser.req.connection_upgrade;
+	response.r.upgrade_websocket  = request_parser.req.upgrade_websocket;
+	response.r.sec_websocket_accept =
+	    ResponseHeader::generate_sec_websocket_accept(request_parser.req.sec_websocket_key);
+	response.r.status = 101;
+
+	write(std::move(response));
 }
 
 CRAB_INLINE void Connection::write(RequestBody &&req) {

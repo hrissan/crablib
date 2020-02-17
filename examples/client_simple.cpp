@@ -99,9 +99,9 @@ int test_http(size_t num, uint16_t port) {
 			return true;
 		}
 		if (request.r.uri == "/ws") {
-			server.web_socket_upgrade(who, std::move(request));
+			who->web_socket_upgrade();
 			connected_sockets.insert(who);
-			http::Server::write(who, http::WebMessage("Server first!"));
+			who->write(http::WebMessage("Server first!"));
 			return false;
 		}
 		response.r.status       = 200;
@@ -114,12 +114,12 @@ int test_http(size_t num, uint16_t port) {
 	server.w_handler = [&](http::Client *who, http::WebMessage &&message) {
 		//		std::cout << "Server Got Message: " << message.body << std::endl;
 		if (message.is_binary()) {
-			http::Server::write(who, std::move(message));
+			who->write(std::move(message));
 		} else {
 			http::WebMessage reply;
 			reply.opcode = http::WebMessage::OPCODE_TEXT;
 			reply.body   = "Echo from Crab: " + message.body;
-			http::Server::write(who, std::move(reply));
+			who->write(std::move(reply));
 		}
 		runloop.print_records();
 	};
@@ -132,9 +132,8 @@ int test_http(size_t num, uint16_t port) {
 		std::cout << "RECV_count=" << st.RECV_count << " RECV_size=" << st.RECV_size << std::endl;
 		std::cout << "SEND_count=" << st.SEND_count << " SEND_size=" << st.SEND_size << std::endl;
 		for (auto *who : connected_sockets)
-			http::Server::write(who,
-			    http::WebMessage("RECV_count=" + std::to_string(st.RECV_count) +
-			                     " connected_clients=" + std::to_string(connected_sockets.size())));
+			who->write(http::WebMessage("RECV_count=" + std::to_string(st.RECV_count) +
+			                            " connected_clients=" + std::to_string(connected_sockets.size())));
 		stat_timer->once(1);
 	}));
 	stat_timer->once(1);

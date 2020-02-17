@@ -72,13 +72,13 @@ int test_http(size_t num, uint16_t port) {
 			return true;
 		}
 		if (request.r.uri == "/ws") {
-			server.web_socket_upgrade(who, std::move(request));
+			who->web_socket_upgrade();
 			connected_sockets.insert(who);
-			http::Server::write(who, http::WebMessage("Server first!"));
+			who->write(http::WebMessage("Server first!"));
 			return false;
 		}
 		if (request.r.uri == "/latency") {
-			server.web_socket_upgrade(who, std::move(request));
+			who->web_socket_upgrade();
 			connected_sockets.insert(who);
 			return false;
 		}
@@ -92,7 +92,7 @@ int test_http(size_t num, uint16_t port) {
 	server.w_handler = [&](http::Client *who, http::WebMessage &&message) {
 		//		std::cout << "Server Got Message: " << message.body << std::endl;
 		if (message.is_binary()) {
-			http::Server::write(who, std::move(message));
+			who->write(std::move(message));
 		} else {
 			LatencyMessage lm;
 			if (lm.parse(message.body)) {
@@ -101,12 +101,12 @@ int test_http(size_t num, uint16_t port) {
 				http::WebMessage reply;
 				reply.opcode = http::WebMessage::OPCODE_TEXT;
 				reply.body   = lm.save();
-				http::Server::write(who, std::move(reply));
+				who->write(std::move(reply));
 			} else {
 				http::WebMessage reply;
 				reply.opcode = http::WebMessage::OPCODE_TEXT;
 				reply.body   = "Echo from Crab: " + message.body;
-				http::Server::write(who, std::move(reply));
+				who->write(std::move(reply));
 			}
 		}
 		runloop.print_records();

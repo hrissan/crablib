@@ -8,8 +8,6 @@
 #include "request_parser.hpp"
 #include "server.hpp"
 
-#include "connection.hpp"
-
 // to test
 // httperf --port 8090 --num-calls 100000 --uri /index.html
 // curl -s "http://127.0.0.1:8888/?[1-10000]"
@@ -20,42 +18,41 @@
 
 namespace crab { namespace http {
 
-class Client : public Connection {  // So the type is opaque for users
-public:
-	Client() = default;
-};
-
 namespace details {
 CRAB_INLINE bool empty_r_handler(Client *, RequestBody &&, ResponseBody &) { return true; }
 CRAB_INLINE void empty_d_handler(Client *) {}
 CRAB_INLINE void empty_w_handler(Client *, WebMessage &&) {}
 }  // namespace details
 
+CRAB_INLINE void Client::write(ResponseBody &&response) {
+	// HTTP message length design is utter crap, we should conform better...
+	// https://www.w3.org/Protocols/rfc2616/rfc2616-sec4.html#sec4.4
+	if (response.r.date.empty())
+		response.r.date = Server::get_date();
+	Connection::write(std::move(response));
+}
+
 CRAB_INLINE Server::Server(const std::string &address, uint16_t port)
     : r_handler(details::empty_r_handler)
     , d_handler(details::empty_d_handler)
     , w_handler(details::empty_w_handler)
-    , la_socket{address, port, std::bind(&Server::accept_all, this)} {
-	set_date(std::chrono::system_clock::now());
-}
+    , la_socket{address, port, std::bind(&Server::accept_all, this)} {}
 
 CRAB_INLINE Server::~Server() = default;  // we use incomplete types
 
-CRAB_INLINE const std::string &Server::get_date() const {
-	auto now = std::chrono::system_clock::now();
-	if (std::chrono::duration_cast<std::chrono::seconds>(now - cached_time_point).count() > 500)
-		const_cast<Server *>(this)->set_date(now);
-	return cached_date;
-}
-
-CRAB_INLINE void Server::set_date(const std::chrono::system_clock::time_point &now) {
-	cached_time_point    = now;
-	std::time_t end_time = std::chrono::system_clock::to_time_t(now);
-	struct ::tm tm {};
-	gmtime_r(&end_time, &tm);
-	char buf[64]{};  // "Wed, 16 Oct 2019 16:68:22 GMT"
-	strftime(buf, sizeof(buf), "%a, %d %b %Y %H:%M:%S %Z", &tm);
-	cached_date = buf;
+CRAB_INLINE const std::string &Server::get_date() {
+	auto &inst = CurrentTimeCache::instance;
+	auto now   = std::chrono::system_clock::now();
+	if (std::chrono::duration_cast<std::chrono::seconds>(now - inst.cached_time_point).count() > 500) {
+		inst.cached_time_point = now;
+		std::time_t end_time   = std::chrono::system_clock::to_time_t(now);
+		struct ::tm tm {};
+		gmtime_r(&end_time, &tm);
+		char buf[64]{};  // "Wed, 16 Oct 2019 16:68:22 GMT"
+		strftime(buf, sizeof(buf), "%a, %d %b %Y %H:%M:%S %Z", &tm);
+		inst.cached_date = buf;
+	}
+	return inst.cached_date;
 }
 
 CRAB_INLINE void Server::on_client_handler(std::list<Client>::iterator it) {
@@ -77,35 +74,10 @@ CRAB_INLINE void Server::accept_all() {
 		clients.emplace_back();
 		auto it = --clients.end();
 		it->set_handlers([this, it]() { on_client_handler(it); }, [this, it]() { on_client_disconnected(it); });
-		std::string addr;
-		it->accept(la_socket, &addr);
-		//        std::cout << "HTTP Client accepted=" << cid << " addr=" << addr << std::endl;
+		it->accept(la_socket);
+		//        std::cout << "HTTP Client accepted=" << cid << " addr=" << (*it)->get_peer_address() << std::endl;
 	}
 }
-
-CRAB_INLINE void Server::write(Client *who, ResponseBody &&response) {
-	// HTTP message length design is utter crap, we should conform better...
-	// https://www.w3.org/Protocols/rfc2616/rfc2616-sec4.html#sec4.4
-	if (response.r.date.empty())
-		response.r.date = get_date();
-	who->write(std::move(response));
-}
-
-CRAB_INLINE void Server::web_socket_upgrade(Client *who, RequestBody &&request) {
-	if (!request.r.is_websocket_upgrade())
-		throw std::runtime_error("Attempt to upgrade non-upgradable connection");
-
-	ResponseBody response;
-
-	response.r.connection_upgrade   = request.r.connection_upgrade;
-	response.r.upgrade_websocket    = request.r.upgrade_websocket;
-	response.r.sec_websocket_accept = ResponseHeader::generate_sec_websocket_accept(request.r.sec_websocket_key);
-	response.r.status               = 101;
-
-	http::Server::write(who, std::move(response));
-}
-
-CRAB_INLINE void Server::write(Client *who, WebMessage &&message) { who->write(std::move(message)); }
 
 CRAB_INLINE void Server::on_client_disconnected(std::list<Client>::iterator it) {
 	Client *who = &*it;
@@ -139,7 +111,7 @@ CRAB_INLINE void Server::on_client_handle_request(Client *who, RequestBody &&req
 			response.r.content_type = "text/plain; charset=utf-8";
 			response.set_body("404 not found");
 		}
-		write(who, std::move(response));
+		who->write(std::move(response));
 	}
 }
 
