@@ -2,6 +2,7 @@
 // Licensed under the MIT License. See LICENSE for details.
 
 #include <chrono>
+#include <functional>
 #include <iostream>
 #include <map>
 #include <random>
@@ -17,16 +18,17 @@ struct BucketsGetter<std::unordered_map<std::string, size_t>> {
 	static size_t bucket_count(const std::unordered_map<std::string, size_t> &v) { return v.bucket_count(); }
 };
 
-template<typename T>
-void benchmark() {
-	T storage;
+constexpr size_t COUNT = 1000000;
+
+template<typename T, typename S>
+void benchmark(std::function<T(size_t)> items_gen) {
+	S storage;
 	std::mt19937 rnd;
-	std::vector<std::string> to_insert;
-	std::vector<std::string> to_search;
-	const size_t COUNT = 1000000;
+	std::vector<T> to_insert;
+	std::vector<T> to_search;
 	for (size_t i = 0; i != COUNT; ++i) {
-		to_insert.push_back(std::to_string(rnd() % COUNT) + std::string("SampleSampleSampleSampleSampleSample"));
-		to_search.push_back(std::to_string(rnd() % COUNT) + std::string("SampleSampleSampleSampleSampleSample"));
+		to_insert.push_back(items_gen(rnd() % COUNT));
+		to_search.push_back(items_gen(rnd() % COUNT));
 	}
 	auto tp        = std::chrono::high_resolution_clock::now();
 	auto start     = tp;
@@ -43,7 +45,7 @@ void benchmark() {
 		auto now   = std::chrono::high_resolution_clock::now();
 		auto mksec = std::chrono::duration_cast<std::chrono::microseconds>(now - tp).count();
 		if (mksec > 100) {
-			auto bc = BucketsGetter<T>::bucket_count(storage);
+			auto bc = BucketsGetter<S>::bucket_count(storage);
 			long_samples.emplace_back(Sample{int(mksec), counter, bc});
 		}
 		tp = now;
@@ -62,10 +64,31 @@ void benchmark() {
 	std::cout << "searched " << to_search.size() << ", found=" << counter << ", mksec=" << mksec << std::endl;
 }
 
+std::string string_gen(size_t c) {
+	return std::to_string(c % COUNT) + std::string("SampleSampleSampleSampleSampleSample");
+}
+
+int int_gen(size_t c) { return int(c); }
+
+size_t small_int_gen(size_t c) { return c % 256; }
+
 int main() {
-	std::cout << "Testing std::map" << std::endl;
-	benchmark<std::map<std::string, size_t>>();
-	std::cout << "Testing std::unordered" << std::endl;
-	benchmark<std::unordered_map<std::string, size_t>>();
+	std::cout << "Testing std::map<std::string> count=" << COUNT << std::endl;
+	benchmark<std::string, std::map<std::string, size_t>>(string_gen);
+	std::cout << "Testing std::unordered<std::string> count=" << COUNT << std::endl;
+	benchmark<std::string, std::unordered_map<std::string, size_t>>(string_gen);
+	std::cout << "----" << std::endl;
+
+	std::cout << "Testing std::map<int> count=" << COUNT << std::endl;
+	benchmark<int, std::map<int, size_t>>(int_gen);
+	std::cout << "Testing std::unordered<int> count=" << COUNT << std::endl;
+	benchmark<int, std::unordered_map<int, size_t>>(int_gen);
+	std::cout << "----" << std::endl;
+
+	std::cout << "Testing small std::map<int> count=" << COUNT << std::endl;
+	benchmark<int, std::map<int, size_t>>(small_int_gen);
+	std::cout << "Testing small std::unordered<int> count=" << COUNT << std::endl;
+	benchmark<int, std::unordered_map<int, size_t>>(small_int_gen);
+	std::cout << "----" << std::endl;
 	return 0;
 }
