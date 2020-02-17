@@ -22,6 +22,11 @@ namespace http = crab::http;
 
 enum { MAX_RESPONSE_COUNT = 10000, MICROSECONDS_PER_MESSAGE = 50 };
 
+// This class uses on_idle so that messages will be generated/sent with
+// as little jitter as possible. It contains small TCP server, so that clients connect
+// directly and get as little latency as possible. Expected to be used with very limited
+// number of low-latency clients, other must be connected via retransmitters
+
 class MDGenerator {
 public:
 	explicit MDGenerator(uint16_t port, std::function<void(Msg msg)> &&message_handler)
@@ -60,9 +65,10 @@ private:
 	std::function<void(Msg msg)> message_handler;
 
 	crab::TCPAcceptor la_socket;
-	crab::Idle idle;
 	using ClientList = std::list<std::unique_ptr<crab::TCPSocket>>;
 	ClientList clients;
+
+	crab::Idle idle;
 
 	std::chrono::steady_clock::time_point last_tick = std::chrono::steady_clock::now();
 	uint64_t total_ticks                            = 0;
@@ -114,6 +120,9 @@ public:
 				req.end = req.begin + MAX_RESPONSE_COUNT;
 			if (create_response(response, req.begin, req.end))
 				return true;
+			// If client requests range which is not available yet, we add them to long-poll
+			// waiting_clients_inv is sorted by req.end so once sequence number reaches begin(),
+			// we can send response to that waiting client
 			waiting_clients.emplace(who, req.end);
 			waiting_clients_inv.emplace(req.end, std::make_pair(req, who));
 			return false;
@@ -136,6 +145,8 @@ private:
 	void on_fast_queue_changed() {
 		std::deque<Msg> fq;
 		{
+			// We lock fast_queue for as little time as possible, so that
+			// latency of add_message() above is not affected
 			std::unique_lock<std::mutex> lock(mutex);
 			fast_queue.swap(fq);
 		}
@@ -163,7 +174,7 @@ private:
 			return true;
 		}
 		if (end > messages.back().seqnum + 1) {
-			return false;
+			return false;  // Those requests will be added to long poll
 		}
 		const auto messages_start = messages.front().seqnum;
 
@@ -178,23 +189,26 @@ private:
 		return true;
 	}
 	void generator_thread() {
+		// Separate thread for MDGenerator. Any variables in this thread are inaccessible from outside
+		// while it communicates with MDSourceApp via single point - add_message()
 		crab::RunLoop runloop;
 
 		MDGenerator gen(settings.upstream_tcp_port, [&](Msg msg) { add_message(msg); });
 
 		runloop.run();
 	}
+
 	const MDSettings settings;
+
+	std::deque<Msg> messages;  // In real system, messages will be stored in some DB
 
 	http::Server server;
 	std::map<http::Client *, uint64_t> waiting_clients;
 	std::map<uint64_t, std::pair<MDRequest, http::Client *>> waiting_clients_inv;
 
-	crab::Watcher ab;
-
-	std::mutex mutex;
+	crab::Watcher ab;            // Signals about changes in fast_queue
+	std::mutex mutex;            // Protects fast_queue
 	std::deque<Msg> fast_queue;  // intermediate queue, it will be locked for very short time
-	std::deque<Msg> messages;
 
 	std::thread th;
 };

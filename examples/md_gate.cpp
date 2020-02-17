@@ -51,15 +51,17 @@ private:
 
 enum { MAX_DATAGRAM_SIZE = 508 };
 
-class LowLatencyReceiver {
+// Connects to TCP, reads messages from upstream_socket, immediately retransmits them to udp_a
+// and sends to message_handler
+class LowLatencyRetransmitter {
 public:
-	LowLatencyReceiver(const MDSettings &settings, std::function<void(Msg msg)> &&message_handler)
+	LowLatencyRetransmitter(const MDSettings &settings, std::function<void(Msg msg)> &&message_handler)
 	    : settings(settings)
-	    , message_handler(std::move(message_handler))
-	    , incoming_socket([&]() { on_incoming_socket_data(); }, [&]() { on_incoming_socket_closed(); })
-	    , incoming_socket_buffer(4096)
+	    , upstream_socket([&]() { on_upstream_socket_data(); }, [&]() { on_upstream_socket_closed(); })
+	    , upstream_socket_buffer(4096)
 	    , udp_a(settings.md_gate_udp_a_address, settings.md_gate_udp_a_port,
 	          [&]() {})  // We just skip packets if buffer is full in UDP line A
+	    , message_handler(std::move(message_handler))
 	    , reconnect_timer([&]() { connect(); })
 	    , simulated_disconnect_timer([&]() { on_simulated_disconnect_timer(); }) {
 		connect();
@@ -69,8 +71,8 @@ public:
 private:
 	void simulated_disconnect() {
 		std::cout << "Simulated disconnected" << std::endl;
-		incoming_socket.close();
-		incoming_socket_buffer.clear();
+		upstream_socket.close();
+		upstream_socket_buffer.clear();
 		reconnect_timer.once(2);
 	}
 	void on_simulated_disconnect_timer() {
@@ -80,16 +82,16 @@ private:
 		if (rand() % 10 == 0)
 			simulated_disconnect();
 	}
-	void on_incoming_socket_data() {
+	void on_upstream_socket_data() {
 		while (true) {
-			if (incoming_socket_buffer.size() < Msg::size)
-				incoming_socket_buffer.read_from(incoming_socket);
+			if (upstream_socket_buffer.size() < Msg::size)
+				upstream_socket_buffer.read_from(upstream_socket);
 			const size_t max_count = MAX_DATAGRAM_SIZE / Msg::size;
-			size_t count           = std::min(max_count, incoming_socket_buffer.size() / Msg::size);
+			size_t count           = std::min(max_count, upstream_socket_buffer.size() / Msg::size);
 			if (count == 0)
 				break;
 			crab::VectorStream vs;
-			incoming_socket_buffer.write_to(vs, count * Msg::size);
+			upstream_socket_buffer.write_to(vs, count * Msg::size);
 			if (udp_a.write_datagram(vs.get_buffer().data(), vs.get_buffer().size()) != vs.get_buffer().size()) {
 				std::cout << "UDP retransmission buffer full, dropping message" << std::endl;
 			}
@@ -100,23 +102,24 @@ private:
 			}
 		}
 	}
-	void on_incoming_socket_closed() {
-		incoming_socket_buffer.clear();
+	void on_upstream_socket_closed() {
+		upstream_socket_buffer.clear();
 		reconnect_timer.once(1);
-		std::cout << "Incoming socket disconnected" << std::endl;
+		std::cout << "Upstream socket disconnected" << std::endl;
 	}
 	void connect() {
-		if (!incoming_socket.connect(settings.upstream_address, settings.upstream_tcp_port)) {
+		if (!upstream_socket.connect(settings.upstream_address, settings.upstream_tcp_port)) {
 			reconnect_timer.once(1);
 		} else {
-			std::cout << "Incoming socket connect started" << std::endl;
+			std::cout << "Upstream socket connection attempt started..." << std::endl;
 		}
 	}
 	const MDSettings settings;
 
+	crab::TCPSocket upstream_socket;
+	crab::Buffer upstream_socket_buffer;
+
 	std::function<void(Msg msg)> message_handler;
-	crab::TCPSocket incoming_socket;
-	crab::Buffer incoming_socket_buffer;
 
 	crab::UDPTransmitter udp_a;
 	crab::Timer reconnect_timer;
@@ -131,7 +134,7 @@ public:
 	    , udp_ra(settings.md_gate_udp_ra_address, settings.md_gate_udp_ra_port, [&]() { broadcast_retransmission(); })
 	    , stat_timer([&]() { on_stat_timer(); })
 	    , ab([&]() { on_fast_queue_changed(); })
-	    , th(&MDGate::generator_thread, this)
+	    , th(&MDGate::retransmitter_thread, this)
 	    , http_client([&]() { on_http_client_data(); }, [&]() { on_http_client_closed(); })
 	    , reconnect_timer([&]() { connect(); }) {
 		connect();
@@ -162,6 +165,8 @@ private:
 	void on_fast_queue_changed() {
 		std::deque<Msg> fq;
 		{
+			// We lock fast_queue for as little time as possible, so that
+			// latency of add_message() above is not affected
 			std::unique_lock<std::mutex> lock(mutex);
 			fast_queue.swap(fq);
 		}
@@ -256,30 +261,31 @@ private:
 			broadcast_retransmission();
 		}
 	}
-	void generator_thread() {
+	void retransmitter_thread() {
+		// Separate thread for Retransmitter. Any variables in this thread are inaccessible from outside
+		// while it communicates with MDGate via single point - add_message()
 		crab::RunLoop runloop;
 
-		LowLatencyReceiver gen(settings, [&](Msg msg) { add_message(msg); });
+		LowLatencyRetransmitter gen(settings, [&](Msg msg) { add_message(msg); });
 
 		runloop.run();
 	}
 
 	const MDSettings settings;
 
-	http::Server server;
-	crab::UDPTransmitter udp_ra;
+	http::Server server;          // requests for retransmits are received here
+	crab::UDPTransmitter udp_ra;  // and broadcasted in fair manner via this UDP multicast group
 
 	crab::Timer stat_timer;
 
-	crab::Watcher ab;
-
-	std::mutex mutex;
+	crab::Watcher ab;            // Signals about changes in fast_queue
+	std::mutex mutex;            // Protects fast_queue
 	std::deque<Msg> fast_queue;  // intermediate queue, it will be locked for very short time
 
-	std::deque<std::vector<Msg>> chunks;
-	std::deque<Msg> messages;  // continuous stream
+	std::deque<Msg> messages;             // continuous stream, with optional non-empty gap to chunks
+	std::deque<std::vector<Msg>> chunks;  // non-overlapping chunks with non-empty gaps between them
 
-	http::Connection http_client;
+	http::Connection http_client;  // We keep connection connected all the time
 	crab::Timer reconnect_timer;
 
 	std::thread th;
