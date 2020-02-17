@@ -60,10 +60,7 @@ int test_proxy(int num, uint16_t port, uint16_t upstream_port) {
 			return;
 		lm.add_lat("proxy_recv_client", std::chrono::steady_clock::now());
 		//        std::cout << lm.save(&it->second) << std::endl;
-		http::WebMessage reply;
-		reply.opcode = http::WebMessage::OPCODE_TEXT;
-		reply.body   = lm.save(&it->second);
-		rws->write(std::move(reply));
+		rws->write(http::WebMessage(lm.save(&it->second)));
 
 		runloop.print_records();
 	};
