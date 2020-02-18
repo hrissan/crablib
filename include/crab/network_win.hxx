@@ -183,10 +183,8 @@ static int address_from_string(const std::string &str, crab::bdata &result) {
 	return 0;
 }
 
-bdata DNSResolver::parse_ipaddress(const std::string &str) {
-	bdata result;
-	address_from_string(str, result);
-	return result;
+bool DNSResolver::parse_ipaddress(const std::string &str, bdata *result) {
+	return address_from_string(str, *result) != 0;
 }
 
 std::vector<std::string> DNSWorker::sync_resolve(const std::string &fullname, bool ipv4, bool ipv6) {

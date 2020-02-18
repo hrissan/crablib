@@ -88,6 +88,16 @@ CRAB_INLINE bool add_la_socket_callable(const FileDescriptor &efd, const FileDes
 	};
 	return kevent(efd.get_value(), &changeLst, 1, 0, 0, NULL) >= 0;
 }
+
+CRAB_INLINE bool add_udp_transmitter_callable(const FileDescriptor &efd,
+    const FileDescriptor &fd,
+    RunLoopCallable *impl) {
+	struct kevent changeLst {
+		uintptr_t(fd.get_value()), EVFILT_WRITE, EV_ADD | EV_CLEAR, 0, 0, impl
+	};
+	return kevent(efd.get_value(), &changeLst, 1, 0, 0, NULL) >= 0;
+}
+
 }  // namespace details
 
 CRAB_INLINE void RunLoop::step(int timeout_ms) {
@@ -167,6 +177,13 @@ CRAB_INLINE bool add_rw_socket_callable(const FileDescriptor &efd, const FileDes
 CRAB_INLINE bool add_la_socket_callable(const FileDescriptor &efd, const FileDescriptor &fd, RunLoopCallable *impl) {
 	return add_epoll_callable(efd.get_value(), fd.get_value(), EPOLLIN | EPOLLET, impl);
 }
+
+CRAB_INLINE bool add_udp_transmitter_callable(const FileDescriptor &efd,
+    const FileDescriptor &fd,
+    RunLoopCallable *impl) {
+	return add_epoll_callable(efd.get_value(), fd.get_value(), EPOLLOUT | EPOLLET, impl);
+}
+
 }  // namespace details
 
 CRAB_INLINE void RunLoop::step(int timeout_ms) {
@@ -215,6 +232,51 @@ CRAB_INLINE bool set_nonblocking(int fd) {
 	flags |= O_NONBLOCK;
 	return fcntl(fd, F_SETFL, flags) >= 0;
 }
+
+CRAB_INLINE int socket(const bdata &addrdata, int type, int proto) {
+	if (addrdata.size() == 4)
+		return ::socket(AF_INET, type, proto);
+	if (addrdata.size() == 16)
+		return ::socket(AF_INET6, type, proto);
+	return -1;
+}
+
+CRAB_INLINE int connect(int fd, const bdata &addrdata, uint16_t port) {
+	if (addrdata.size() == 4) {
+		sockaddr_in addr{};
+		addr.sin_family = AF_INET;
+		addr.sin_port   = htons(port);
+		std::copy(addrdata.begin(), addrdata.end(), reinterpret_cast<uint8_t *>(&addr.sin_addr));
+		return ::connect(fd, reinterpret_cast<sockaddr *>(&addr), sizeof(addr));
+	}
+	if (addrdata.size() == 16) {
+		sockaddr_in6 addr{};
+		addr.sin6_family = AF_INET6;
+		addr.sin6_port   = htons(port);
+		std::copy(addrdata.begin(), addrdata.end(), reinterpret_cast<uint8_t *>(&addr.sin6_addr));
+		return ::connect(fd, reinterpret_cast<sockaddr *>(&addr), sizeof(addr));
+	}
+	return -1;
+}
+
+CRAB_INLINE int bind(int fd, const bdata &addrdata, uint16_t port) {
+	if (addrdata.size() == 4) {
+		sockaddr_in addr{};
+		addr.sin_family = AF_INET;
+		addr.sin_port   = htons(port);
+		std::copy(addrdata.begin(), addrdata.end(), reinterpret_cast<uint8_t *>(&addr.sin_addr));
+		return ::bind(fd, reinterpret_cast<sockaddr *>(&addr), sizeof(addr));
+	}
+	if (addrdata.size() == 16) {
+		sockaddr_in6 addr{};
+		addr.sin6_family = AF_INET6;
+		addr.sin6_port   = htons(port);
+		std::copy(addrdata.begin(), addrdata.end(), reinterpret_cast<uint8_t *>(&addr.sin6_addr));
+		return ::bind(fd, reinterpret_cast<sockaddr *>(&addr), sizeof(addr));
+	}
+	return -1;
+}
+
 CRAB_INLINE std::string good_inet_ntop(const sockaddr *addr) {
 	char addr_buf[INET6_ADDRSTRLEN] = {};
 	switch (addr->sa_family) {
@@ -233,16 +295,18 @@ CRAB_INLINE std::string good_inet_ntop(const sockaddr *addr) {
 }
 }  // namespace details
 
-CRAB_INLINE bdata DNSResolver::parse_ipaddress(const std::string &str) {
+CRAB_INLINE bool DNSResolver::parse_ipaddress(const std::string &str, bdata *result) {
 	bdata tmp(16, 0);
 	if (inet_pton(AF_INET6, str.c_str(), tmp.data()) == 1) {
-		return tmp;
+		*result = tmp;
+		return true;
 	}
 	tmp.resize(4);
 	if (inet_pton(AF_INET, str.c_str(), tmp.data()) == 1) {
-		return tmp;
+		*result = tmp;
+		return true;
 	}
-	return bdata{};
+	return false;
 }
 
 CRAB_INLINE std::string DNSResolver::print_ipaddress(const bdata &data) {
@@ -298,11 +362,10 @@ CRAB_INLINE bool TCPSocket::is_open() const { return fd.is_valid() || is_pending
 CRAB_INLINE bool TCPSocket::connect(const std::string &address, uint16_t port) {
 	close();
 
-	bdata addrdata = DNSResolver::parse_ipaddress(address);
-	int family     = addrdata.size() == 4 ? AF_INET : addrdata.size() == 16 ? AF_INET6 : 0;
-	if (family == 0)
+	bdata addrdata;
+	if (!DNSResolver::parse_ipaddress(address, &addrdata))
 		return false;
-	details::FileDescriptor temp(socket(family, SOCK_STREAM, IPPROTO_TCP));
+	details::FileDescriptor temp(details::socket(addrdata, SOCK_STREAM, IPPROTO_TCP));
 	int set = 1;
 #if CRAB_SOCKET_KEVENT
 	setsockopt(temp.get_value(), SOL_SOCKET, SO_NOSIGPIPE, &set, sizeof(set));
@@ -310,20 +373,7 @@ CRAB_INLINE bool TCPSocket::connect(const std::string &address, uint16_t port) {
 
 	if (!temp.is_valid() || !details::set_nonblocking(temp.get_value()))
 		return false;
-	int connect_result = -1;
-	if (family == AF_INET) {
-		sockaddr_in addr{};
-		addr.sin_family = AF_INET;
-		addr.sin_port   = htons(port);
-		std::copy(addrdata.begin(), addrdata.end(), reinterpret_cast<uint8_t *>(&addr.sin_addr));
-		connect_result = ::connect(temp.get_value(), reinterpret_cast<sockaddr *>(&addr), sizeof(addr));
-	} else if (family == AF_INET6) {
-		sockaddr_in6 addr{};
-		addr.sin6_family = AF_INET6;
-		addr.sin6_port   = htons(port);
-		std::copy(addrdata.begin(), addrdata.end(), reinterpret_cast<uint8_t *>(&addr.sin6_addr));
-		connect_result = ::connect(temp.get_value(), reinterpret_cast<sockaddr *>(&addr), sizeof(addr));
-	}
+	int connect_result = details::connect(temp.get_value(), addrdata, port);
 	if (connect_result < 0 && errno != EINPROGRESS)
 		return false;
 	if (setsockopt(temp.get_value(), IPPROTO_TCP, TCP_NODELAY, &set, sizeof(set)) < 0)
@@ -414,32 +464,15 @@ CRAB_INLINE void TCPSocket::accept(TCPAcceptor &acceptor, std::string *accepted_
 CRAB_INLINE TCPAcceptor::TCPAcceptor(const std::string &address, uint16_t port, Handler &&a_handler)
     : a_handler(std::move(a_handler)) {
 	bdata addrdata = DNSResolver::parse_ipaddress(address);
-	int family     = addrdata.size() == 4 ? AF_INET : addrdata.size() == 16 ? AF_INET6 : 0;
-	details::check(family != 0, "crab::TCPAcceptor ip address invalid");
-	details::FileDescriptor tmp(socket(family, SOCK_STREAM, IPPROTO_TCP));
+	details::FileDescriptor tmp(details::socket(addrdata, SOCK_STREAM, IPPROTO_TCP));
 	details::check(tmp.is_valid(), "crab::TCPAcceptor socket() failed");
 	int set = 1;
 #if CRAB_SOCKET_KEVENT
 	setsockopt(tmp.get_value(), SOL_SOCKET, SO_NOSIGPIPE, &set, sizeof(set));
 #endif
 	setsockopt(tmp.get_value(), SOL_SOCKET, SO_REUSEADDR, &set, sizeof(set));
-	setsockopt(tmp.get_value(), SOL_SOCKET, SO_REUSEPORT, &set, sizeof(set));
 
-	if (family == AF_INET) {
-		sockaddr_in addr{};
-		addr.sin_family = AF_INET;
-		addr.sin_port   = htons(port);
-		std::copy(addrdata.begin(), addrdata.end(), reinterpret_cast<uint8_t *>(&addr.sin_addr));
-		details::check(bind(tmp.get_value(), reinterpret_cast<sockaddr *>(&addr), sizeof(addr)) == 0,
-		    "crab::TCPAcceptor bind failed");
-	} else if (family == AF_INET6) {
-		sockaddr_in6 addr{};
-		addr.sin6_family = AF_INET6;
-		addr.sin6_port   = htons(port);
-		std::copy(addrdata.begin(), addrdata.end(), reinterpret_cast<uint8_t *>(&addr.sin6_addr));
-		details::check(bind(tmp.get_value(), reinterpret_cast<sockaddr *>(&addr), sizeof(addr)) == 0,
-		    "crab::TCPAcceptor bind failed");
-	}
+	details::check(details::bind(tmp.get_value(), addrdata, port) >= 0, "crab::TCPAcceptor bind failed");
 	details::check(details::set_nonblocking(tmp.get_value()), "crab::TCPAcceptor fcntl set nonblocking failed");
 	details::check(listen(tmp.get_value(), SOMAXCONN) >= 0, "crab::TCPAcceptor listen failed");
 	details::check(details::add_la_socket_callable(RunLoop::current()->efd, tmp, this),
@@ -450,9 +483,9 @@ CRAB_INLINE TCPAcceptor::TCPAcceptor(const std::string &address, uint16_t port, 
 CRAB_INLINE bool TCPAcceptor::can_accept() {
 	if (accepted_fd.is_valid())
 		return true;
-	uint8_t in_addr[sizeof(sockaddr_in)] = {};
-	socklen_t in_len                     = sizeof(in_addr);
-	const int set                        = 1;
+	sockaddr_storage in_addr = {};
+	socklen_t in_len         = sizeof(in_addr);
+	const int set            = 1;
 	while (true) {
 #if CRAB_SOCKET_KEVENT
 		details::FileDescriptor sd(::accept(fd.get_value(), reinterpret_cast<sockaddr *>(&in_addr), &in_len));
@@ -473,6 +506,103 @@ CRAB_INLINE bool TCPAcceptor::can_accept() {
 		accepted_addr = details::good_inet_ntop(reinterpret_cast<sockaddr *>(&in_addr));
 		return true;
 	}
+}
+
+CRAB_INLINE UDPTransmitter::UDPTransmitter(const std::string &address, uint16_t port, Handler &&r_handler)
+    : r_handler(std::move(r_handler)) {
+	bdata addrdata = DNSResolver::parse_ipaddress(address);
+	details::FileDescriptor temp(details::socket(addrdata, SOCK_DGRAM, IPPROTO_UDP));
+	details::check(temp.is_valid(), "crab::UDPTransmitter socket() failed");
+	int set = 1;
+	details::check(details::set_nonblocking(temp.get_value()), "crab::UDPTransmitter set_nonblocking() failed");
+
+	if (DNSResolver::is_multicast(addrdata)) {
+		details::check(setsockopt(temp.get_value(), SOL_SOCKET, SO_BROADCAST, &set, sizeof(set)) >= 0,
+		    "crab::UDPTransmitter: Failed to set SO_BROADCAST option");
+		details::check(setsockopt(temp.get_value(), IPPROTO_IP, IP_MULTICAST_LOOP, &set, sizeof(set)) >= 0,
+		    "crab::UDPTransmitter: Failed to set IP_MULTICAST_LOOP option");
+	}
+	int connect_result = details::connect(temp.get_value(), addrdata, port);
+	details::check(connect_result >= 0 || errno == EINPROGRESS, "crab::UDPTransmitter connect() failed");
+	details::check(details::add_udp_transmitter_callable(RunLoop::current()->efd, temp, this), "");
+	if (connect_result >= 0) {
+		//	 On some systems if socket is connected right away, no epoll happens
+		can_write = true;
+		RunLoop::current()->links.add_triggered_callables(this);
+	}
+	fd.swap(temp);
+}
+
+CRAB_INLINE size_t UDPTransmitter::write_datagram(const uint8_t *data, size_t count) {
+	if (!fd.is_valid() || !can_write)
+		return 0;
+	details::StaticHolder<PerformanceStats>::instance.UDP_SEND_count += 1;
+	RunLoop::current()->push_record("sendto", int(count));
+	ssize_t result = ::sendto(fd.get_value(), data, count, details::RECV_SEND_FLAGS, nullptr, 0);
+	RunLoop::current()->push_record("R(sendto)", int(result));
+	if (result != count)
+		can_write = false;
+	if (result < 0) {
+		// If no one is listening on the other side, after receiving ICMP report, error 111 is returned on Linux
+		// We will ignore all errors here, in hope they will disappear soon
+		return 0;  // Will fire on_epoll_call in future automatically
+	}
+	details::StaticHolder<PerformanceStats>::instance.UDP_SEND_size += result;
+	return result;
+}
+
+CRAB_INLINE UDPReceiver::UDPReceiver(const std::string &address, uint16_t port, Handler &&r_handler)
+    : r_handler(std::move(r_handler)) {
+	// On Linux we can  bind either to 127.0.0.1, 0.0.0.0 or multicast group
+	// TODO - check on Mac OSX
+	bdata addrdata = DNSResolver::parse_ipaddress(address);
+	details::FileDescriptor temp(details::socket(addrdata, SOCK_DGRAM, IPPROTO_UDP));
+	details::check(temp.is_valid(), "crab::UDPReceiver socket() failed");
+	int set = 1;
+	if (DNSResolver::is_multicast(addrdata))
+		setsockopt(temp.get_value(), SOL_SOCKET, SO_REUSEADDR, &set, sizeof(set));
+	details::check(details::set_nonblocking(temp.get_value()), "crab::UDPReceiver set_nonblocking() failed");
+
+	details::check(details::bind(temp.get_value(), addrdata, port) >= 0, "crab::UDPReceiver bind() failed");
+	if (DNSResolver::is_multicast(addrdata)) {
+		// On Linux, multicast is broken. INADDR_ANY does not mean "any adapter", but "default one"
+		// So, to listen to all adapters, we must call setsockopt per adapter.
+		// And then listen to changes of adapters list (how?), and call setsockopt on each new adapter.
+		// Compare to TCP or UDP unicast, where INADDR_ANY correctly means listening on all adapter.
+
+		// On Mac OSX, INADDR_ANY correctly listens to all adapters (tested on Snow Leopard)
+		// TODO - check on recent Mac OSX
+		ip_mreq mreq{};
+		std::copy(addrdata.begin(), addrdata.end(), reinterpret_cast<uint8_t *>(&mreq.imr_multiaddr.s_addr));
+		mreq.imr_interface.s_addr = htonl(INADDR_ANY);
+		details::check(setsockopt(temp.get_value(), IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) >= 0,
+		    "crab::UDPReceiver: Failed to join multicast group");
+	}
+	details::check(details::add_la_socket_callable(RunLoop::current()->efd, temp, this), "");
+	fd.swap(temp);
+}
+
+CRAB_INLINE bool UDPReceiver::read_datagram(uint8_t *data, size_t *size, std::string *peer_addr) {
+	if (!fd.is_valid() || !can_read)
+		return false;
+	sockaddr_storage in_addr = {};
+	socklen_t in_len         = sizeof(in_addr);
+	details::StaticHolder<PerformanceStats>::instance.UDP_RECV_count += 1;
+	RunLoop::current()->push_record("recvfrom", int(MAX_DATAGRAM_SIZE));
+	ssize_t result = recvfrom(
+	    fd.get_value(), data, MAX_DATAGRAM_SIZE, details::RECV_SEND_FLAGS, (struct sockaddr *)&in_addr, &in_len);
+	RunLoop::current()->push_record("R(recvfrom)", int(result));
+	if (result < 0) {
+		// Sometimes (for example during adding/removing network adapters), errors could be returned on Linux
+		// We will ignore all errors here, in hope they will disappear soon
+		return false;  // Will fire on_epoll_call in future automatically
+	}
+	if (peer_addr) {
+		*peer_addr = details::good_inet_ntop(reinterpret_cast<sockaddr *>(&in_addr));
+	}
+	details::StaticHolder<PerformanceStats>::instance.UDP_RECV_size += result;
+	*size = result;
+	return true;
 }
 
 }  // namespace crab

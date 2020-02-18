@@ -63,12 +63,12 @@ struct MDSettings {
 	uint16_t upstream_tcp_port   = 7000;
 	uint16_t upstream_http_port  = 7001;
 
-	std::string md_gate_address        = "127.0.0.1";
-	uint16_t md_gate_udp_a_port        = 7002;
-	std::string md_gate_udp_a_address  = "239.195.13.117";
-	uint16_t md_gate_udp_ra_port       = 7003;
-	std::string md_gate_udp_ra_address = "239.195.14.117";
-	uint16_t md_gate_http_port         = 7004;
+	std::string md_gate_address      = "127.0.0.1";
+	uint16_t md_gate_udp_a_port      = 7002;
+	std::string md_gate_udp_a_group  = "239.195.13.117";
+	uint16_t md_gate_udp_ra_port     = 7003;
+	std::string md_gate_udp_ra_group = "239.195.14.117";
+	uint16_t md_gate_http_port       = 7004;
 };
 
 struct Msg {

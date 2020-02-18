@@ -20,7 +20,7 @@
 
 namespace http = crab::http;
 
-enum { MAX_RESPONSE_COUNT = 10000, MICROSECONDS_PER_MESSAGE = 50 };
+enum { MAX_RESPONSE_COUNT = 10000, MICROSECONDS_PER_MESSAGE = 500000 };
 
 // This class uses on_idle so that messages will be generated/sent with
 // as little jitter as possible. It contains small TCP server, so that clients connect
@@ -29,9 +29,10 @@ enum { MAX_RESPONSE_COUNT = 10000, MICROSECONDS_PER_MESSAGE = 50 };
 
 class MDGenerator {
 public:
-	explicit MDGenerator(uint16_t port, std::function<void(Msg msg)> &&message_handler)
+	explicit MDGenerator(const MDSettings &settings, std::function<void(Msg msg)> &&message_handler)
 	    : message_handler(std::move(message_handler))
-	    , la_socket("0.0.0.0", port, [&]() { accept_all(); })
+	    , la_socket("0.0.0.0", settings.upstream_tcp_port, [&]() { accept_all(); })
+	    , udp_a(settings.md_gate_udp_a_group, settings.md_gate_udp_a_port, [&]() {})
 	    , idle([&]() { on_idle(); }) {}
 
 	void on_idle() {
@@ -49,6 +50,7 @@ public:
 			crab::OMemoryStream os(buffer, Msg::size);
 			msg.write(&os);
 
+			udp_a.write_datagram(buffer, Msg::size);  // Ignore `buffer full` errors
 			for (auto it = clients.begin(); it != clients.end();) {
 				if ((*it)->write_some(buffer, sizeof(buffer)) != sizeof(buffer)) {
 					std::cout << "HTTP Client disconnected (or buffer full) #=" << clients.size() << std::endl;
@@ -67,6 +69,7 @@ private:
 	crab::TCPAcceptor la_socket;
 	using ClientList = std::list<std::unique_ptr<crab::TCPSocket>>;
 	ClientList clients;
+	crab::UDPTransmitter udp_a;
 
 	crab::Idle idle;
 
@@ -193,7 +196,7 @@ private:
 		// while it communicates with MDSourceApp via single point - add_message()
 		crab::RunLoop runloop;
 
-		MDGenerator gen(settings.upstream_tcp_port, [&](Msg msg) { add_message(msg); });
+		MDGenerator gen(settings, [&](Msg msg) { add_message(msg); });
 
 		runloop.run();
 	}

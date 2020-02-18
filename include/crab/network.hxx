@@ -243,7 +243,7 @@ CRAB_INLINE void DNSResolver::resolve(const std::string &full_name, bool ipv4, b
 	cancel();
 	DNSWorker *w = DNSWorker::StaticWorker::instance;
 	if (!w)
-		throw std::runtime_error("Create single DNSWorker in your main");
+		throw std::runtime_error("Please, create single DNSWorker instance in your main");
 	resolving = true;
 	std::unique_lock<std::mutex> lock(w->dns_mutex);
 	this->full_name = full_name;
@@ -266,6 +266,21 @@ CRAB_INLINE void DNSResolver::cancel() {
 		else
 			++it;
 	ab.cancel();
+}
+
+CRAB_INLINE bdata DNSResolver::parse_ipaddress(const std::string &str) {
+	bdata result;
+	if (!parse_ipaddress(str, &result))
+		throw std::runtime_error("Error parsing IP address '" + str + "'");
+	return result;
+}
+
+CRAB_INLINE bool DNSResolver::is_multicast(const bdata &data) {
+	if (data.size() == 4 && data[0] == 224)
+		return true;
+	if (data.size() == 16 && data[0] == 0xff)
+		return true;
+	return false;
 }
 
 #endif

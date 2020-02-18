@@ -22,33 +22,6 @@
 
 namespace http = crab::http;
 
-namespace crab {
-
-// Abstracts UDP outgoing buffer with event on buffer space available
-class UDPTransmitter {
-public:
-	explicit UDPTransmitter(const std::string &addr, uint16_t port, Handler &&r_handler)
-	    : r_handler(std::move(r_handler)) {}
-
-	size_t write_datagram(const void *data, size_t size) { return size; }
-
-	~UDPTransmitter() = default;
-
-private:
-	Handler &&r_handler;
-};
-
-class UDPReceiver {
-public:
-	typedef std::function<void(const std::string &addr, const unsigned char *data, size_t size)> P_handler;
-	UDPReceiver(const std::string &addr, uint16_t port, P_handler &&p_handler) {}
-	~UDPReceiver() = default;
-
-private:
-};
-
-}  // namespace crab
-
 enum { MAX_DATAGRAM_SIZE = 508 };
 
 // Connects to TCP, reads messages from upstream_socket, immediately retransmits them to udp_a
@@ -59,7 +32,7 @@ public:
 	    : settings(settings)
 	    , upstream_socket([&]() { on_upstream_socket_data(); }, [&]() { on_upstream_socket_closed(); })
 	    , upstream_socket_buffer(4096)
-	    , udp_a(settings.md_gate_udp_a_address, settings.md_gate_udp_a_port,
+	    , udp_a(settings.md_gate_udp_a_group, settings.md_gate_udp_a_port,
 	          [&]() {})  // We just skip packets if buffer is full in UDP line A
 	    , message_handler(std::move(message_handler))
 	    , reconnect_timer([&]() { connect(); })
@@ -131,7 +104,7 @@ public:
 	explicit MDGate(const MDSettings &settings)
 	    : settings(settings)
 	    , server("0.0.0.0", settings.md_gate_http_port)
-	    , udp_ra(settings.md_gate_udp_ra_address, settings.md_gate_udp_ra_port, [&]() { broadcast_retransmission(); })
+	    , udp_ra(settings.md_gate_udp_ra_group, settings.md_gate_udp_ra_port, [&]() { broadcast_retransmission(); })
 	    , stat_timer([&]() { on_stat_timer(); })
 	    , ab([&]() { on_fast_queue_changed(); })
 	    , th(&MDGate::retransmitter_thread, this)

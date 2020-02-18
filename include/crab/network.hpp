@@ -34,6 +34,10 @@ struct PerformanceStats {
 	std::atomic<size_t> SEND_size{};
 	std::atomic<size_t> EPOLL_count{};
 	std::atomic<size_t> EPOLL_size{};
+	std::atomic<size_t> UDP_RECV_count{};
+	std::atomic<size_t> UDP_RECV_size{};
+	std::atomic<size_t> UDP_SEND_count{};
+	std::atomic<size_t> UDP_SEND_size{};
 };
 
 class Timer : private RunLoopCallable {
@@ -174,6 +178,53 @@ private:
 #endif
 };
 
+// Abstracts UDP outgoing buffer with event on buffer space available
+class UDPTransmitter : private RunLoopCallable {
+public:
+	explicit UDPTransmitter(const std::string &address, uint16_t port, Handler &&r_handler);
+
+	size_t write_datagram(const uint8_t *data, size_t count);
+	// either returns count (if written into buffer) or 0 (if buffer is full or a error occurs)
+
+private:
+	void on_runloop_call() override { r_handler(); }
+
+	Handler r_handler;
+
+#if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL
+	details::FileDescriptor fd;
+#else
+//  TODO - implement on other platforms
+//  std::unique_ptr<UDPTransmitterImpl> impl;
+//  friend struct UDPTransmitterImpl;
+#endif
+};
+
+class UDPReceiver : private RunLoopCallable {
+public:
+	explicit UDPReceiver(const std::string &address, uint16_t port, Handler &&r_handler);
+	// address must be either local adapter address (127.0.0.1, 0.0.0.0) or multicast group address
+
+	static constexpr size_t MAX_DATAGRAM_SIZE = 65536;
+	bool read_datagram(uint8_t *data, size_t *size, std::string *peer_addr = nullptr);
+	// data must point to buffer of at least MAX_DATAGRAM_SIZE size
+	// either returns false (if buffer is empty), or returns true, fills buffer and sets *size
+	// cannot return size_t, because datagrams of zero size are valid
+
+private:
+	void on_runloop_call() override { r_handler(); }
+
+	Handler r_handler;
+
+#if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL
+	details::FileDescriptor fd;
+#else
+	//  TODO - implement on other platforms
+//  std::unique_ptr<UDPReceiverImpl> impl;
+//  friend struct UDPReceiverImpl;
+#endif
+};
+
 #if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL || CRAB_SOCKET_WINDOWS
 
 namespace details {
@@ -229,11 +280,15 @@ private:
 	friend class Idle;
 	friend class TCPSocket;
 	friend class TCPAcceptor;
+	friend class UDPTransmitter;
+	friend class UDPReceiver;
 	friend class Watcher;
 
 	friend struct TimerImpl;
 	friend struct WatcherImpl;
 	friend struct TCPSocketImpl;
+	//    friend struct UDPTransmitterImpl;
+	//    friend struct UDPReceiverImpl;
 	friend struct TCPAcceptorImpl;
 
 	using CurrentLoop = details::StaticHolderTL<RunLoop *>;
@@ -255,7 +310,7 @@ private:
 
 class DNSResolver;
 
-// If using DNSResolver, create single DNSWorker in your main
+// If using DNSResolver, create single DNSWorker instance in your main
 class DNSWorker {
 public:
 	DNSWorker();
@@ -285,8 +340,11 @@ public:
 	void resolve(const std::string &full_name, bool ipv4, bool ipv6);  // will call handler once
 	void cancel();
 
-	static bdata parse_ipaddress(const std::string &str);
 	// returns 4 or 16 bytes depending on family, 0 bytes to indicate a error
+	static bool parse_ipaddress(const std::string &str, bdata *result);
+	static bdata parse_ipaddress(const std::string &str);
+
+	static bool is_multicast(const bdata &data);
 	static std::string print_ipaddress(const bdata &data);
 
 private:
