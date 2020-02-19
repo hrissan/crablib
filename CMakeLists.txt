@@ -71,6 +71,9 @@ add_executable(http_server_longpoll ${SOURCE_FILES} examples/http_server_longpol
 add_executable(http_server_multi ${SOURCE_FILES} examples/http_server_multi.cpp)
 add_executable(http_server_complex ${SOURCE_FILES} examples/http_server_complex.cpp)
 
+add_executable(fair_client ${SOURCE_FILES} examples/fair_client.cpp)
+add_executable(fair_server ${SOURCE_FILES} examples/fair_server.cpp)
+
 add_executable(md_tcp_source ${SOURCE_FILES} examples/md_tcp_source.cpp)
 add_executable(md_gate ${SOURCE_FILES} examples/md_gate.cpp)
 add_executable(md_client ${SOURCE_FILES} examples/md_client.cpp)

@@ -342,7 +342,7 @@ public:
 
 	// returns 4 or 16 bytes depending on family, 0 bytes to indicate a error
 	static bool parse_ipaddress(const std::string &str, bdata *result);
-	static bdata parse_ipaddress(const std::string &str);
+	static bdata parse_ipaddress(const std::string &str);  // throws on error
 
 	static bool is_multicast(const bdata &data);
 	static std::string print_ipaddress(const bdata &data);

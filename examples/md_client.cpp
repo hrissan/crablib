@@ -40,6 +40,10 @@ private:
 // Listen to interface changes on Linux
 // https://github.com/angt/ipevent/blob/e0a4c4dfe8ac193345315d55f320ab212dbda784/ipevent.c
 
+// Multicast with IPv6
+// https://linux.die.net/man/3/if_nametoindex
+// https://stackoverflow.com/questions/53309453/sending-packet-to-interface-via-multicast?noredirect=1&lq=1
+
 void print_interfaces() {
 	struct ifaddrs *ifaddr, *ifa;
 	int family, s, n;

@@ -521,6 +521,11 @@ CRAB_INLINE UDPTransmitter::UDPTransmitter(const std::string &address, uint16_t 
 		    "crab::UDPTransmitter: Failed to set SO_BROADCAST option");
 		details::check(setsockopt(temp.get_value(), IPPROTO_IP, IP_MULTICAST_LOOP, &set, sizeof(set)) >= 0,
 		    "crab::UDPTransmitter: Failed to set IP_MULTICAST_LOOP option");
+		// On multiadapter system, we should select adapter to send multicast to,
+		// unlike unicast, where adapter is selected based on routing table.
+		// If performance is not important (service discovery, etc), we could loop all adapters in send_datagram
+		// But if performance is important, we should have UDPTransmitter per adapter.
+		// TODO - add methods to set/get an adapter for multicast sending
 	}
 	int connect_result = details::connect(temp.get_value(), addrdata, port);
 	details::check(connect_result >= 0 || errno == EINPROGRESS, "crab::UDPTransmitter connect() failed");
@@ -564,11 +569,14 @@ CRAB_INLINE UDPReceiver::UDPReceiver(const std::string &address, uint16_t port, 
 
 	details::check(details::bind(temp.get_value(), addrdata, port) >= 0, "crab::UDPReceiver bind() failed");
 	if (DNSResolver::is_multicast(addrdata)) {
+		// TODO - handle IPv6 multicast
 		// On Linux, multicast is broken. INADDR_ANY does not mean "any adapter", but "default one"
 		// So, to listen to all adapters, we must call setsockopt per adapter.
 		// And then listen to changes of adapters list (how?), and call setsockopt on each new adapter.
 		// Compare to TCP or UDP unicast, where INADDR_ANY correctly means listening on all adapter.
 		// Sadly, same on Mac OSX
+
+		// TODO - handle multiple adapters, check adapter configuration changes with simple crab::Timer
 		ip_mreq mreq{};
 		std::copy(addrdata.begin(), addrdata.end(), reinterpret_cast<uint8_t *>(&mreq.imr_multiaddr.s_addr));
 		mreq.imr_interface.s_addr = htonl(INADDR_ANY);

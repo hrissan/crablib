@@ -167,6 +167,8 @@ In regards to connections left behind by clients without FIN, there were experim
 
 Application-level timeouts worked always, but were less efficient, than TCP keep-alives, which did not work when closing MacBook lid though :(:(:(. Currently this is a big TODO.
 
+Some ideas are described here (Linux-specific)) https://blog.cloudflare.com/when-tcp-sockets-refuse-to-die/
+
 # HTTP Server - streaming, long-polling, WebSocket etc.
 
 Currently, the server reads the whole request body, then creates the whole response body. This is good for small requests and responses, but cannot be used to upload/download large files, for example.

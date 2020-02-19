@@ -35,6 +35,9 @@ public:
 	    , udp_a(settings.md_gate_udp_a_group, settings.md_gate_udp_a_port, [&]() {})
 	    , idle([&]() { on_idle(); }) {}
 
+private:
+	using ClientList = std::list<std::unique_ptr<crab::TCPSocket>>;
+
 	void on_idle() {
 		auto now     = std::chrono::steady_clock::now();
 		size_t ticks = std::chrono::duration_cast<std::chrono::microseconds>(now - last_tick).count();
@@ -63,22 +66,6 @@ public:
 		}
 	}
 
-private:
-	std::function<void(Msg msg)> message_handler;
-
-	crab::TCPAcceptor la_socket;
-	using ClientList = std::list<std::unique_ptr<crab::TCPSocket>>;
-	ClientList clients;
-	crab::UDPTransmitter udp_a;
-
-	crab::Idle idle;
-
-	std::chrono::steady_clock::time_point last_tick = std::chrono::steady_clock::now();
-	uint64_t total_ticks                            = 0;
-
-	std::mt19937 mt;
-	uint64_t seqnum = 0;
-
 	void on_client_handler(ClientList::iterator it) {
 		// If socket buffer is filled, we disconnect
 		// And we do not read anything, so just empty handler
@@ -98,6 +85,20 @@ private:
 			std::cout << "HTTP Client accepted #=" << clients.size() << " addr=" << addr << std::endl;
 		}
 	}
+
+	std::function<void(Msg msg)> message_handler;
+
+	crab::TCPAcceptor la_socket;
+	ClientList clients;
+	crab::UDPTransmitter udp_a;
+
+	crab::Idle idle;
+
+	std::chrono::steady_clock::time_point last_tick = std::chrono::steady_clock::now();
+	uint64_t total_ticks                            = 0;
+
+	std::mt19937 mt;
+	uint64_t seqnum = 0;
 };
 
 class MDSourceApp {
