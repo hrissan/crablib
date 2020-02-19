@@ -140,9 +140,21 @@ public:
 	size_t write_some(const uint8_t *val, size_t count) override;
 	// writes 0..count-1, if returns 0 (outgoing buffer full) will fire rw_handler or
 	// d_handler in future
+
 	void write_shutdown();
-	// will fire d_handler only after all sent data is acknowledged or disconnect happens
+	// will fire d_handler only after all sent data is acknowledged and FIN is acknowledged
 	// receiving operations perform as usual
+
+	// write_shutdown is not perfect yet, only implemented to support HTTP/1.0 connection: close
+	// there is a catch on processing events after write_shutdown
+	// either you do not read, and you never know about received FIN and wait forever
+	// or you read() and discard, and client can transfer gigabytes of data and make you wait forever
+	// or you close() immediately after shutdown() and get all various behaviours described in
+	// https://www.nybek.com/blog/2015/03/05/cross-platform-testing-of-so_linger/
+
+	// Turns out, the contract is if client sets connection: close, it promises to send nothing more
+	// so the most portable solution would be to read() on event, and close if any data is received
+	// TODO - implement
 private:
 	void on_runloop_call() override;
 
