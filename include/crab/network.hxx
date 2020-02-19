@@ -276,7 +276,7 @@ CRAB_INLINE bdata DNSResolver::parse_ipaddress(const std::string &str) {
 }
 
 CRAB_INLINE bool DNSResolver::is_multicast(const bdata &data) {
-	if (data.size() == 4 && data[0] == 224)
+	if (data.size() == 4 && (data[0] & 0xf0) == 0xe0)
 		return true;
 	if (data.size() == 16 && data[0] == 0xff)
 		return true;

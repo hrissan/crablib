@@ -553,8 +553,7 @@ CRAB_INLINE size_t UDPTransmitter::write_datagram(const uint8_t *data, size_t co
 
 CRAB_INLINE UDPReceiver::UDPReceiver(const std::string &address, uint16_t port, Handler &&r_handler)
     : r_handler(std::move(r_handler)) {
-	// On Linux we can  bind either to 127.0.0.1, 0.0.0.0 or multicast group
-	// TODO - check on Mac OSX
+	// On Linux & Mac OSX we can bind either to 0.0.0.0, adapter address or multicast group
 	bdata addrdata = DNSResolver::parse_ipaddress(address);
 	details::FileDescriptor temp(details::socket(addrdata, SOCK_DGRAM, IPPROTO_UDP));
 	details::check(temp.is_valid(), "crab::UDPReceiver socket() failed");
@@ -569,9 +568,7 @@ CRAB_INLINE UDPReceiver::UDPReceiver(const std::string &address, uint16_t port, 
 		// So, to listen to all adapters, we must call setsockopt per adapter.
 		// And then listen to changes of adapters list (how?), and call setsockopt on each new adapter.
 		// Compare to TCP or UDP unicast, where INADDR_ANY correctly means listening on all adapter.
-
-		// On Mac OSX, INADDR_ANY correctly listens to all adapters (tested on Snow Leopard)
-		// TODO - check on recent Mac OSX
+		// Sadly, same on Mac OSX
 		ip_mreq mreq{};
 		std::copy(addrdata.begin(), addrdata.end(), reinterpret_cast<uint8_t *>(&mreq.imr_multiaddr.s_addr));
 		mreq.imr_interface.s_addr = htonl(INADDR_ANY);
