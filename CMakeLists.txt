@@ -83,6 +83,7 @@ add_executable(udp_eagain ${SOURCE_FILES} examples/lowlevel/udp_eagain.cpp)
 add_executable(benchmark_atomic ${SOURCE_FILES} examples/lowlevel/benchmark_atomic.cpp)
 add_executable(benchmark_chrono ${SOURCE_FILES} examples/lowlevel/benchmark_chrono.cpp)
 add_executable(benchmark_map ${SOURCE_FILES} examples/lowlevel/benchmark_map.cpp)
+add_executable(benchmark_getifaddrs ${SOURCE_FILES} examples/lowlevel/benchmark_getifaddrs.cpp)
 
 # Examples below are of very low quality and must be rewritten
 add_executable(client_simple ${SOURCE_FILES} examples/client_simple.cpp)
