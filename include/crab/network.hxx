@@ -102,11 +102,17 @@ CRAB_INLINE void RunLoop::run() {
 		int timeout_ms = MAX_SLEEP_MS;
 		if (links.process_timer(now, timeout_ms))
 			continue;
-		for (auto it = links.idle_handlers.begin(); it != links.idle_handlers.end(); ++it) {
-			links.add_triggered_callables(&*it);
-			timeout_ms = 0;
+		// Nothing triggered and no timers here
+		if (links.idle_handlers.empty()) {
+			step(timeout_ms);  // Just waiting
+		} else {
+			step(0);                                  // Poll
+			if (links.triggered_callables.empty()) {  // Nothing triggered during poll
+				for (auto it = links.idle_handlers.begin(); it != links.idle_handlers.end(); ++it) {
+					links.add_triggered_callables(&*it);
+				}
+			}
 		}
-		step(timeout_ms);
 		now = std::chrono::steady_clock::now();
 	}
 }
@@ -163,6 +169,22 @@ CRAB_INLINE void Timer::cancel() {
 }
 
 CRAB_INLINE Idle::Idle(Handler &&cb) : a_handler(cb) { RunLoop::current()->links.idle_handlers.push_back(*this); }
+
+CRAB_INLINE void Idle::set_active(bool a) {
+	if (a) {
+		RunLoop::current()->links.idle_handlers.push_back(*this);
+	} else {
+		idle_node.unlink();
+	}
+}
+
+CRAB_INLINE void Idle::on_runloop_call() {
+	// We enqueue all active idle instances at once in RunLoop::run, each handler is allowed
+	// to set any other idle to incative state
+	// Easy check strengthens invariant to "Only active idles run"
+	if (is_active())
+		a_handler();
+}
 
 CRAB_INLINE Watcher::Watcher(Handler &&a_handler) : loop(RunLoop::current()), a_handler(std::move(a_handler)) {}
 

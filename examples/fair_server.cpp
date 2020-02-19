@@ -32,6 +32,8 @@ private:
 
 	// if bunch of clients is in fair_queue, request from fresh client will have low latency
 
+	// IntrusiveList is good as a queue due to O(1) removal cost and auto-remove in Node destructor
+
 	crab::Idle idle;
 
 	uint64_t seqnum = 0;
@@ -48,6 +50,7 @@ private:
 				continue;
 			fair_queue.push_back(c);
 		}
+		idle.set_active(!fair_queue.empty());
 	}
 	static void busy_sleep_microseconds(int msec) {
 		auto start = std::chrono::steady_clock::now();
@@ -80,6 +83,7 @@ private:
 			return;  // No more requests
 		// Then, if more requests requests pending, add client into fair_queue
 		fair_queue.push_back(*it);  // Will have at least MSG_SIZE in buffer
+		idle.set_active(!fair_queue.empty());
 	}
 	void on_client_disconnected(ClientList::iterator it) {
 		clients.erase(it);  // automatically unlinks from fair_queue
@@ -102,6 +106,7 @@ private:
 			// also actual fair server will ensure that 2 connections from the same login are either not allowed
 			// or at least occupy single slot in fair_queue, and have timeouts for connections
 			fair_queue.push_back(clients.back());
+			idle.set_active(!fair_queue.empty());
 		}
 	}
 };

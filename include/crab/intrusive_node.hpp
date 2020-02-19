@@ -87,12 +87,14 @@ public:
 	IntrusiveIterator<T, Link> begin() { return IntrusiveIterator<T, Link>(&this->content); }
 	IntrusiveIterator<T, Link> end() { return IntrusiveIterator<T, Link>(this->content.prev); }
 
+	bool empty() const { return &content == content.prev; }
+
 	T &front() { return *content.next; }
 	T &back() { return *content.prev; }
-	bool empty() const { return &content == content.prev; }
-	void push_back(T &node) { insert(end(), node); }
-	void push_front(T &node) { insert(begin(), node); }
-	void insert(IntrusiveIterator<T, Link> pos, T &node) {
+
+	void push_back(T &node) { insert(end(), node); }        // NOP if already in some list
+	void push_front(T &node) { insert(begin(), node); }     // NOP if already in some list
+	void insert(IntrusiveIterator<T, Link> pos, T &node) {  // NOP if already in some list
 		IntrusiveNode<T> *other = &(node.*Link);
 		if (other->in_list())
 			return;

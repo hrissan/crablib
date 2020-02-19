@@ -101,9 +101,13 @@ private:
 class Idle : private RunLoopCallable {
 public:
 	explicit Idle(Handler &&cb);
+	// Active after construction, only handlers of active Idles will run
+
+	void set_active(bool a);
+	bool is_active() { return idle_node.in_list(); }
 
 private:
-	void on_runloop_call() override { a_handler(); }
+	void on_runloop_call() override;
 
 	IntrusiveNode<Idle> idle_node;
 	Handler a_handler;
