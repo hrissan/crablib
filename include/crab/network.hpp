@@ -335,8 +335,8 @@ public:
 
 private:
 	using StaticWorker = details::StaticHolder<DNSWorker *>;
-	//	static DNSWorker *instance;
 	friend class DNSResolver;
+
 	bool quit = false;
 	std::list<DNSResolver *> work_queue;
 	std::mutex dns_mutex;
