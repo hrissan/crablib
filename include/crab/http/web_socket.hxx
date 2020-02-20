@@ -18,7 +18,7 @@ CRAB_INLINE WebSocket::WebSocket(Handler &&r_handler, Handler &&d_handler) {
 	masking_key_random.seed(sd);
 }
 
-CRAB_INLINE bool WebSocket::connect(const std::string &address, uint16_t port, const RequestHeader &rh) {
+CRAB_INLINE bool WebSocket::connect(const Address &address, const RequestHeader &rh) {
 	close();
 	http::RequestBody req;
 	req.r                       = rh;
@@ -36,7 +36,7 @@ CRAB_INLINE bool WebSocket::connect(const std::string &address, uint16_t port, c
 	req.r.sec_websocket_key = base64::encode(rdata, sizeof(rdata));
 
 	//	data_to_write.write(rd.data(), rd.size());
-	if (!Connection::connect(address, port))
+	if (!Connection::connect(address))
 		return false;
 	Connection::write(std::move(req));
 	return true;

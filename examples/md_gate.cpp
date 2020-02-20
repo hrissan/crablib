@@ -32,8 +32,7 @@ public:
 	    : settings(settings)
 	    , upstream_socket([&]() { on_upstream_socket_data(); }, [&]() { on_upstream_socket_closed(); })
 	    , upstream_socket_buffer(4096)
-	    , udp_a(settings.md_gate_udp_a_group, settings.md_gate_udp_a_port,
-	          [&]() {})  // We just skip packets if buffer is full in UDP line A
+	    , udp_a(settings.md_gate_udp_a(), [&]() {})  // We just skip packets if buffer is full in UDP line A
 	    , message_handler(std::move(message_handler))
 	    , reconnect_timer([&]() { connect(); })
 	    , simulated_disconnect_timer([&]() { on_simulated_disconnect_timer(); }) {
@@ -81,7 +80,7 @@ private:
 		std::cout << "Upstream socket disconnected" << std::endl;
 	}
 	void connect() {
-		if (!upstream_socket.connect(settings.upstream_address, settings.upstream_tcp_port)) {
+		if (!upstream_socket.connect(settings.upsteam_tcp())) {
 			reconnect_timer.once(1);
 		} else {
 			std::cout << "Upstream socket connection attempt started..." << std::endl;
@@ -103,8 +102,8 @@ class MDGate {
 public:
 	explicit MDGate(const MDSettings &settings)
 	    : settings(settings)
-	    , server("0.0.0.0", settings.md_gate_http_port)
-	    , udp_ra(settings.md_gate_udp_ra_group, settings.md_gate_udp_ra_port, [&]() { broadcast_retransmission(); })
+	    , server(settings.md_gate_http())
+	    , udp_ra(settings.md_gate_udp_ra(), [&]() { broadcast_retransmission(); })
 	    , stat_timer([&]() { on_stat_timer(); })
 	    , ab([&]() { on_fast_queue_changed(); })
 	    , th(&MDGate::retransmitter_thread, this)
@@ -227,7 +226,7 @@ private:
 		reconnect_timer.once(1);
 	}
 	void connect() {
-		if (!http_client.connect(settings.upstream_address, settings.upstream_http_port)) {
+		if (!http_client.connect(settings.upsteam_http())) {
 			reconnect_timer.once(1);
 		} else {
 			std::cout << "Incoming http connect started" << std::endl;

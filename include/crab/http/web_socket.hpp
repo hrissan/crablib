@@ -18,7 +18,7 @@ public:
 	// after close you are guaranteed that no handlers will be called
 	using Connection::is_open;
 
-	bool connect(const std::string &address, uint16_t port, const RequestHeader &rh);
+	bool connect(const Address &address, const RequestHeader &rh);
 	// At list fill host, uri, authorization
 	// either returns false or returns true and will call r_handler or d_handler in future
 

@@ -11,7 +11,7 @@ int test_http(size_t num, uint16_t port) {
 	std::string body = "Hello, Crab " + std::to_string(num) + "!";
 	crab::RunLoop runloop;
 
-	http::Server server("0.0.0.0", port);
+	http::Server server(port);
 	server.r_handler = [&](http::Client *who, http::RequestBody &&request, http::ResponseBody &response) -> bool {
 		response.r.status       = 200;
 		response.r.content_type = "text/plain; charset=utf-8";

@@ -124,9 +124,9 @@ CRAB_INLINE Connection::Connection(Handler &&r_handler, Handler &&d_handler)
     , sock([this]() { advance_state(true); }, std::bind(&Connection::on_disconnect, this))
     , state(SHUTDOWN) {}
 
-CRAB_INLINE bool Connection::connect(const std::string &address, uint16_t port) {
+CRAB_INLINE bool Connection::connect(const Address &address) {
 	close();
-	if (!sock.connect(address, port))
+	if (!sock.connect(address))
 		return false;
 	peer_address = address;
 	client_side  = true;
@@ -146,7 +146,7 @@ CRAB_INLINE void Connection::close() {
 	state = SHUTDOWN;
 	read_buffer.clear();
 	sock.close();
-	peer_address.clear();
+	peer_address = Address();
 }
 
 CRAB_INLINE bool Connection::read_next(RequestBody &req) {

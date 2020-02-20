@@ -11,8 +11,7 @@
 class MDClientApp {
 public:
 	explicit MDClientApp(const MDSettings &settings)
-	    : settings(settings)
-	    , udp_a(settings.md_gate_udp_a_group, settings.md_gate_udp_a_port, [&]() { on_udp_a(); }) {}
+	    : settings(settings), udp_a(settings.md_gate_udp_a(), [&]() { on_udp_a(); }) {}
 
 private:
 	void on_udp_a() {

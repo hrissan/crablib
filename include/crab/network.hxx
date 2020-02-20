@@ -7,6 +7,11 @@
 
 namespace crab {
 
+CRAB_INLINE Address::Address(const std::string &numeric_host, uint16_t port) {
+	if (!parse(*this, numeric_host, port))
+		throw std::runtime_error("Address failed to parse, numeric_host='" + numeric_host + "'");
+}
+
 CRAB_INLINE void TCPSocket::set_handlers(Handler &&rw_handler, Handler &&d_handler) {
 	this->rw_handler = std::move(rw_handler);
 	this->d_handler  = std::move(d_handler);
@@ -219,9 +224,10 @@ CRAB_INLINE DNSWorker::~DNSWorker() {
 CRAB_INLINE void DNSWorker::worker_fun() {
 	while (true) {
 		DNSResolver *req = nullptr;
-		std::string full_name;
-		bool ipv4 = false;
-		bool ipv6 = false;
+		std::string host_name;
+		uint16_t port = 0;
+		bool ipv4     = false;
+		bool ipv6     = false;
 		{
 			std::unique_lock<std::mutex> lock(dns_mutex);
 			if (quit)
@@ -233,14 +239,15 @@ CRAB_INLINE void DNSWorker::worker_fun() {
 			//  std::cout << "Took work" << std::endl;
 			req = work_queue.front();
 			work_queue.pop_front();
-			full_name              = std::move(req->full_name);
+			host_name              = std::move(req->host_name);
+			port                   = req->port;
 			ipv4                   = req->ipv4;
 			ipv6                   = req->ipv6;
 			req->executing_request = &req;
 		}
 		// resolve
 		// std::this_thread::sleep_for(std::chrono::seconds(1));
-		auto names = sync_resolve(full_name, ipv4, ipv6);
+		auto names = sync_resolve(host_name, port, ipv4, ipv6);
 		// std::cout << "Resolved 1" << std::endl;
 		std::unique_lock<std::mutex> lock(dns_mutex);
 		if (!req)
@@ -261,14 +268,15 @@ CRAB_INLINE void DNSResolver::on_handler() {
 	dns_handler(names);
 }
 
-CRAB_INLINE void DNSResolver::resolve(const std::string &full_name, bool ipv4, bool ipv6) {
+CRAB_INLINE void DNSResolver::resolve(const std::string &host_name, uint16_t port, bool ipv4, bool ipv6) {
 	cancel();
 	DNSWorker *w = DNSWorker::StaticWorker::instance;
 	if (!w)
 		throw std::runtime_error("Please, create single DNSWorker instance in your main");
 	resolving = true;
 	std::unique_lock<std::mutex> lock(w->dns_mutex);
-	this->full_name = full_name;
+	this->host_name = host_name;
+	this->port      = port;
 	this->ipv4      = ipv4;
 	this->ipv6      = ipv6;
 	w->work_queue.push_back(this);
@@ -288,21 +296,6 @@ CRAB_INLINE void DNSResolver::cancel() {
 		else
 			++it;
 	ab.cancel();
-}
-
-CRAB_INLINE bdata DNSResolver::parse_ipaddress(const std::string &str) {
-	bdata result;
-	if (!parse_ipaddress(str, &result))
-		throw std::runtime_error("Error parsing IP address '" + str + "'");
-	return result;
-}
-
-CRAB_INLINE bool DNSResolver::is_multicast(const bdata &data) {
-	if (data.size() == 4 && (data[0] & 0xf0) == 0xe0)
-		return true;
-	if (data.size() == 16 && data[0] == 0xff)
-		return true;
-	return false;
 }
 
 #endif

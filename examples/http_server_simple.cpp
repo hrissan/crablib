@@ -11,7 +11,7 @@ int main() {
 	std::cout << "This is simple HTTP server" << std::endl;
 	crab::RunLoop runloop;
 
-	http::Server server("0.0.0.0", 7000);
+	http::Server server(7000);
 
 	server.r_handler = [&](http::Client *who, http::RequestBody &&request, http::ResponseBody &response) -> bool {
 		response.r.status       = 200;

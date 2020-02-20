@@ -86,7 +86,7 @@ int test_http(size_t num, uint16_t port) {
 	RunLoop runloop;
 	int req_counter = 0;
 	std::set<http::Client *> connected_sockets;
-	http::Server server("0.0.0.0", port);
+	http::Server server(port);
 	server.r_handler = [&](http::Client *who, http::RequestBody &&request, http::ResponseBody &response) -> bool {
 		if (request.r.uri == "/") {
 			response.r.status       = 200;
@@ -177,7 +177,7 @@ int test_client(int num, uint16_t port) {
 	http::RequestHeader req;
 	req.host = "127.0.0.1";
 	req.uri  = "/ws";
-	rws->connect("127.0.0.1", port, req);
+	rws->connect(crab::Address("127.0.0.1", port), req);
 
 	stat_timer.reset(new Timer([&]() {
 		message_counter += 1;
@@ -263,25 +263,25 @@ int main(int argc, char *argv[]) {
 	//	auto na = DNSResolver::sync_resolve("google.com", true, false);
 	//	if( !na.empty() )
 	//		rws->connect(na.front(), "80");
-	rws->connect("74.125.131.101", 80);
+	rws->connect(crab::Address("74.125.131.101", 80));
 
 	//	auto google_names = DNSResolver::sync_resolve("google.ru", true, false);
 	//	        for(auto na : google_names){
 	//	            std::cout << " google name resolved=" << na << std::endl;
 	//	        }
 
-	DNSResolver res([](std::vector<std::string> result) {
+	DNSResolver res([](std::vector<Address> result) {
 		std::cout << "names resolved" << std::endl;
 		for (auto na : result) {
-			std::cout << " name resolved=" << na << std::endl;
+			std::cout << " name resolved=" << na.get_address() << std::endl;
 		}
 		RunLoop::current()->cancel();
 	});
 
-	res.resolve("alawar.com", true, true);
+	res.resolve("alawar.com", 80, true, true);
 	res.cancel();
 	std::this_thread::sleep_for(std::chrono::seconds(1));
-	res.resolve("google.com", true, true);
+	res.resolve("google.com", 80, true, true);
 
 	//	TCPSocket rws;
 	//	TCPAcceptor server("127.0.0.1", 8700, [&]{

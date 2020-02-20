@@ -21,8 +21,8 @@ public:
 	void close();  // after close you are guaranteed that no handlers will be called
 	bool is_open() const { return sock.is_open(); }
 
-	bool connect(const std::string &address, uint16_t port) { return sock.connect(address, port); }
-	void accept(TCPAcceptor &acceptor, std::string *accepted_addr = nullptr) {
+	bool connect(const Address &address) { return sock.connect(address); }
+	void accept(TCPAcceptor &acceptor, Address *accepted_addr = nullptr) {
 		return sock.accept(acceptor, accepted_addr);
 	}
 
@@ -61,12 +61,12 @@ public:
 		this->d_handler = std::move(d_handler);
 	}
 
-	bool connect(const std::string &address, uint16_t port);
+	bool connect(const Address &address);
 	void accept(TCPAcceptor &acceptor);
 
 	void close();
 	bool is_open() const { return sock.is_open(); }
-	const std::string &get_peer_address() const { return peer_address; }
+	const Address &get_peer_address() const { return peer_address; }
 
 	void write(ResponseBody &&resp);
 	void write(RequestBody &&resp);
@@ -120,7 +120,7 @@ protected:
 	BufferedTCPSocket sock;
 
 	State state;
-	std::string peer_address;
+	Address peer_address;
 };
 
 }  // namespace http

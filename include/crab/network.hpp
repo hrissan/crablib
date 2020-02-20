@@ -116,6 +116,28 @@ private:
 	friend struct details::RunLoopLinks;
 };
 
+#if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL
+class Address {
+public:
+	Address();
+	Address(const std::string &numeric_host, uint16_t port);
+
+	static bool parse(Address &address, const std::string &numeric_host, uint16_t port);
+
+	std::string get_address() const;
+	uint16_t get_port() const;
+	bool is_multicast_group() const;
+
+	const sockaddr *impl_get_sockaddr() const { return reinterpret_cast<const sockaddr *>(&addr); }
+	sockaddr *impl_get_sockaddr() { return reinterpret_cast<sockaddr *>(&addr); }
+	size_t impl_get_sockaddr_length() const;
+
+private:
+	sockaddr_storage addr = {};
+};
+#else
+#endif
+
 // socket is not RAII because it can go to disconnected state by external interaction
 class TCPSocket : public IStream, public OStream, private RunLoopCallable {
 public:
@@ -128,10 +150,10 @@ public:
 	// after close you are guaranteed that no handlers will be called
 	bool is_open() const;  // Connecting or connected
 
-	bool connect(const std::string &address, uint16_t port);
+	bool connect(const Address &address);
 	// either returns false or returns true and will call rw_handler or d_handler in future
 
-	void accept(TCPAcceptor &acceptor, std::string *accepted_addr = nullptr);
+	void accept(TCPAcceptor &acceptor, Address *accepted_addr = nullptr);
 	// throws if acceptor.can_accept() is false
 
 	size_t read_some(uint8_t *val, size_t count) override;
@@ -171,7 +193,7 @@ private:
 
 class TCPAcceptor : private RunLoopCallable {
 public:
-	explicit TCPAcceptor(const std::string &address, uint16_t port, Handler &&a_handler);
+	explicit TCPAcceptor(const Address &address, Handler &&a_handler);
 
 	bool can_accept();
 
@@ -187,7 +209,7 @@ private:
 
 	// We actually accept in can_accept, so that TCPSocket::accept never fails
 	details::FileDescriptor accepted_fd;
-	std::string accepted_addr;
+	Address accepted_addr;
 #else
 	std::unique_ptr<TCPAcceptorImpl> impl;
 	friend struct TCPAcceptorImpl;
@@ -197,7 +219,7 @@ private:
 // Abstracts UDP outgoing buffer with event on buffer space available
 class UDPTransmitter : private RunLoopCallable {
 public:
-	explicit UDPTransmitter(const std::string &address, uint16_t port, Handler &&r_handler);
+	explicit UDPTransmitter(const Address &address, Handler &&r_handler);
 
 	size_t write_datagram(const uint8_t *data, size_t count);
 	// either returns count (if written into buffer) or 0 (if buffer is full or a error occurs)
@@ -218,11 +240,11 @@ private:
 
 class UDPReceiver : private RunLoopCallable {
 public:
-	explicit UDPReceiver(const std::string &address, uint16_t port, Handler &&r_handler);
+	explicit UDPReceiver(const Address &address, Handler &&r_handler);
 	// address must be either local adapter address (127.0.0.1, 0.0.0.0) or multicast group address
 
 	static constexpr size_t MAX_DATAGRAM_SIZE = 65536;
-	bool read_datagram(uint8_t *data, size_t *size, std::string *peer_addr = nullptr);
+	bool read_datagram(uint8_t *data, size_t *size, Address *peer_addr = nullptr);
 	// data must point to buffer of at least MAX_DATAGRAM_SIZE size
 	// either returns false (if buffer is empty), or returns true, fills buffer and sets *size
 	// cannot return size_t, because datagrams of zero size are valid
@@ -331,7 +353,7 @@ class DNSWorker {
 public:
 	DNSWorker();
 	~DNSWorker();
-	static std::vector<std::string> sync_resolve(const std::string &fullname, bool ipv4, bool ipv6);
+	static std::vector<Address> sync_resolve(const std::string &host_name, uint16_t port, bool ipv4, bool ipv6);
 
 private:
 	using StaticWorker = details::StaticHolder<DNSWorker *>;
@@ -348,20 +370,13 @@ private:
 
 class DNSResolver {
 public:
-	typedef std::function<void(const std::vector<std::string> &names)> DNS_handler;
+	typedef std::function<void(const std::vector<Address> &names)> DNS_handler;
 
 	explicit DNSResolver(DNS_handler &&handler);
 	~DNSResolver() { cancel(); }
 
-	void resolve(const std::string &full_name, bool ipv4, bool ipv6);  // will call handler once
+	void resolve(const std::string &host_name, uint16_t port, bool ipv4, bool ipv6);  // will call handler once
 	void cancel();
-
-	// returns 4 or 16 bytes depending on family, 0 bytes to indicate a error
-	static bool parse_ipaddress(const std::string &str, bdata *result);
-	static bdata parse_ipaddress(const std::string &str);  // throws on error
-
-	static bool is_multicast(const bdata &data);
-	static std::string print_ipaddress(const bdata &data);
 
 private:
 	friend class DNSWorker;
@@ -371,10 +386,11 @@ private:
 
 	bool resolving = false;
 	// vars below are protected by mutex in worker
-	std::string full_name;
-	bool ipv4 = false;
-	bool ipv6 = false;
-	std::vector<std::string> names;
+	std::string host_name;
+	uint16_t port = 0;
+	bool ipv4     = false;
+	bool ipv6     = false;
+	std::vector<Address> names;
 	DNSResolver **executing_request = nullptr;
 };
 

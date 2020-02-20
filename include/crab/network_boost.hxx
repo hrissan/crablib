@@ -334,9 +334,9 @@ DNSResolver::DNSResolver(DNS_handler handler) : dns_handler(handler), impl(std::
 
 DNSResolver::~DNSResolver() { impl->close(); }
 
-void DNSResolver::resolve(const std::string &fullname, bool ipv4, bool ipv6) {
+void DNSResolver::resolve(const std::string &host_name, bool ipv4, bool ipv6) {
 	impl->close();
-	boost::asio::ip::tcp::resolver::query query(fullname, "http");
+	boost::asio::ip::tcp::resolver::query query(host_name, "http");
 	impl->pending_resolve = true;
 	impl->resolver.async_resolve(query,
 	    boost::bind(
@@ -363,9 +363,9 @@ bdata DNSResolver::parse_ipaddress(const std::string &str) {
 	return bdata();
 }
 
-std::vector<std::string> DNSResolver::sync_resolve(const std::string &fullname, bool ipv4, bool ipv6) {
+std::vector<std::string> DNSResolver::sync_resolve(const std::string &host_name, bool ipv4, bool ipv6) {
 	boost::asio::ip::tcp::resolver resolver(RunLoop::current()->io());
-	boost::asio::ip::tcp::resolver::query query(fullname, "http");
+	boost::asio::ip::tcp::resolver::query query(host_name, "http");
 	boost::asio::ip::tcp::resolver::iterator endpoint_iterator = resolver.resolve(query);
 	std::vector<std::string> names;
 	for (; endpoint_iterator != boost::asio::ip::tcp::resolver::iterator(); ++endpoint_iterator) {

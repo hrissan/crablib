@@ -43,7 +43,7 @@ namespace http = crab::http;
 
 class ServerComplexApp {
 public:
-	explicit ServerComplexApp(uint16_t port) : server("0.0.0.0", port), stat_timer([&]() { on_stat_timer(); }) {
+	explicit ServerComplexApp(uint16_t port) : server(port), stat_timer([&]() { on_stat_timer(); }) {
 		server.r_handler = [&](http::Client *who, http::RequestBody &&request, http::ResponseBody &response) -> bool {
 			req_counter += 1;
 			if (request.r.uri == "/") {

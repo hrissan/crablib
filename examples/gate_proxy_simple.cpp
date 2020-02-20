@@ -30,7 +30,7 @@ int test_proxy(int num, uint16_t port, uint16_t upstream_port) {
 
 	std::map<http::Client *, std::string> connected_sockets;
 	std::map<std::string, http::Client *> connected_sockets_inv;
-	http::Server server("0.0.0.0", port);
+	http::Server server(port);
 
 	server.r_handler = [&](http::Client *who, http::RequestBody &&request, http::ResponseBody &response) -> bool {
 		if (request.r.uri == "/latency") {
@@ -96,7 +96,7 @@ int test_proxy(int num, uint16_t port, uint16_t upstream_port) {
 	http::RequestHeader req;
 	req.host = "127.0.0.1";
 	req.uri  = "/ws";
-	rws->connect("127.0.0.1", upstream_port, req);
+	rws->connect(crab::Address("127.0.0.1", upstream_port), req);
 
 	stat_timer.reset(new Timer([&]() { runloop.print_records(); }));
 	stat_timer->once(1);

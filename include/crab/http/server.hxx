@@ -32,11 +32,11 @@ CRAB_INLINE void Client::write(ResponseBody &&response) {
 	Connection::write(std::move(response));
 }
 
-CRAB_INLINE Server::Server(const std::string &address, uint16_t port)
+CRAB_INLINE Server::Server(const Address &address)
     : r_handler(details::empty_r_handler)
     , d_handler(details::empty_d_handler)
     , w_handler(details::empty_w_handler)
-    , la_socket{address, port, std::bind(&Server::accept_all, this)} {}
+    , la_socket{address, std::bind(&Server::accept_all, this)} {}
 
 CRAB_INLINE Server::~Server() = default;  // we use incomplete types
 

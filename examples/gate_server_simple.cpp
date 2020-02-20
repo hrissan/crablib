@@ -19,7 +19,7 @@ int test_http(size_t num, uint16_t port) {
 	RunLoop runloop;
 	//	Idle idle([](){});
 	std::set<http::Client *> connected_sockets;
-	http::Server server("0.0.0.0", port);
+	http::Server server(port);
 	server.r_handler = [&](http::Client *who, http::RequestBody &&request, http::ResponseBody &response) -> bool {
 		if (request.r.uri == "/latency") {
 			who->web_socket_upgrade();

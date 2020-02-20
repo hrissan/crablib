@@ -69,6 +69,16 @@ struct MDSettings {
 	uint16_t md_gate_udp_ra_port     = 7003;
 	std::string md_gate_udp_ra_group = "239.195.14.117";
 	uint16_t md_gate_http_port       = 7004;
+
+	crab::Address upsteam_tcp_bind() const { return {"0.0.0.0", upstream_tcp_port}; }
+	crab::Address upsteam_tcp() const { return {upstream_address, upstream_tcp_port}; }
+	crab::Address upsteam_http_bind() const { return {"0.0.0.0", upstream_http_port}; }
+	crab::Address upsteam_http() const { return {upstream_address, upstream_http_port}; }
+
+	crab::Address md_gate_udp_a() const { return {md_gate_udp_a_group, md_gate_udp_a_port}; }
+	crab::Address md_gate_udp_ra() const { return {md_gate_udp_ra_group, md_gate_udp_ra_port}; }
+	crab::Address md_gate_http_bind() const { return {"0.0.0.0", md_gate_http_port}; }
+	crab::Address md_gate_http() const { return {md_gate_address, md_gate_http_port}; }
 };
 
 struct Msg {

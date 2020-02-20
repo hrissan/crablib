@@ -19,6 +19,11 @@
 #include "streams.hpp"
 #include "util.hpp"
 
+#if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL || CRAB_SOCKET_WINDOWS
+#include <sys/socket.h>
+// We use address_storage structucre in crab::Address
+#endif
+
 namespace crab {
 
 typedef std::function<void()> Handler;
@@ -57,6 +62,7 @@ namespace details {
 class FileDescriptor : private Nocopy {
 public:
 	explicit FileDescriptor(int value = -1) : value(value) {}
+	explicit FileDescriptor(int value, const char *throw_if_invalid_message);
 	~FileDescriptor() { reset(); }
 	void reset(int new_value = -1);
 	int get_value() const { return value; }

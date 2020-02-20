@@ -31,8 +31,8 @@ class MDGenerator {
 public:
 	explicit MDGenerator(const MDSettings &settings, std::function<void(Msg msg)> &&message_handler)
 	    : message_handler(std::move(message_handler))
-	    , la_socket("0.0.0.0", settings.upstream_tcp_port, [&]() { accept_all(); })
-	    , udp_a(settings.md_gate_udp_a_group, settings.md_gate_udp_a_port, [&]() {})
+	    , la_socket(settings.upsteam_tcp_bind(), [&]() { accept_all(); })
+	    , udp_a(settings.md_gate_udp_a(), [&]() {})
 	    , idle([&]() { on_idle(); }) {}
 
 private:
@@ -80,9 +80,10 @@ private:
 			auto it = --clients.end();
 			clients.back().reset(new crab::TCPSocket(
 			    [this, it]() { on_client_handler(it); }, [this, it]() { on_client_disconnected(it); }));
-			std::string addr;
+			crab::Address addr;
 			clients.back()->accept(la_socket, &addr);
-			std::cout << "HTTP Client accepted #=" << clients.size() << " addr=" << addr << std::endl;
+			std::cout << "HTTP Client accepted #=" << clients.size() << " addr=" << addr.get_address() << ":"
+			          << addr.get_port() << std::endl;
 		}
 	}
 
@@ -105,7 +106,7 @@ class MDSourceApp {
 public:
 	explicit MDSourceApp(const MDSettings &settings)
 	    : settings(settings)
-	    , server("0.0.0.0", settings.upstream_http_port)
+	    , server(settings.upsteam_http())
 	    , ab([&]() { on_fast_queue_changed(); })
 	    , th(&MDSourceApp::generator_thread, this) {
 		server.r_handler = [&](http::Client *who, http::RequestBody &&request, http::ResponseBody &response) -> bool {

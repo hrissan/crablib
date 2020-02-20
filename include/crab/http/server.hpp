@@ -46,7 +46,8 @@ public:
 	typedef std::function<void(Client *who, WebMessage &&)> W_handler;
 	// only messages with opcodes text and binary are sent to handler, other processed automatically
 
-	explicit Server(const std::string &address, uint16_t port);
+	explicit Server(const Address &address);
+	explicit Server(uint16_t port) : Server(Address("0.0.0.0", port)) {}
 	~Server();
 	// Unlike other parts of crab, you must not destroy server in handlers
 	// when destroying server, remove all Client * you remembered

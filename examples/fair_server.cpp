@@ -9,9 +9,9 @@
 
 class FairServerApp {
 public:
-	explicit FairServerApp(uint16_t port, bool sleep_thread = false)
+	explicit FairServerApp(const crab::Address &bind_address, bool sleep_thread = false)
 	    : sleep_thread(sleep_thread)
-	    , la_socket("0.0.0.0", port, [&]() { accept_all(); })
+	    , la_socket(bind_address, [&]() { accept_all(); })
 	    , idle([&]() { on_idle(); })
 	    , stat_timer([&]() { print_stats(); }) {
 		print_stats();
@@ -115,10 +115,10 @@ private:
 			auto it = --clients.end();
 			clients.back().socket.reset(new crab::BufferedTCPSocket(
 			    [this, it]() { on_client_handler(it); }, [this, it]() { on_client_disconnected(it); }));
-			std::string addr;
+			crab::Address addr;
 			clients.back().socket->accept(la_socket, &addr);
-			std::cout << "HTTP Client accepted, total number of clients is=" << clients.size() << " addr=" << addr
-			          << std::endl;
+			std::cout << "HTTP Client accepted, total number of clients is=" << clients.size()
+			          << " addr=" << addr.get_address() << ":" << addr.get_port() << std::endl;
 
 			// Before login, clients are assigned low-priority
 			// In actual fair server, there would be separate queue for not-yet-logged in clients
@@ -145,7 +145,7 @@ int main(int argc, char *argv[]) {
 	std::cout << "    who send single requests are served immediately" << std::endl;
 	crab::RunLoop runloop;
 
-	FairServerApp app(7000);
+	FairServerApp app(crab::Address("0.0.0.0", 7000));
 
 	runloop.run();
 	return 0;

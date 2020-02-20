@@ -187,24 +187,27 @@ bool DNSResolver::parse_ipaddress(const std::string &str, bdata *result) {
 	return address_from_string(str, *result) != 0;
 }
 
-std::vector<std::string> DNSWorker::sync_resolve(const std::string &fullname, bool ipv4, bool ipv6) {
-	std::vector<std::string> names;
+std::vector<Address> DNSWorker::sync_resolve(const std::string &host_name, uint16_t port, bool ipv4, bool ipv6) {
+	std::vector<Address> names;
 	if (!ipv4 && !ipv6)
 		return names;
-	addrinfo hints          = {};
-	struct addrinfo *result = nullptr;
+	addrinfo hints = {};
+	struct AddrinfoHolder {
+		struct addrinfo *result = nullptr;
+		~AddrinfoHolder() { freeaddrinfo(result); }
+	} holder;
 
-	hints.ai_family   = ipv4 && ipv6 ? AF_UNSPEC : ipv4 ? AF_INET : AF_INET6;
-	hints.ai_socktype = SOCK_STREAM;
-	hints.ai_flags    = AI_V4MAPPED | AI_ADDRCONFIG;  // AI_NUMERICHOST
+	hints.ai_family    = ipv4 && ipv6 ? AF_UNSPEC : ipv4 ? AF_INET : AF_INET6;
+	hints.ai_socktype  = SOCK_STREAM;
+	hints.ai_flags     = AI_V4MAPPED | AI_ADDRCONFIG;  // AI_NUMERICHOST
+	const auto service = std::to_string(port);
 
-	if (getaddrinfo(fullname.c_str(), "80", &hints, &result) != 0)
+	if (getaddrinfo(host_name.c_str(), service.c_str(), &hints, &holder.result) != 0)
 		return names;
-	for (struct addrinfo *rp = result; rp != nullptr; rp = rp->ai_next) {
+	for (struct addrinfo *rp = holder.result; rp != nullptr; rp = rp->ai_next) {
+		// TODO
 		names.push_back(good_inet_ntop(rp->ai_addr));
 	}
-	freeaddrinfo(result);
-	result = nullptr;
 	return names;
 }
 

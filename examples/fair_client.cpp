@@ -8,9 +8,8 @@
 
 class FairClientApp {
 public:
-	explicit FairClientApp(const std::string &address, uint16_t port, size_t max_requests)
+	explicit FairClientApp(const crab::Address &address, size_t max_requests)
 	    : address(address)
-	    , port(port)
 	    , max_requests(max_requests)
 	    , socket([&]() { on_socket_data(); }, [&]() { on_socket_closed(); })
 	    , socket_buffer(4096)
@@ -56,7 +55,7 @@ private:
 		std::cout << "Upstream socket disconnected" << std::endl;
 	}
 	void connect() {
-		if (!socket.connect(address, port)) {
+		if (!socket.connect(address)) {
 			reconnect_timer.once(1);
 		} else {
 			std::cout << "Upstream socket connection attempt started..." << std::endl;
@@ -77,8 +76,7 @@ private:
 			requests_in_transit += 1;
 		}
 	}
-	const std::string address;
-	const uint16_t port;
+	const crab::Address address;
 	const size_t max_requests;
 
 	crab::BufferedTCPSocket socket;
@@ -106,7 +104,7 @@ int main(int argc, char *argv[]) {
 	const size_t count    = argc < 3 ? 1 : std::stoull(argv[2]);
 
 	for (size_t i = 0; i != count; ++i)
-		apps.emplace_back("127.0.0.1", 7000, requests);
+		apps.emplace_back(crab::Address("127.0.0.1", 7000), requests);
 
 	runloop.run();
 	return 0;
