@@ -36,6 +36,7 @@ CRAB_INLINE size_t BufferedTCPSocket::read_some(uint8_t *val, size_t count) {
 	}
 }
 
+// TODO - do not allow to write when not connected (underlying socket has it as a NOP)
 CRAB_INLINE void BufferedTCPSocket::write(const uint8_t *val, size_t count, bool buffer_only) {
 	if (buffer_only) {
 		if (count == 0)
