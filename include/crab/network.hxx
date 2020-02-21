@@ -203,62 +203,72 @@ CRAB_INLINE void Watcher::cancel() {
 	loop->links.cancel_called_watcher(this);
 }
 
-CRAB_INLINE DNSWorker::DNSWorker() {
-	if (StaticWorker::instance)
-		throw std::runtime_error("Create single DNSWorker in your main");
-	StaticWorker::instance = this;
-	dns_thread             = std::thread(&DNSWorker::worker_fun, this);
-}
+namespace details {
 
-CRAB_INLINE DNSWorker::~DNSWorker() {
-	{
-		std::unique_lock<std::mutex> lock(dns_mutex);
-		quit = true;
-		cond.notify_all();
+class DNSWorker {
+public:
+	static DNSWorker &get_instance() {
+		// C++11 local static variables are thread-safe
+		// and also will be destroyed on main() exit
+		static DNSWorker storage;
+		return storage;
 	}
-	if (dns_thread.joinable())
-		dns_thread.join();
-	StaticWorker::instance = nullptr;
-}
 
-CRAB_INLINE void DNSWorker::worker_fun() {
-	while (true) {
-		DNSResolver *req = nullptr;
-		std::string host_name;
-		uint16_t port = 0;
-		bool ipv4     = false;
-		bool ipv6     = false;
+private:
+	DNSWorker() = default;
+	~DNSWorker() {
 		{
 			std::unique_lock<std::mutex> lock(dns_mutex);
-			if (quit)
-				return;
-			if (work_queue.empty()) {
-				cond.wait(lock);
-				continue;
-			}
-			//  std::cout << "Took work" << std::endl;
-			req = work_queue.front();
-			work_queue.pop_front();
-			host_name              = std::move(req->host_name);
-			port                   = req->port;
-			ipv4                   = req->ipv4;
-			ipv6                   = req->ipv6;
-			req->executing_request = &req;
+			quit = true;
+			cond.notify_all();
 		}
-		// resolve
-		// std::this_thread::sleep_for(std::chrono::seconds(1));
-		auto names = sync_resolve(host_name, port, ipv4, ipv6);
-		// std::cout << "Resolved 1" << std::endl;
-		std::unique_lock<std::mutex> lock(dns_mutex);
-		if (!req)
-			continue;
-		// std::cout << "Resolved 2" << std::endl;
-		req->names = std::move(names);
-		// std::cout << "Resolved 3" << std::endl;
-		req->ab.call();
-		// std::cout << "Resolved 4" << std::endl;
+		if (dns_thread.joinable())
+			dns_thread.join();
 	}
-}
+
+	friend class ::crab::DNSResolver;
+
+	std::mutex dns_mutex;
+	bool quit = false;
+	IntrusiveList<DNSResolver, &DNSResolver::work_queue_node> work_queue;
+	DNSResolver *executing_request = nullptr;
+	std::condition_variable cond;
+
+	std::thread dns_thread{&DNSWorker::worker_fun, this};
+	void worker_fun() {
+		while (true) {
+			std::string host_name;
+			uint16_t port = 0;
+			bool ipv4     = false;
+			bool ipv6     = false;
+			{
+				std::unique_lock<std::mutex> lock(dns_mutex);
+				if (quit)
+					return;
+				if (work_queue.empty()) {
+					cond.wait(lock);
+					continue;
+				}
+				executing_request = &*work_queue.begin();
+				executing_request->work_queue_node.unlink();
+				host_name = std::move(executing_request->host_name);
+				port      = executing_request->port;
+				ipv4      = executing_request->ipv4;
+				ipv6      = executing_request->ipv6;
+			}
+			// resolve
+			auto names = DNSResolver::sync_resolve(host_name, port, ipv4, ipv6);
+			std::unique_lock<std::mutex> lock(dns_mutex);
+			if (!executing_request)
+				continue;
+			executing_request->names = std::move(names);
+			executing_request->ab.call();
+			executing_request = nullptr;
+		}
+	}
+};
+
+}  // namespace details
 
 CRAB_INLINE DNSResolver::DNSResolver(DNS_handler &&handler)
     : ab(std::bind(&DNSResolver::on_handler, this)), dns_handler(std::move(handler)) {}
@@ -270,32 +280,36 @@ CRAB_INLINE void DNSResolver::on_handler() {
 
 CRAB_INLINE void DNSResolver::resolve(const std::string &host_name, uint16_t port, bool ipv4, bool ipv6) {
 	cancel();
-	DNSWorker *w = DNSWorker::StaticWorker::instance;
-	if (!w)
-		throw std::runtime_error("Please, create single DNSWorker instance in your main");
+	auto &w   = details::DNSWorker::get_instance();
 	resolving = true;
-	std::unique_lock<std::mutex> lock(w->dns_mutex);
+	std::unique_lock<std::mutex> lock(w.dns_mutex);
 	this->host_name = host_name;
 	this->port      = port;
 	this->ipv4      = ipv4;
 	this->ipv6      = ipv6;
-	w->work_queue.push_back(this);
-	w->cond.notify_one();
+	w.work_queue.push_back(*this);
+	w.cond.notify_one();
 }
 
 CRAB_INLINE void DNSResolver::cancel() {
 	if (!resolving)
 		return;
-	DNSWorker *w = DNSWorker::StaticWorker::instance;
-	std::unique_lock<std::mutex> lock(w->dns_mutex);
-	if (executing_request)
-		*executing_request = nullptr;
-	for (auto it = w->work_queue.begin(); it != w->work_queue.end();)
-		if (*it == this)
-			it = w->work_queue.erase(it);
-		else
-			++it;
+	auto &w = details::DNSWorker::get_instance();
+	std::unique_lock<std::mutex> lock(w.dns_mutex);
+	if (w.executing_request == this)
+		w.executing_request = nullptr;
+	work_queue_node.unlink();
 	ab.cancel();
+}
+
+CRAB_INLINE Address DNSResolver::sync_resolve_single(const std::string &host_name, uint16_t port) {
+	auto arr = sync_resolve(host_name, port, true, false);
+	if (!arr.empty())
+		return arr.front();
+	arr = sync_resolve(host_name, port, false, true);
+	if (!arr.empty())
+		return arr.front();
+	throw std::runtime_error("Failed to resolve host '" + host_name + "'");
 }
 
 #endif

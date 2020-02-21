@@ -346,28 +346,6 @@ private:
 	std::vector<PerformanceRecord> performance;
 };
 
-class DNSResolver;
-
-// If using DNSResolver, create single DNSWorker instance in your main
-class DNSWorker {
-public:
-	DNSWorker();
-	~DNSWorker();
-	static std::vector<Address> sync_resolve(const std::string &host_name, uint16_t port, bool ipv4, bool ipv6);
-
-private:
-	using StaticWorker = details::StaticHolder<DNSWorker *>;
-	friend class DNSResolver;
-
-	bool quit = false;
-	std::list<DNSResolver *> work_queue;
-	std::mutex dns_mutex;
-	std::condition_variable cond;
-	std::thread dns_thread;
-
-	void worker_fun();
-};
-
 class DNSResolver {
 public:
 	typedef std::function<void(const std::vector<Address> &names)> DNS_handler;
@@ -378,20 +356,27 @@ public:
 	void resolve(const std::string &host_name, uint16_t port, bool ipv4, bool ipv6);  // will call handler once
 	void cancel();
 
+	static std::vector<Address> sync_resolve(const std::string &host_name, uint16_t port, bool ipv4, bool ipv6);
+
+	static Address sync_resolve_single(const std::string &host_name, uint16_t port);
+	// Convenience method - resolves synchronously, prefer IPv4, return first address
+
 private:
-	friend class DNSWorker;
+	friend class details::DNSWorker;
+
 	Watcher ab;
 	DNS_handler dns_handler;
 	void on_handler();
 
 	bool resolving = false;
-	// vars below are protected by mutex in worker
+	// vars of resolving NDSResolvers are protected by mutex in worker
+	// because worker can access them any time it takes a new job
 	std::string host_name;
 	uint16_t port = 0;
 	bool ipv4     = false;
 	bool ipv6     = false;
 	std::vector<Address> names;
-	DNSResolver **executing_request = nullptr;
+	IntrusiveNode<DNSResolver> work_queue_node;
 };
 
 }  // namespace crab

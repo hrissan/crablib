@@ -89,8 +89,8 @@ public:
 
 	bool empty() const { return &content == content.prev; }
 
-	T &front() { return *content.next; }
-	T &back() { return *content.prev; }
+	T &front() { return *begin(); }
+	T &back() { return *(--end()); }
 
 	void push_back(T &node) { insert(end(), node); }        // NOP if already in some list
 	void push_front(T &node) { insert(begin(), node); }     // NOP if already in some list

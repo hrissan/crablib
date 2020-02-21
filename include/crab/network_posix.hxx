@@ -334,7 +334,7 @@ CRAB_INLINE void TCPSocket::on_runloop_call() {
 	}
 }
 
-CRAB_INLINE std::vector<Address> DNSWorker::sync_resolve(const std::string &host_name,
+CRAB_INLINE std::vector<Address> DNSResolver::sync_resolve(const std::string &host_name,
     uint16_t port,
     bool ipv4,
     bool ipv6) {

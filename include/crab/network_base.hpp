@@ -35,6 +35,10 @@ class Watcher;
 class TCPSocket;
 class TCPAcceptor;
 
+namespace details {
+class DNSWorker;
+}
+
 #if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL || CRAB_SOCKET_WINDOWS
 
 struct RunLoopCallable : private Nocopy {

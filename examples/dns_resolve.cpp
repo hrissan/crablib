@@ -6,7 +6,6 @@
 #include <crab/crab.hpp>
 
 int main(int argc, char *argv[]) {
-	crab::DNSWorker dns_worker;
 	crab::RunLoop runloop;
 
 	crab::DNSResolver res([](const std::vector<crab::Address> &result) {

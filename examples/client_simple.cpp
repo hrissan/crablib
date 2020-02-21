@@ -237,8 +237,6 @@ int test_async_calls() {
 }
 
 int main(int argc, char *argv[]) {
-	DNSWorker dns_worker;
-
 	RunLoop runloop;
 
 	Buffer ms(1024);
