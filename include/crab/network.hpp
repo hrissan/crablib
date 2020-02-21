@@ -116,7 +116,6 @@ private:
 	friend struct details::RunLoopLinks;
 };
 
-#if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL
 class Address {
 public:
 	Address();
@@ -128,15 +127,15 @@ public:
 	uint16_t get_port() const;
 	bool is_multicast_group() const;
 
+#if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL || CRAB_SOCKET_WINDOWS
 	const sockaddr *impl_get_sockaddr() const { return reinterpret_cast<const sockaddr *>(&addr); }
 	sockaddr *impl_get_sockaddr() { return reinterpret_cast<sockaddr *>(&addr); }
 	size_t impl_get_sockaddr_length() const;
-
 private:
 	sockaddr_storage addr = {};
-};
 #else
 #endif
+};
 
 // socket is not RAII because it can go to disconnected state by external interaction
 class TCPSocket : public IStream, public OStream, private Callable {
