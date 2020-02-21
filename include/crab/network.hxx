@@ -280,13 +280,13 @@ CRAB_INLINE void DNSResolver::on_handler() {
 
 CRAB_INLINE void DNSResolver::resolve(const std::string &host_name, uint16_t port, bool ipv4, bool ipv6) {
 	cancel();
-	auto &w   = details::DNSWorker::get_instance();
-	resolving = true;
-	std::unique_lock<std::mutex> lock(w.dns_mutex);
+	auto &w         = details::DNSWorker::get_instance();
+	resolving       = true;
 	this->host_name = host_name;
 	this->port      = port;
 	this->ipv4      = ipv4;
 	this->ipv6      = ipv6;
+	std::unique_lock<std::mutex> lock(w.dns_mutex);
 	w.work_queue.push_back(*this);
 	w.cond.notify_one();
 }
@@ -300,6 +300,7 @@ CRAB_INLINE void DNSResolver::cancel() {
 		w.executing_request = nullptr;
 	work_queue_node.unlink();
 	ab.cancel();
+	resolving = false;
 }
 
 CRAB_INLINE Address DNSResolver::sync_resolve_single(const std::string &host_name, uint16_t port) {
