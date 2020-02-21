@@ -133,6 +133,18 @@ Because callbacks in crab only signal, but do not carry information, a user can 
 
 When experimenting on generic hardware, no latency drop was observed in this mode. Author has no access to SolarFlare-like hardware to play with, so the question adapting crab to busy-polling remains open. 
 
+# TCP_NODELAY
+
+crab enables this by default on all sockets. Motivation - TCP delay is not a solution if user fails to prepare data for sending in bulk quantities
+
+# shutdown versus close
+
+Correctly implementing HTTP `connection: close` is surprisingly difficult. shutdown() is platform-dependent, and can discard data which did not reach client.
+
+crab TCPSocket write_shutdown() is just a wrapper around lower-level function, while http::Connection implements all state changes/checks necessary to wait for all data to be written to socket buffer, shutdown, then wait until client closes socket.
+
+Contract is that client sends no more data during wait, so if it does, connection will be immediately closed.
+
 # HTTP Server conformance - unknown, probably mediocre
 
 HTTP standard is utter crap, every tiny feature is broken.

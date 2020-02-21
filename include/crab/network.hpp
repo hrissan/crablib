@@ -40,7 +40,7 @@ struct PerformanceStats {
 	std::atomic<size_t> UDP_SEND_size{};
 };
 
-class Timer : private RunLoopCallable {
+class Timer : private Callable {
 public:
 	explicit Timer(Handler &&a_handler) : a_handler(std::move(a_handler)) {}
 	~Timer() { cancel(); }
@@ -74,7 +74,7 @@ inline bool details::LessTimerPtr::operator()(Timer *a, Timer *b) const { return
 #endif
 #endif
 
-class Watcher : private RunLoopCallable {
+class Watcher : private Callable {
 public:
 	explicit Watcher(Handler &&a_handler);
 	~Watcher() override { cancel(); }
@@ -98,7 +98,7 @@ private:
 #endif
 };
 
-class Idle : private RunLoopCallable {
+class Idle : private Callable {
 public:
 	explicit Idle(Handler &&cb);
 	// Active after construction, only handlers of active Idles will run
@@ -139,7 +139,7 @@ private:
 #endif
 
 // socket is not RAII because it can go to disconnected state by external interaction
-class TCPSocket : public IStream, public OStream, private RunLoopCallable {
+class TCPSocket : public IStream, public OStream, private Callable {
 public:
 	explicit TCPSocket(Handler &&rw_handler, Handler &&d_handler)
 	    : rw_handler(std::move(rw_handler)), d_handler(std::move(d_handler)) {}
@@ -176,7 +176,9 @@ public:
 
 	// Turns out, the contract is if client sets connection: close, it promises to send nothing more
 	// so the most portable solution would be to read() on event, and close if any data is received
-	// TODO - implement
+	// We decided to implement it in http::Connection which has all information needed
+	// Implementing in TCPSocket would require tracking state and additional checks for users, who
+	// do not use write_shutdown at all
 private:
 	void on_runloop_call() override;
 
@@ -191,7 +193,7 @@ private:
 #endif
 };
 
-class TCPAcceptor : private RunLoopCallable {
+class TCPAcceptor : private Callable {
 public:
 	explicit TCPAcceptor(const Address &address, Handler &&a_handler);
 
@@ -217,7 +219,7 @@ private:
 };
 
 // Abstracts UDP outgoing buffer with event on buffer space available
-class UDPTransmitter : private RunLoopCallable {
+class UDPTransmitter : private Callable {
 public:
 	explicit UDPTransmitter(const Address &address, Handler &&r_handler);
 
@@ -238,7 +240,7 @@ private:
 #endif
 };
 
-class UDPReceiver : private RunLoopCallable {
+class UDPReceiver : private Callable {
 public:
 	explicit UDPReceiver(const Address &address, Handler &&r_handler);
 	// address must be either local adapter address (127.0.0.1, 0.0.0.0) or multicast group address
@@ -272,11 +274,11 @@ struct RunLoopLinks : private Nocopy {  // Common structure when implementing ov
 #else
 	std::set<Timer *, details::LessTimerPtr> active_timers;
 #endif
-	IntrusiveList<RunLoopCallable, &RunLoopCallable::triggered_callables_node> triggered_callables;
+	IntrusiveList<Callable, &Callable::triggered_callables_node> triggered_callables;
 	IntrusiveList<Idle, &Idle::idle_node> idle_handlers;
 	bool quit = true;
 
-	void add_triggered_callables(RunLoopCallable *callable);
+	void add_triggered_callables(Callable *callable);
 	bool process_timer(const std::chrono::steady_clock::time_point &now, int &timeout_ms);
 
 	// protected queueu, below can be accessed from other threads
@@ -290,7 +292,7 @@ struct RunLoopLinks : private Nocopy {  // Common structure when implementing ov
 }  // namespace details
 #endif
 
-class RunLoop : private RunLoopCallable {
+class RunLoop : private Callable {
 public:
 	RunLoop();
 	~RunLoop() override;
@@ -309,6 +311,13 @@ public:
 	static const PerformanceStats &get_stats() { return details::StaticHolder<PerformanceStats>::instance; }
 
 	enum { MAX_SLEEP_MS = 60 * 60 * 1000 };  // Arbitrary max poll wait time
+
+#if CRAB_SOCKET_KEVENT
+	void impl_kevent(struct kevent *changelist, int nchanges);
+	void impl_kevent(int fd, Callable *callable, uint16_t flags, int16_t filter1, int16_t filter2 = 0);
+#elif CRAB_SOCKET_EPOLL
+	void impl_epoll_ctl(int fd, Callable *callable, int op, uint32_t events);
+#endif
 private:
 	void step(int timeout_ms = MAX_SLEEP_MS);
 	void wakeup();

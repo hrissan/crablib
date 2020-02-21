@@ -20,20 +20,18 @@ public:
 private:
 	const bool sleep_thread;
 	crab::TCPAcceptor la_socket;
-	crab::Timer stat_timer;
-	size_t requests_processed = 0;
 
 	struct Client {
 		std::unique_ptr<crab::BufferedTCPSocket> socket;
 		crab::Buffer socket_buffer;
-		crab::IntrusiveNode<Client> fair_queue;
+		crab::IntrusiveNode<Client> fair_queue_node;
 
 		Client() : socket_buffer(4096) {}
 	};
 	using ClientList = std::list<Client>;
 	ClientList clients;
 
-	crab::IntrusiveList<Client, &Client::fair_queue> fair_queue;
+	crab::IntrusiveList<Client, &Client::fair_queue_node> fair_queue;
 	// clients in fair_queue are considered low-priority and served in on_idle
 	// callbacks for such clients are ignored
 	// client is put in fair_queue if it has more than 1 request pending (sending batch requests)
@@ -44,6 +42,9 @@ private:
 
 	crab::Idle idle;
 
+	crab::Timer stat_timer;
+	size_t requests_processed = 0;
+
 	uint64_t seqnum = 0;
 	enum { REQUEST_SIZE = 1 };
 
@@ -53,7 +54,7 @@ private:
 		size_t counter = 0;
 		while (!fair_queue.empty() && counter++ < MAX_COUNTER) {
 			Client &c = *fair_queue.begin();
-			c.fair_queue.unlink();
+			c.fair_queue_node.unlink();
 			if (process_single_request(c)) {
 				continue;
 			}
@@ -91,7 +92,7 @@ private:
 		return false;  // client.socket_buffer.size() < REQUEST_SIZE;  // No more requests
 	}
 	void on_client_handler(ClientList::iterator it) {
-		if (it->fair_queue.in_list())  // clients in fair_queue wait for their turn
+		if (it->fair_queue_node.in_list())  // clients in fair_queue wait for their turn
 			return;
 		if (it->socket->get_total_buffer_size() != 0) {
 			// do not process requests for clients not reading their responses
@@ -107,7 +108,7 @@ private:
 	}
 	void on_client_disconnected(ClientList::iterator it) {
 		clients.erase(it);  // automatically unlinks from fair_queue
-		std::cout << "HTTP Client disconnected, total number of clients is=" << clients.size() << std::endl;
+		std::cout << "Fair Client disconnected, total number of clients is=" << clients.size() << std::endl;
 	}
 	void accept_all() {
 		while (la_socket.can_accept()) {  // && clients.size() < max_incoming_connections &&
@@ -117,7 +118,7 @@ private:
 			    [this, it]() { on_client_handler(it); }, [this, it]() { on_client_disconnected(it); }));
 			crab::Address addr;
 			clients.back().socket->accept(la_socket, &addr);
-			std::cout << "HTTP Client accepted, total number of clients is=" << clients.size()
+			std::cout << "Fair Client accepted, total number of clients is=" << clients.size()
 			          << " addr=" << addr.get_address() << ":" << addr.get_port() << std::endl;
 
 			// Before login, clients are assigned low-priority

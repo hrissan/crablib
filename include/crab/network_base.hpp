@@ -22,6 +22,11 @@
 #if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL || CRAB_SOCKET_WINDOWS
 #include <sys/socket.h>
 // We use address_storage structucre in crab::Address
+
+#if CRAB_SOCKET_KEVENT
+#include <sys/event.h>
+#endif
+
 #endif
 
 namespace crab {
@@ -41,11 +46,11 @@ class DNSWorker;
 
 #if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL || CRAB_SOCKET_WINDOWS
 
-struct RunLoopCallable : private Nocopy {
-	IntrusiveNode<RunLoopCallable> triggered_callables_node;
+struct Callable : private Nocopy {
+	IntrusiveNode<Callable> triggered_callables_node;
 	bool can_read  = false;
 	bool can_write = false;
-	virtual ~RunLoopCallable() { cancel_callable(); }
+	virtual ~Callable() { cancel_callable(); }
 	virtual void on_runloop_call() = 0;
 	void cancel_callable() { triggered_callables_node.unlink(); }
 	bool is_pending_callable() const { return triggered_callables_node.in_list(); }

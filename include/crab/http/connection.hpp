@@ -94,6 +94,8 @@ public:
 		SHUTDOWN                      // Both side of Web Socket
 	};
 
+	// TODO - fix SHUTDOWN logic, add additional state for Connection: close
+
 	State get_state() const { return state; }
 
 protected:

@@ -71,7 +71,7 @@ CRAB_INLINE bool RunLoopLinks::process_timer(const std::chrono::steady_clock::ti
 	return false;
 }
 
-CRAB_INLINE void RunLoopLinks::add_triggered_callables(RunLoopCallable *callable) {
+CRAB_INLINE void RunLoopLinks::add_triggered_callables(Callable *callable) {
 	triggered_callables.push_back(*callable);
 }
 
@@ -94,12 +94,13 @@ CRAB_INLINE void RunLoopLinks::trigger_called_watchers() {
 	}
 }
 }  // namespace details
+
 CRAB_INLINE void RunLoop::run() {
 	links.quit = false;
 	auto now   = std::chrono::steady_clock::now();
 	while (!links.quit) {
 		if (!links.triggered_callables.empty()) {
-			RunLoopCallable *callable = &*links.triggered_callables.begin();
+			Callable *callable = &*links.triggered_callables.begin();
 			callable->triggered_callables_node.unlink();
 			callable->on_runloop_call();
 			continue;

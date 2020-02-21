@@ -424,18 +424,18 @@ bool TCPSocket::connect(const std::string &addr, uint16_t port) {
 	int family = address_from_string(addr, addrdata);
 	if (family != AF_INET && family != AF_INET6)
 		return false;
-	SocketDescriptor temp(socket(family, SOCK_STREAM, IPPROTO_TCP));
-	if (temp.get_value() == -1)
+	SocketDescriptor tmp(socket(family, SOCK_STREAM, IPPROTO_TCP));
+	if (tmp.get_value() == -1)
 		return false;
 	if (CreateIoCompletionPort(
-	        temp.handle_value(), RunLoop::current()->impl->completion_queue.value, OverlappedCallableKey, 0) == NULL)
+	        tmp.handle_value(), RunLoop::current()->impl->completion_queue.value, OverlappedCallableKey, 0) == NULL)
 		return false;
 	impl->zero_overlapped();
 	DWORD numBytes              = 0;
 	DWORD last                  = 0;
 	GUID guid                   = WSAID_CONNECTEX;
 	LPFN_CONNECTEX ConnectExPtr = NULL;
-	if (::WSAIoctl(temp.get_value(), SIO_GET_EXTENSION_FUNCTION_POINTER, &guid, sizeof(guid), &ConnectExPtr,
+	if (::WSAIoctl(tmp.get_value(), SIO_GET_EXTENSION_FUNCTION_POINTER, &guid, sizeof(guid), &ConnectExPtr,
 	        sizeof(ConnectExPtr), &numBytes, NULL, NULL) != 0) {
 		last = WSAGetLastError();
 		return false;
@@ -444,28 +444,28 @@ bool TCPSocket::connect(const std::string &addr, uint16_t port) {
 		sockaddr_in addr{};
 		addr.sin_family      = AF_INET;
 		addr.sin_addr.s_addr = INADDR_ANY;
-		if (bind(temp.get_value(), reinterpret_cast<sockaddr *>(&addr), sizeof(addr)) != 0)
+		if (bind(tmp.get_value(), reinterpret_cast<sockaddr *>(&addr), sizeof(addr)) != 0)
 			return false;
 		addr.sin_port = htons(port);
 		std::copy(addrdata.begin(), addrdata.end(), reinterpret_cast<uint8_t *>(&addr.sin_addr));
-		if (ConnectExPtr(temp.get_value(), reinterpret_cast<sockaddr *>(&addr), sizeof(addr), NULL, 0, NULL,
-		        impl.get()) == 0 &&
+		if (ConnectExPtr(
+		        tmp.get_value(), reinterpret_cast<sockaddr *>(&addr), sizeof(addr), NULL, 0, NULL, impl.get()) == 0 &&
 		    WSAGetLastError() != ERROR_IO_PENDING)
 			return false;
 	} else if (family == AF_INET6) {
 		sockaddr_in6 addr{};
 		addr.sin6_family = AF_INET6;
 		addr.sin6_addr   = IN6ADDR_ANY_INIT;
-		if (bind(temp.get_value(), reinterpret_cast<sockaddr *>(&addr), sizeof(addr)) != 0)
+		if (bind(tmp.get_value(), reinterpret_cast<sockaddr *>(&addr), sizeof(addr)) != 0)
 			return false;
 		addr.sin6_port = htons(port);
 		std::copy(addrdata.begin(), addrdata.end(), reinterpret_cast<uint8_t *>(&addr.sin6_addr));
-		if (ConnectExPtr(temp.get_value(), reinterpret_cast<sockaddr *>(&addr), sizeof(addr), NULL, 0, NULL,
-		        impl.get()) == 0 &&
+		if (ConnectExPtr(
+		        tmp.get_value(), reinterpret_cast<sockaddr *>(&addr), sizeof(addr), NULL, 0, NULL, impl.get()) == 0 &&
 		    WSAGetLastError() != ERROR_IO_PENDING)
 			return false;
 	}
-	impl->fd.swap(temp);
+	impl->fd.swap(tmp);
 	impl->pending_read = true;
 	RunLoop::current()->impl->pending_counter += 1;
 	return true;
@@ -542,10 +542,10 @@ struct TCPAcceptorImpl : public OverlappedCallable {
 	void start_accept() {
 		if (pending_accept)
 			return;
-		SocketDescriptor temp(socket(ai_family, ai_socktype, ai_protocol));
-		if (temp.get_value() == -1)
+		SocketDescriptor tmp(socket(ai_family, ai_socktype, ai_protocol));
+		if (tmp.get_value() == -1)
 			throw std::runtime_error("crab::TCPAcceptor::TCPAcceptor afd = socket failed");
-		accepted_fd.swap(temp);
+		accepted_fd.swap(tmp);
 		DWORD dwBytesRecvd = 0;
 		pending_accept     = true;
 		loop->impl->pending_counter += 1;

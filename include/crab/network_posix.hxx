@@ -70,31 +70,6 @@ namespace details {
 constexpr int RECV_SEND_FLAGS    = MSG_DONTWAIT;
 constexpr int EVFILT_USER_WAKEUP = 111;
 
-CRAB_INLINE void add_rw_socket_callable(const FileDescriptor &efd, const FileDescriptor &fd, RunLoopCallable *impl) {
-	// If call fail, socket will be closed and auto cleared from queue
-	struct kevent changeLst[] = {{uintptr_t(fd.get_value()), EVFILT_READ, EV_ADD | EV_CLEAR, 0, 0, impl},
-	    {uintptr_t(fd.get_value()), EVFILT_WRITE, EV_ADD | EV_CLEAR, 0, 0, impl}};
-	check(kevent(efd.get_value(), changeLst, 2, 0, 0, NULL) >= 0, "crab::add_rw_socket_callable failed");
-}
-
-CRAB_INLINE void add_la_socket_callable(const FileDescriptor &efd, const FileDescriptor &fd, RunLoopCallable *impl) {
-	struct kevent changeLst {
-		uintptr_t(fd.get_value()), EVFILT_READ, EV_ADD | EV_CLEAR, 0, 0, impl
-	};
-	check(kevent(efd.get_value(), &changeLst, 1, 0, 0, NULL) >= 0, "crab::add_la_socket_callable failed");
-}
-
-CRAB_INLINE void add_udp_trans_callable(const FileDescriptor &efd, const FileDescriptor &fd, RunLoopCallable *impl) {
-	struct kevent changeLst {
-		uintptr_t(fd.get_value()), EVFILT_WRITE, EV_ADD | EV_CLEAR, 0, 0, impl
-	};
-	check(kevent(efd.get_value(), &changeLst, 1, 0, 0, NULL) >= 0, "crab::add_udp_trans_callable failed");
-}
-
-CRAB_INLINE void add_udp_rec_callable(const FileDescriptor &efd, const FileDescriptor &fd, RunLoopCallable *impl) {
-	add_la_socket_callable(efd, fd, impl);
-}
-
 }  // namespace details
 
 CRAB_INLINE RunLoop::RunLoop() : efd(kqueue(), "crab::RunLoop kqeueu failed") {
@@ -110,11 +85,22 @@ CRAB_INLINE RunLoop::RunLoop() : efd(kqueue(), "crab::RunLoop kqeueu failed") {
 	CurrentLoop::instance = this;
 }
 
+CRAB_INLINE void RunLoop::impl_kevent(struct kevent *changelist, int nchangesnchanges) {
+	details::check(
+	    kevent(efd.get_value(), changelist, nchangesnchanges, 0, 0, NULL) >= 0, "crab::RunLoop impl_kevent failed");
+}
+
+CRAB_INLINE void RunLoop::impl_kevent(int fd, Callable *callable, uint16_t flags, int16_t filter1, int16_t filter2) {
+	struct kevent changelist[] = {
+	    {uintptr_t(fd), filter1, flags, 0, 0, callable}, {uintptr_t(fd), filter2, flags, 0, 0, callable}};
+	impl_kevent(changelist, filter2 == 0 ? 1 : 2);
+}
+
 CRAB_INLINE RunLoop::~RunLoop() { CurrentLoop::instance = nullptr; }
 
 CRAB_INLINE void RunLoop::wakeup() {
 	struct kevent changeLst {
-		details::EVFILT_USER_WAKEUP, EVFILT_USER, 0, NOTE_TRIGGER, 0, static_cast<RunLoopCallable *>(this)
+		details::EVFILT_USER_WAKEUP, EVFILT_USER, 0, NOTE_TRIGGER, 0, static_cast<Callable *>(this)
 	};
 	details::check(kevent(efd.get_value(), &changeLst, 1, 0, 0, NULL) >= 0, "crab::RunLoop::wakeup");
 }
@@ -124,8 +110,7 @@ CRAB_INLINE void RunLoop::on_runloop_call() { links.trigger_called_watchers(); }
 CRAB_INLINE void RunLoop::step(int timeout_ms) {
 	struct kevent events[details::MAX_EVENTS];
 	struct timespec tmout = {timeout_ms / 1000, (timeout_ms % 1000) * 1000 * 1000};
-	//	struct timespec tmout = {0, 0}; // Poll-like experiments
-	int n = kevent(efd.get_value(), 0, 0, events, details::MAX_EVENTS, &tmout);
+	int n                 = kevent(efd.get_value(), 0, 0, events, details::MAX_EVENTS, &tmout);
 	if (n < 0) {  // SIGNAL or error
 		n = errno;
 		if (n != EINTR)
@@ -137,9 +122,9 @@ CRAB_INLINE void RunLoop::step(int timeout_ms) {
 	details::StaticHolder<PerformanceStats>::instance.EPOLL_count += 1;
 	details::StaticHolder<PerformanceStats>::instance.EPOLL_size += n;
 	for (int i = 0; i != n; ++i) {
-		RunLoopCallable *impl = static_cast<RunLoopCallable *>(events[i].udata);
-		impl->can_read        = impl->can_read || (events[i].filter == EVFILT_READ);
-		impl->can_write       = impl->can_write || (events[i].filter == EVFILT_WRITE);
+		Callable *impl  = static_cast<Callable *>(events[i].udata);
+		impl->can_read  = impl->can_read || (events[i].filter == EVFILT_READ);
+		impl->can_write = impl->can_write || (events[i].filter == EVFILT_WRITE);
 		links.add_triggered_callables(impl);
 	}
 }
@@ -148,28 +133,7 @@ CRAB_INLINE void RunLoop::step(int timeout_ms) {
 namespace details {
 
 constexpr int RECV_SEND_FLAGS = MSG_DONTWAIT | MSG_NOSIGNAL;
-constexpr auto EPOLLIN_PLUS   = EPOLLIN | EPOLLERR | EPOLLHUP | EPOLLRDHUP;
-
-CRAB_INLINE void add_epoll_callable(int efd, int fd, uint32_t events, RunLoopCallable *impl) {
-	epoll_event event = {events, {.ptr = impl}};
-	check(epoll_ctl(efd, EPOLL_CTL_ADD, fd, &event) >= 0, "crab::add_epoll_callable failed");
-}
-
-CRAB_INLINE void add_rw_socket_callable(const FileDescriptor &efd, const FileDescriptor &fd, RunLoopCallable *impl) {
-	add_epoll_callable(efd.get_value(), fd.get_value(), EPOLLIN_PLUS | EPOLLOUT | EPOLLET, impl);
-}
-
-CRAB_INLINE void add_la_socket_callable(const FileDescriptor &efd, const FileDescriptor &fd, RunLoopCallable *impl) {
-	add_epoll_callable(efd.get_value(), fd.get_value(), EPOLLIN | EPOLLET, impl);
-}
-
-CRAB_INLINE void add_udp_trans_callable(const FileDescriptor &efd, const FileDescriptor &fd, RunLoopCallable *impl) {
-	add_epoll_callable(efd.get_value(), fd.get_value(), EPOLLOUT | EPOLLET, impl);
-}
-
-CRAB_INLINE void add_udp_rec_callable(const FileDescriptor &efd, const FileDescriptor &fd, RunLoopCallable *impl) {
-	add_la_socket_callable(efd, fd, impl);
-}
+constexpr auto EPOLLIN_TCP    = EPOLLIN | EPOLLERR | EPOLLHUP | EPOLLRDHUP | EPOLLOUT;
 
 }  // namespace details
 
@@ -178,7 +142,7 @@ CRAB_INLINE RunLoop::RunLoop() : efd(epoll_create1(0)), wake_fd(eventfd(0, EFD_N
 		throw std::runtime_error("RunLoop::RunLoop Only single RunLoop per thread is allowed");
 	details::check(efd.is_valid(), "crab::RunLoop epoll_create1 failed");
 	details::check(wake_fd.is_valid(), "crab::RunLoop eventfd failed");
-	details::add_epoll_callable(efd.get_value(), wake_fd.get_value(), EPOLLIN | EPOLLET, this);
+	impl_epoll_ctl(wake_fd.get_value(), this, EPOLL_CTL_ADD, EPOLLIN | EPOLLET);
 	/*      Experimental code to handle Ctrl~C, code interferes with debugger operations, though
 	        TODO - create crab::SignalHandler to process UNIX signals
 	        on Windows use https://stackoverflow.com/questions/18291284/handle-ctrlc-on-win32
@@ -196,6 +160,11 @@ CRAB_INLINE RunLoop::RunLoop() : efd(epoll_create1(0)), wake_fd(eventfd(0, EFD_N
 }
 
 CRAB_INLINE RunLoop::~RunLoop() { CurrentLoop::instance = nullptr; }
+
+CRAB_INLINE void RunLoop::impl_epoll_ctl(int fd, Callable *callable, int op, uint32_t events) {
+	epoll_event event = {events, {.ptr = callable}};
+	check(epoll_ctl(efd.get_value(), op, fd, &event) >= 0, "crab::add_epoll_callable failed");
+}
 
 CRAB_INLINE void RunLoop::on_runloop_call() {
 	eventfd_t value = 0;
@@ -223,7 +192,7 @@ CRAB_INLINE void RunLoop::step(int timeout_ms) {
 	details::StaticHolder<PerformanceStats>::instance.EPOLL_count += 1;
 	details::StaticHolder<PerformanceStats>::instance.EPOLL_size += n;
 	for (int i = 0; i != n; ++i) {
-		auto impl       = static_cast<RunLoopCallable *>(events[i].data.ptr);
+		auto impl       = static_cast<Callable *>(events[i].data.ptr);
 		impl->can_read  = impl->can_read || (events[i].events & details::EPOLLIN_PLUS);
 		impl->can_write = impl->can_write || (events[i].events & EPOLLOUT);
 		links.add_triggered_callables(impl);
@@ -385,30 +354,58 @@ CRAB_INLINE bool TCPSocket::is_open() const { return fd.is_valid() || is_pending
 CRAB_INLINE bool TCPSocket::connect(const Address &address) {
 	close();
 	try {
-		details::FileDescriptor temp(::socket(address.impl_get_sockaddr()->sa_family, SOCK_STREAM, IPPROTO_TCP),
+		details::FileDescriptor tmp(::socket(address.impl_get_sockaddr()->sa_family, SOCK_STREAM, IPPROTO_TCP),
 		    "crab::connect socket() failed");
 #if CRAB_SOCKET_KEVENT
-		details::setsockopt_1(temp.get_value(), SOL_SOCKET, SO_NOSIGPIPE);
+		details::setsockopt_1(tmp.get_value(), SOL_SOCKET, SO_NOSIGPIPE);
 #endif
-		details::set_nonblocking(temp.get_value());
+		details::set_nonblocking(tmp.get_value());
 		int connect_result =
-		    ::connect(temp.get_value(), address.impl_get_sockaddr(), address.impl_get_sockaddr_length());
+		    ::connect(tmp.get_value(), address.impl_get_sockaddr(), address.impl_get_sockaddr_length());
 		if (connect_result < 0 && errno != EINPROGRESS)
 			return false;
-		details::setsockopt_1(temp.get_value(), IPPROTO_TCP, TCP_NODELAY);
-		details::add_rw_socket_callable(RunLoop::current()->efd, temp, this);
+		details::setsockopt_1(tmp.get_value(), IPPROTO_TCP, TCP_NODELAY);
+#if CRAB_SOCKET_KEVENT
+		RunLoop::current()->impl_kevent(tmp.get_value(), this, EV_ADD | EV_CLEAR, EVFILT_READ, EVFILT_WRITE);
+#else
+		RunLoop::current()->impl_epoll_ctl(tmp.get_value(), this, EPOLL_CTL_ADD, EPOLLIN_TCP | EPOLLET);
+#endif
 		if (connect_result >= 0) {
-			//	 On some systems if socket is connected right away, no epoll happens
+			// On some systems if localhost socket is connected right away, no epoll happens
 			RunLoop::current()->links.add_triggered_callables(this);
 			can_read = can_write = true;
 		}
-		fd.swap(temp);
+		fd.swap(tmp);
 		return true;
 	} catch (const std::exception &) {
 		// During network adapter reconfigurations, connect may return strange error
 		// Trying in a second usually solves problems
 	}
 	return false;
+}
+
+CRAB_INLINE void TCPSocket::accept(TCPAcceptor &acceptor, Address *accepted_addr) {
+	if (!acceptor.accepted_fd.is_valid())
+		throw std::logic_error("TCPAcceptor::accept error, forgot if(can_accept())?");
+	close();
+	if (accepted_addr)
+		*accepted_addr = acceptor.accepted_addr;
+	acceptor.accepted_addr = Address();
+	fd.swap(acceptor.accepted_fd);
+	try {
+#if CRAB_SOCKET_KEVENT
+		RunLoop::current()->impl_kevent(fd.get_value(), this, EV_ADD | EV_CLEAR, EVFILT_READ, EVFILT_WRITE);
+#else
+		RunLoop::current()->impl_epoll_ctl(fd.get_value(), this, EPOLL_CTL_ADD, EPOLLIN_TCP | EPOLLET);
+#endif
+	} catch (const std::exception &) {
+		// We cannot add to epoll/kevent in TCPAcceptor because we do not have
+		// TCPSocket yet, so we design accept to always succeeds, but trigger event,
+		// so that for use it will appear as socket was immediately disconnected
+		fd.reset();
+		RunLoop::current()->links.add_triggered_callables(this);
+		return;
+	}
 }
 
 CRAB_INLINE size_t TCPSocket::read_some(uint8_t *data, size_t count) {
@@ -460,26 +457,7 @@ CRAB_INLINE size_t TCPSocket::write_some(const uint8_t *data, size_t count) {
 	return result;
 }
 
-CRAB_INLINE void TCPSocket::accept(TCPAcceptor &acceptor, Address *accepted_addr) {
-	if (!acceptor.accepted_fd.is_valid())
-		throw std::logic_error("TCPAcceptor::accept error, forgot if(can_accept())?");
-	close();
-	if (accepted_addr)
-		*accepted_addr = acceptor.accepted_addr;
-	acceptor.accepted_addr = Address();
-	try {
-		details::add_rw_socket_callable(RunLoop::current()->efd, acceptor.accepted_fd, this);
-	} catch (const std::exception &) {
-		// accept always succeeds, but close handler will be fired
-		acceptor.accepted_fd.reset();
-		RunLoop::current()->links.add_triggered_callables(this);
-		return;
-	}
-	fd.swap(acceptor.accepted_fd);
-}
-
 CRAB_INLINE TCPAcceptor::TCPAcceptor(const Address &address, Handler &&a_handler) : a_handler(std::move(a_handler)) {
-	auto sa = address.impl_get_sockaddr();
 	details::FileDescriptor tmp(::socket(address.impl_get_sockaddr()->sa_family, SOCK_STREAM, IPPROTO_TCP),
 	    "crab::TCPAcceptor socket() failed");
 #if CRAB_SOCKET_KEVENT
@@ -491,7 +469,11 @@ CRAB_INLINE TCPAcceptor::TCPAcceptor(const Address &address, Handler &&a_handler
 	    "crab::TCPAcceptor bind failed");
 	details::set_nonblocking(tmp.get_value());
 	details::check(listen(tmp.get_value(), SOMAXCONN) >= 0, "crab::TCPAcceptor listen failed");
-	details::add_la_socket_callable(RunLoop::current()->efd, tmp, this);
+#if CRAB_SOCKET_KEVENT
+	RunLoop::current()->impl_kevent(tmp.get_value(), this, EV_ADD | EV_CLEAR, EVFILT_READ);
+#else
+	RunLoop::current()->impl_epoll_ctl(tmp.get_value(), this, EPOLL_CTL_ADD, EPOLLIN | EPOLLET);
+#endif
 	fd.swap(tmp);
 }
 
@@ -499,20 +481,21 @@ CRAB_INLINE bool TCPAcceptor::can_accept() {
 	if (accepted_fd.is_valid())
 		return true;
 	Address in_addr;
-	const int set = 1;
 	while (true) {
 		try {
 			socklen_t in_len = sizeof(sockaddr_storage);
 #if CRAB_SOCKET_KEVENT
 			details::FileDescriptor sd(::accept(fd.get_value(), in_addr.impl_get_sockaddr(), &in_len));
 			// On FreeBSD non-blocking flag is inherited automatically - very smart :)
-			details::setsockopt_1(sd.get_value(), SOL_SOCKET, SO_NOSIGPIPE);
 #else  // CRAB_SOCKET_EPOLL
 			details::FileDescriptor sd(
 			    ::accept4(fd.get_value(), in_addr.impl_get_sockaddr(), &in_len, SOCK_NONBLOCK));
 #endif
 			if (!sd.is_valid())
 				return false;
+#if CRAB_SOCKET_KEVENT
+			details::setsockopt_1(sd.get_value(), SOL_SOCKET, SO_NOSIGPIPE);
+#endif
 			details::setsockopt_1(sd.get_value(), IPPROTO_TCP, TCP_NODELAY);
 			accepted_fd.swap(sd);
 			accepted_addr = in_addr;
@@ -526,13 +509,13 @@ CRAB_INLINE bool TCPAcceptor::can_accept() {
 
 CRAB_INLINE UDPTransmitter::UDPTransmitter(const Address &address, Handler &&r_handler)
     : r_handler(std::move(r_handler)) {
-	details::FileDescriptor temp(::socket(address.impl_get_sockaddr()->sa_family, SOCK_DGRAM, IPPROTO_UDP),
+	details::FileDescriptor tmp(::socket(address.impl_get_sockaddr()->sa_family, SOCK_DGRAM, IPPROTO_UDP),
 	    "crab::UDPTransmitter socket() failed");
-	details::set_nonblocking(temp.get_value());
+	details::set_nonblocking(tmp.get_value());
 
 	if (address.is_multicast_group()) {
-		details::setsockopt_1(temp.get_value(), SOL_SOCKET, SO_BROADCAST);
-		// details::setsockopt_1(temp.get_value(), IPPROTO_IP, IP_MULTICAST_LOOP);
+		details::setsockopt_1(tmp.get_value(), SOL_SOCKET, SO_BROADCAST);
+		// details::setsockopt_1(tmp.get_value(), IPPROTO_IP, IP_MULTICAST_LOOP);
 
 		// On multiadapter system, we should select adapter to send multicast to,
 		// unlike unicast, where adapter is selected based on routing table.
@@ -540,15 +523,19 @@ CRAB_INLINE UDPTransmitter::UDPTransmitter(const Address &address, Handler &&r_h
 		// But if performance is important, we should have UDPTransmitter per adapter.
 		// TODO - add methods to set/get an adapter for multicast sending
 	}
-	int connect_result = ::connect(temp.get_value(), address.impl_get_sockaddr(), address.impl_get_sockaddr_length());
+	int connect_result = ::connect(tmp.get_value(), address.impl_get_sockaddr(), address.impl_get_sockaddr_length());
 	details::check(connect_result >= 0 || errno == EINPROGRESS, "crab::UDPTransmitter connect() failed");
-	details::add_udp_trans_callable(RunLoop::current()->efd, temp, this);
+#if CRAB_SOCKET_KEVENT
+	RunLoop::current()->impl_kevent(tmp.get_value(), this, EV_ADD | EV_CLEAR, EVFILT_WRITE);
+#else
+	RunLoop::current()->impl_epoll_ctl(tmp.get_value(), this, EPOLL_CTL_ADD, EPOLLOUT | EPOLLET);
+#endif
 	if (connect_result >= 0) {
-		//	 On some systems if socket is connected right away, no epoll happens
+		// On some systems if socket is connected right away, no epoll happens
 		RunLoop::current()->links.add_triggered_callables(this);
 		can_write = true;
 	}
-	fd.swap(temp);
+	fd.swap(tmp);
 }
 
 CRAB_INLINE size_t UDPTransmitter::write_datagram(const uint8_t *data, size_t count) {
@@ -571,13 +558,13 @@ CRAB_INLINE size_t UDPTransmitter::write_datagram(const uint8_t *data, size_t co
 
 CRAB_INLINE UDPReceiver::UDPReceiver(const Address &address, Handler &&r_handler) : r_handler(std::move(r_handler)) {
 	// On Linux & Mac OSX we can bind either to 0.0.0.0, adapter address or multicast group
-	details::FileDescriptor temp(::socket(address.impl_get_sockaddr()->sa_family, SOCK_DGRAM, IPPROTO_UDP),
+	details::FileDescriptor tmp(::socket(address.impl_get_sockaddr()->sa_family, SOCK_DGRAM, IPPROTO_UDP),
 	    "crab::UDPReceiver socket() failed");
 	if (address.is_multicast_group())
-		details::setsockopt_1(temp.get_value(), SOL_SOCKET, SO_REUSEADDR);
-	details::set_nonblocking(temp.get_value());
+		details::setsockopt_1(tmp.get_value(), SOL_SOCKET, SO_REUSEADDR);
+	details::set_nonblocking(tmp.get_value());
 
-	details::check(::bind(temp.get_value(), address.impl_get_sockaddr(), address.impl_get_sockaddr_length()) >= 0,
+	details::check(::bind(tmp.get_value(), address.impl_get_sockaddr(), address.impl_get_sockaddr_length()) >= 0,
 	    "crab::UDPReceiver bind() failed");
 	if (address.is_multicast_group()) {
 		if (address.impl_get_sockaddr()->sa_family != AF_INET)
@@ -594,11 +581,15 @@ CRAB_INLINE UDPReceiver::UDPReceiver(const Address &address, Handler &&r_handler
 		ip_mreq mreq{};
 		mreq.imr_multiaddr        = sa->sin_addr;
 		mreq.imr_interface.s_addr = htonl(INADDR_ANY);
-		details::check(setsockopt(temp.get_value(), IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) >= 0,
+		details::check(setsockopt(tmp.get_value(), IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) >= 0,
 		    "crab::UDPReceiver: Failed to join multicast group");
 	}
-	details::add_udp_rec_callable(RunLoop::current()->efd, temp, this);
-	fd.swap(temp);
+#if CRAB_SOCKET_KEVENT
+	RunLoop::current()->impl_kevent(tmp.get_value(), this, EV_ADD | EV_CLEAR, EVFILT_READ);
+#else
+	RunLoop::current()->impl_epoll_ctl(tmp.get_value(), this, EPOLL_CTL_ADD, EPOLLIN | EPOLLET);
+#endif
+	fd.swap(tmp);
 }
 
 CRAB_INLINE bool UDPReceiver::read_datagram(uint8_t *data, size_t *size, Address *peer_addr) {
