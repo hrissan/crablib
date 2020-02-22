@@ -44,6 +44,8 @@ class ResponseParser {
 
 public:
 	ResponseHeader req;
+	size_t max_total_length = 8192;
+
 	template<typename InputIterator>
 	InputIterator parse(InputIterator begin, InputIterator end) {
 		while (begin != end && state != GOOD)
@@ -58,6 +60,7 @@ private:
 	void process_ready_header();
 	Header header;
 	std::string lowcase_name;
+	size_t total_length = 0;
 	State consume(char input);
 };
 

@@ -20,6 +20,8 @@ CRAB_INLINE void RequestParser::parse(Buffer &buf) {
 CRAB_INLINE RequestParser::State RequestParser::consume(char input) {
 	CRAB_LITERAL(lowcase_connection, "connection");
 	CRAB_LITERAL(lowcase_transfer_encoding, "transfer-encoding");
+	if (++total_length > max_total_length)
+		throw std::runtime_error("HTTP Header too long - security violation");
 
 	switch (state) {
 	case METHOD_START:
@@ -304,6 +306,10 @@ CRAB_INLINE const uint8_t *BodyParser::consume(const uint8_t *begin, const uint8
 	default:
 		break;
 	}
+	if (chunk_header_total_length > max_chunk_header_total_length)
+		throw std::runtime_error("HTTP Chunk Header too long - security violation");
+	if (trailers_total_length > max_trailers_total_length)
+		throw std::runtime_error("HTTP Trailer too long - security violation");
 	state = consume(*begin++);
 	return begin;
 }
@@ -311,49 +317,78 @@ CRAB_INLINE const uint8_t *BodyParser::consume(const uint8_t *begin, const uint8
 CRAB_INLINE BodyParser::State BodyParser::consume(uint8_t input) {
 	switch (state) {
 	case CHUNK_SIZE_START:
+		chunk_header_total_length += 1;
+		if (input == ' ')
+			return CHUNK_SIZE_START;
 		if (from_hex_digit(input) < 0)
 			throw std::runtime_error("Chunk size must start with hex digit");
 		chunk_size.push_back(input);
 		return CHUNK_SIZE;
 	case CHUNK_SIZE:
-		if (input == '\r') {
-			// We already checked that chunk_size contains only hex digits and is not empty
-			remaining_bytes = 0;
-			for (auto c : chunk_size)
-				remaining_bytes = remaining_bytes * 16 + from_hex_digit(c);
-			chunk_size.clear();
+		chunk_header_total_length += 1;
+		if (input == ' ' || input == ';')
+			return CHUNK_SIZE_PADDING;
+		if (input == '\r')
 			return NEWLINE_N1;
-		}
 		if (from_hex_digit(input) < 0)
 			throw std::runtime_error("Chunk size must be hex number");
 		if (chunk_size.size() >= sizeof(size_t) * 2)
 			throw std::runtime_error("Chunk size too big");
 		chunk_size.push_back(input);
 		return CHUNK_SIZE;
+	case CHUNK_SIZE_PADDING:
+		chunk_header_total_length += 1;
+		// Actual grammar here is complicated, we just skip to \r
+		if (input == '\r')
+			return NEWLINE_N1;
+		return CHUNK_SIZE_PADDING;
 	case NEWLINE_N1:
+		chunk_header_total_length += 1;
 		if (input != '\n')
 			throw std::runtime_error("Newline is expected");
+		// We already checked that chunk_size contains only hex digits and is not empty
+		remaining_bytes = 0;
+		for (auto c : chunk_size)
+			remaining_bytes = remaining_bytes * 16 + from_hex_digit(c);
+		chunk_size.clear();
+		chunk_header_total_length = 0;
 		if (remaining_bytes == 0)
-			return NEWLINE_R3;
+			return TRAILER_LINE_START;
 		return CHUNK_BODY;
+	case TRAILER_LINE_START:
+		trailers_total_length += 1;
+		if (input == '\r')
+			return NEWLINE_N3;
+		if (!is_char(input) || is_ctl(input) || is_tspecial(input))
+			throw std::runtime_error("Invalid character at header line start");
+		return TRAILER;
+	case TRAILER:
+		trailers_total_length += 1;
+		if (input == '\r')
+			return NEWLINE_N1;
+		return TRAILER;
 	case NEWLINE_R2:
+		trailers_total_length += 1;
 		if (input != '\r')
 			throw std::runtime_error("Newline is expected");
 		return NEWLINE_N2;
 	case NEWLINE_N2:
+		trailers_total_length += 1;
 		if (input != '\n')
 			throw std::runtime_error("Newline is expected");
 		return CHUNK_SIZE_START;
 	case NEWLINE_R3:
+		trailers_total_length += 1;
 		if (input != '\r')
 			throw std::runtime_error("Newline is expected");
 		return NEWLINE_N3;
 	case NEWLINE_N3:
+		trailers_total_length += 1;
 		if (input != '\n')
 			throw std::runtime_error("Newline is expected");
 		return GOOD;
 	default:
-		throw std::logic_error("Invalid web message parser state");
+		throw std::logic_error("Invalid chunked body parser state");
 	}
 }
 

@@ -20,6 +20,9 @@ CRAB_INLINE ResponseParser::State ResponseParser::consume(char input) {
 	CRAB_LITERAL(lowcase_connection, "connection");
 	CRAB_LITERAL(lowcase_transfer_encoding, "transfer-encoding");
 
+	if (++total_length > max_total_length)
+		throw std::runtime_error("HTTP Header too long - security violation");
+
 	switch (state) {
 	case HTTP_VERSION_H:
 		if (input != 'H')
