@@ -3,6 +3,8 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
+#include <ctime>
 #include <iostream>
 #include "../network.hpp"
 #include "request_parser.hpp"
@@ -47,7 +49,11 @@ CRAB_INLINE const std::string &Server::get_date() {
 		inst.cached_time_point = now;
 		std::time_t end_time   = std::chrono::system_clock::to_time_t(now);
 		struct ::tm tm {};
+#if defined(_WIN32)
+		gmtime_s(&tm, &end_time);
+#else
 		gmtime_r(&end_time, &tm);
+#endif
 		char buf[64]{};  // "Wed, 16 Oct 2019 16:68:22 GMT"
 		strftime(buf, sizeof(buf), "%a, %d %b %Y %H:%M:%S %Z", &tm);
 		inst.cached_date = buf;

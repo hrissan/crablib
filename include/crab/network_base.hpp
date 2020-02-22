@@ -20,20 +20,24 @@
 #include "streams.hpp"
 #include "util.hpp"
 
-#if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL || CRAB_SOCKET_WINDOWS
-#include <sys/socket.h>
 // We use address_storage structucre in crab::Address
-
-#if CRAB_SOCKET_KEVENT
+#if CRAB_SOCKET_WINDOWS
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#undef ERROR
+#undef min
+#undef max
+#elif CRAB_SOCKET_EPOLL
+#include <sys/socket.h>
+#elif CRAB_SOCKET_KEVENT
 #include <sys/event.h>
-#endif
-
+#include <sys/socket.h>
 #endif
 
 namespace crab {
 
 typedef std::function<void()> Handler;
-CRAB_INLINE bool empty_handler() {}
+CRAB_INLINE void empty_handler() {}
 
 class RunLoop;
 class Timer;

@@ -10,6 +10,9 @@
 // On Mac OSX, no EAGAIN returned, WireShark must be used to investigate dropped packets
 // TODO - test on Windows
 
+#if defined(_WIN32)
+int main() { return 0; }
+#else
 #include <arpa/inet.h>
 #include <errno.h>
 #include <stdio.h>
@@ -69,3 +72,4 @@ int main() {
 	}
 	return 0;
 }
+#endif

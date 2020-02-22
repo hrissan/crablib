@@ -27,7 +27,7 @@ public:
 private:
 	size_t heap_index = 0;  // Protect against accidental modification
 	template<typename T, IntrusiveHeapIndex T::*, typename Pred, bool health_checks>
-	friend struct IntrusiveHeap;
+	friend class IntrusiveHeap;
 };
 
 template<typename T, IntrusiveHeapIndex T::*Index, typename Pred = std::less<T>, bool health_checks = false>

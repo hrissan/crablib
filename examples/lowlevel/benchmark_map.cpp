@@ -372,7 +372,7 @@ std::string string_gen(size_t c) {
 
 int int_gen(size_t c) { return int(c); }
 
-size_t small_int_gen(size_t c) { return c % 256; }
+int small_int_gen(size_t c) { return int(c % 256); }
 
 int main() {
 	benchmark_sets();

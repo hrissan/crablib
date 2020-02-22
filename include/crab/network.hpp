@@ -116,7 +116,7 @@ public:
 #if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL || CRAB_SOCKET_WINDOWS
 	const sockaddr *impl_get_sockaddr() const { return reinterpret_cast<const sockaddr *>(&addr); }
 	sockaddr *impl_get_sockaddr() { return reinterpret_cast<sockaddr *>(&addr); }
-	size_t impl_get_sockaddr_length() const;
+	int impl_get_sockaddr_length() const;
 
 private:
 	sockaddr_storage addr = {};
@@ -178,6 +178,7 @@ private:
 class TCPAcceptor {
 public:
 	explicit TCPAcceptor(const Address &address, Handler &&a_handler);
+	~TCPAcceptor();
 
 	bool can_accept();
 
@@ -285,7 +286,9 @@ public:
 
 	enum { MAX_SLEEP_MS = 60 * 60 * 1000 };  // Arbitrary max poll wait time
 
-#if CRAB_SOCKET_KEVENT
+#if CRAB_SOCKET_WINDOWS
+	RunLoopImpl *get_impl() const { return impl.get(); }
+#elif CRAB_SOCKET_KEVENT
 	void impl_kevent(struct kevent *changelist, int nchanges);
 	void impl_kevent(int fd, Callable *callable, uint16_t flags, int16_t filter1, int16_t filter2 = 0);
 #elif CRAB_SOCKET_EPOLL
@@ -300,7 +303,7 @@ private:
 	//	friend class TCPSocket;
 	//	friend class TCPAcceptor;
 	//	friend class UDPTransmitter;
-	friend class Callable;
+	friend struct Callable;
 	friend class Watcher;
 
 	//	friend struct TimerImpl;

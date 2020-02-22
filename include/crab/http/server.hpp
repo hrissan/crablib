@@ -12,6 +12,7 @@
 #include "../network.hpp"
 #include "connection.hpp"
 #include "types.hpp"
+#include "../util.hpp"
 
 namespace crab { namespace http {
 
@@ -62,7 +63,7 @@ private:
 		std::chrono::system_clock::time_point cached_time_point{};
 		std::string cached_date;
 	};
-	using CurrentTimeCache = details::StaticHolderTL<TimeCache>;
+	using CurrentTimeCache = crab::details::StaticHolderTL<TimeCache>;
 
 	TCPAcceptor la_socket;
 

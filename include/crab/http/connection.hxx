@@ -386,7 +386,7 @@ CRAB_INLINE void Connection::advance_state(bool called_from_runloop) {
 				return;
 			}
 		}
-	} catch (const std::exception &ex) {
+	} catch (const std::exception &) {
 		sock.write_shutdown();
 		state = SHUTDOWN;
 	}

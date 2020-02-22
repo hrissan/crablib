@@ -9,6 +9,7 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <cctype>
 #include <vector>
 
 namespace crab {
@@ -61,7 +62,7 @@ struct Literal {
 	const char *value;
 	size_t size;
 
-	static constexpr int length(const char *str) { return *str ? 1 + length(str + 1) : 0; }
+	static constexpr size_t length(const char *str) { return *str ? 1U + length(str + 1) : 0U; }
 	int compare(const char *b, size_t bs) const {
 		if (size > bs)
 			return 1;

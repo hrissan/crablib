@@ -258,7 +258,7 @@ CRAB_INLINE uint16_t Address::get_port() const {
 	}
 }
 
-CRAB_INLINE size_t Address::impl_get_sockaddr_length() const {
+CRAB_INLINE int Address::impl_get_sockaddr_length() const {
 	switch (addr.ss_family) {
 	case AF_INET: {
 		return sizeof(sockaddr_in);
@@ -458,6 +458,8 @@ CRAB_INLINE TCPAcceptor::TCPAcceptor(const Address &address, Handler &&cb) : a_h
 #endif
 	fd.swap(tmp);
 }
+
+CRAB_INLINE TCPAcceptor::~TCPAcceptor()=default;
 
 CRAB_INLINE bool TCPAcceptor::can_accept() {
 	if (accepted_fd.is_valid())
