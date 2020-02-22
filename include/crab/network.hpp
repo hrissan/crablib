@@ -40,7 +40,7 @@ struct PerformanceStats {
 	std::atomic<size_t> UDP_SEND_size{};
 };
 
-class Timer : private Callable {
+class Timer {
 public:
 	explicit Timer(Handler &&a_handler) : a_handler(std::move(a_handler)) {}
 	~Timer() { cancel(); }
@@ -50,7 +50,6 @@ public:
 	void cancel();
 
 private:
-	void on_runloop_call() override { a_handler(); }
 	Handler a_handler;
 
 #if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL || CRAB_SOCKET_WINDOWS

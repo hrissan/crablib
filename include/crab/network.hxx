@@ -44,6 +44,12 @@ CRAB_INLINE bool RunLoopLinks::process_timer(const std::chrono::steady_clock::ti
 	Timer &timer = active_timers.front();
 	if (timer.fire_time <= now) {
 		active_timers.pop_front();
+		// Timer is not Callable, timers must not be put into triggered_callables en masse
+		// then executed, because then the timer.is_set() will be false for all timers except
+		// the first one, while handler for that particular timer did not run yet.
+		// This would break app logic if timers are used as a logic state holders (which is
+		// useful and common), what is worse the probability of bug will be very low, so those
+		// problems would be very hard to debug.
 		timer.a_handler();
 		return true;
 	}
@@ -107,6 +113,7 @@ CRAB_INLINE void RunLoop::run() {
 			}
 		}
 		now = std::chrono::steady_clock::now();
+		// Runloop optimizes # of calls to now() because those can be slow
 	}
 }
 
@@ -130,10 +137,7 @@ CRAB_INLINE void Timer::once(float after_seconds) {
 
 CRAB_INLINE bool Timer::is_set() const { return heap_index.in_heap(); }
 
-CRAB_INLINE void Timer::cancel() {
-	cancel_callable();
-	RunLoop::current()->links.active_timers.erase(*this);
-}
+CRAB_INLINE void Timer::cancel() { RunLoop::current()->links.active_timers.erase(*this); }
 
 CRAB_INLINE Idle::Idle(Handler &&cb) : a_handler(cb) { RunLoop::current()->links.idle_handlers.push_back(*this); }
 
