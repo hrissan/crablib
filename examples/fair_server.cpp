@@ -22,11 +22,11 @@ private:
 	crab::TCPAcceptor la_socket;
 
 	struct Client {
-		std::unique_ptr<crab::BufferedTCPSocket> socket;
+		crab::BufferedTCPSocket socket;
 		crab::Buffer socket_buffer;
 		crab::IntrusiveNode<Client> fair_queue_node;
 
-		Client() : socket_buffer(4096) {}
+		Client() : socket(crab::empty_handler), socket_buffer(4096) {}
 	};
 	using ClientList = std::list<Client>;
 	ClientList clients;
@@ -72,13 +72,13 @@ private:
 		}
 	}
 	bool process_single_request(Client &client) {
-		if (client.socket->get_total_buffer_size() != 0) {
-			std::cout << "Write buffer full=" << client.socket->get_total_buffer_size() << std::endl;
+		if (client.socket.get_total_buffer_size() != 0) {
+			std::cout << "Write buffer full=" << client.socket.get_total_buffer_size() << std::endl;
 			return true;  // Remove from fair_queue until buffer clears
 		}
 		if (client.socket_buffer.size() < REQUEST_SIZE) {
 			// Must have at least capacity of 2 * REQUEST_SIZE for the logic to work correctly
-			client.socket_buffer.read_from(*client.socket);
+			client.socket_buffer.read_from(client.socket);
 			if (client.socket_buffer.size() < REQUEST_SIZE) {
 				return true;  // No more requests
 			}
@@ -86,15 +86,17 @@ private:
 		client.socket_buffer.did_read(REQUEST_SIZE);  // Skip
 		busy_sleep_microseconds(5);                   // Simulate processing latency
 		seqnum += 1;
-		client.socket->write(reinterpret_cast<const uint8_t *>(&seqnum), sizeof(uint64_t), true);
-		client.socket->write(reinterpret_cast<const uint8_t *>(&seqnum), sizeof(uint64_t));
+		client.socket.write(reinterpret_cast<const uint8_t *>(&seqnum), sizeof(uint64_t), true);
+		client.socket.write(reinterpret_cast<const uint8_t *>(&seqnum), sizeof(uint64_t));
 		requests_processed += 1;
 		return false;  // client.socket_buffer.size() < REQUEST_SIZE;  // No more requests
 	}
 	void on_client_handler(ClientList::iterator it) {
+		if (!it->socket.is_open())
+			return on_client_disconnected(it);
 		if (it->fair_queue_node.in_list())  // clients in fair_queue wait for their turn
 			return;
-		if (it->socket->get_total_buffer_size() != 0) {
+		if (it->socket.get_total_buffer_size() != 0) {
 			// do not process requests for clients not reading their responses
 			// We respond immediately to the first request
 			return;
@@ -114,10 +116,9 @@ private:
 		while (la_socket.can_accept()) {  // && clients.size() < max_incoming_connections &&
 			clients.emplace_back();
 			auto it = --clients.end();
-			clients.back().socket.reset(new crab::BufferedTCPSocket(
-			    [this, it]() { on_client_handler(it); }, [this, it]() { on_client_disconnected(it); }));
+			clients.back().socket.set_handler([this, it]() { on_client_handler(it); });
 			crab::Address addr;
-			clients.back().socket->accept(la_socket, &addr);
+			clients.back().socket.accept(la_socket, &addr);
 			std::cout << "Fair Client accepted, total number of clients is=" << clients.size()
 			          << " addr=" << addr.get_address() << ":" << addr.get_port() << std::endl;
 

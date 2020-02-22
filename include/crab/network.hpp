@@ -132,9 +132,8 @@ private:
 // socket is not RAII because it can go to disconnected state by external interaction
 class TCPSocket : public IStream, public OStream, private Callable {
 public:
-	explicit TCPSocket(Handler &&rw_handler, Handler &&d_handler)
-	    : rw_handler(std::move(rw_handler)), d_handler(std::move(d_handler)) {}
-	void set_handlers(Handler &&rw_handler, Handler &&d_handler);
+	explicit TCPSocket(Handler &&rwd_handler) : rwd_handler(std::move(rwd_handler)) {}
+	void set_handler(Handler &&rwd_handler);
 
 	~TCPSocket() override { close(); }
 	void close();
@@ -142,20 +141,20 @@ public:
 	bool is_open() const;  // Connecting or connected
 
 	bool connect(const Address &address);
-	// either returns false or returns true and will call rw_handler or d_handler in future
+	// either returns false or returns true and will call rwd_handler in future
 
 	void accept(TCPAcceptor &acceptor, Address *accepted_addr = nullptr);
 	// throws if acceptor.can_accept() is false
 
 	size_t read_some(uint8_t *val, size_t count) override;
 	// reads 0..count-1, if returns 0 (incoming buffer empty) would
-	// fire rw_handler or d_handler in future
+	// fire rwd_handler in future
 	size_t write_some(const uint8_t *val, size_t count) override;
-	// writes 0..count-1, if returns 0 (outgoing buffer full) will fire rw_handler or
-	// d_handler in future
+	// writes 0..count-1, if returns 0 (outgoing buffer full) will
+	// fire rwd_handler in future
 
 	void write_shutdown();
-	// will fire d_handler only after all sent data is acknowledged and FIN is acknowledged
+	// will disconnect only after all sent data is acknowledged and FIN is acknowledged
 	// receiving operations perform as usual
 
 	// write_shutdown is not perfect yet, only implemented to support HTTP/1.0 connection: close
@@ -171,10 +170,9 @@ public:
 	// Implementing in TCPSocket would require tracking state and additional checks for users, who
 	// do not use write_shutdown at all
 private:
-	void on_runloop_call() override;
+	void on_runloop_call() override { rwd_handler(); }
 
-	Handler rw_handler;
-	Handler d_handler;
+	Handler rwd_handler;
 
 #if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL
 	details::FileDescriptor fd;

@@ -11,7 +11,7 @@ public:
 	explicit FairClientApp(const crab::Address &address, size_t max_requests)
 	    : address(address)
 	    , max_requests(max_requests)
-	    , socket([&]() { on_socket_data(); }, [&]() { on_socket_closed(); })
+	    , socket([&]() { socket_handler(); })
 	    , socket_buffer(4096)
 	    , reconnect_timer([&]() { connect(); })
 	    , stat_timer([&]() { print_stats(); }) {
@@ -20,7 +20,9 @@ public:
 	}
 
 private:
-	void on_socket_data() {
+	void socket_handler() {
+		if (!socket.is_open())
+			return on_socket_closed();
 		while (true) {
 			if (socket_buffer.size() < Msg::size)
 				socket_buffer.read_from(socket);

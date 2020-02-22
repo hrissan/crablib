@@ -245,19 +245,20 @@ int main(int argc, char *argv[]) {
 
 	std::unique_ptr<TCPSocket> rws;
 
-	rws.reset(new TCPSocket(
-	    [&]() {
-		    ms.write_to(*rws);
-		    while (true) {
-			    uint8_t buf[512] = {};
-			    size_t cou       = rws->read_some(buf, sizeof(buf));
-			    std::cout << std::string(reinterpret_cast<char *>(buf), cou);
-			    if (cou != sizeof(buf))
-				    break;
-		    }
-	    },
-	    [&]() { std::cout << std::endl
-		                  << "test_disconnect" << std::endl; }));
+	rws.reset(new TCPSocket([&]() {
+		if (!rws->is_open()) {
+			std::cout << std::endl << "test_disconnect" << std::endl;
+			return;
+		}
+		ms.write_to(*rws);
+		while (true) {
+			uint8_t buf[512] = {};
+			size_t cou       = rws->read_some(buf, sizeof(buf));
+			std::cout << std::string(reinterpret_cast<char *>(buf), cou);
+			if (cou != sizeof(buf))
+				break;
+		}
+	}));
 	//	auto na = DNSResolver::sync_resolve("google.com", true, false);
 	//	if( !na.empty() )
 	//		rws->connect(na.front(), "80");

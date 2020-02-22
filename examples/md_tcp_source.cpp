@@ -36,7 +36,7 @@ public:
 	    , idle([&]() { on_idle(); }) {}
 
 private:
-	using ClientList = std::list<std::unique_ptr<crab::TCPSocket>>;
+	using ClientList = std::list<crab::TCPSocket>;
 
 	void on_idle() {
 		auto now     = std::chrono::steady_clock::now();
@@ -55,7 +55,7 @@ private:
 
 			udp_a.write_datagram(buffer, Msg::size);  // Ignore `buffer full` errors
 			for (auto it = clients.begin(); it != clients.end();) {
-				if ((*it)->write_some(buffer, sizeof(buffer)) != sizeof(buffer)) {
+				if (it->write_some(buffer, sizeof(buffer)) != sizeof(buffer)) {
 					std::cout << "HTTP Client disconnected (or buffer full) #=" << clients.size() << std::endl;
 					it = clients.erase(it);
 				} else {
@@ -67,22 +67,23 @@ private:
 	}
 
 	void on_client_handler(ClientList::iterator it) {
+		if (!it->is_open())
+			return on_client_disconnected(it);
 		// If socket buffer is filled, we disconnect
 		// And we do not read anything, so just empty handler
 	}
 	void on_client_disconnected(ClientList::iterator it) {
 		clients.erase(it);
-		std::cout << "HTTP Client disconnected #=" << clients.size() << std::endl;
+		std::cout << "Client disconnected #=" << clients.size() << std::endl;
 	}
 	void accept_all() {
-		while (la_socket.can_accept()) {  // && clients.size() < max_incoming_connections &&
-			clients.emplace_back();
+		while (la_socket.can_accept()) {                // && clients.size() < max_incoming_connections &&
+			clients.emplace_back(crab::empty_handler);  // We do not know iterator at this point
 			auto it = --clients.end();
-			clients.back().reset(new crab::TCPSocket(
-			    [this, it]() { on_client_handler(it); }, [this, it]() { on_client_disconnected(it); }));
+			clients.back().set_handler([this, it]() { on_client_handler(it); });
 			crab::Address addr;
-			clients.back()->accept(la_socket, &addr);
-			std::cout << "HTTP Client accepted #=" << clients.size() << " addr=" << addr.get_address() << ":"
+			clients.back().accept(la_socket, &addr);
+			std::cout << "Client accepted #=" << clients.size() << " addr=" << addr.get_address() << ":"
 			          << addr.get_port() << std::endl;
 		}
 	}

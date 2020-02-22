@@ -386,16 +386,6 @@ struct TCPSocketImpl : public OverlappedCallable {
 	}
 };
 
-void TCPSocket::on_runloop_call() {
-	if (!impl || impl->fd.get_value() == -1)
-		return d_handler();
-	try {
-		rw_handler();
-	} catch (const std::exception &ex) {
-		impl->close(true);
-	}
-}
-
 void TCPSocket::close() {
 	cancel_callable();
 	if (!impl || impl->fd.get_value() == -1)
@@ -406,7 +396,7 @@ void TCPSocket::close() {
 }
 
 void TCPSocket::write_shutdown() {
-	if (impl->fd.get_value() == -1 && impl->asked_shutdown)
+	if (!impl || impl->fd.get_value() == -1 || impl->asked_shutdown)
 		return;
 	impl->asked_shutdown = true;
 	if (impl->write_buf.empty()) {
@@ -414,7 +404,7 @@ void TCPSocket::write_shutdown() {
 	}
 }
 
-bool TCPSocket::is_open() const { return impl && impl->fd.get_value() >= 0; }
+bool TCPSocket::is_open() const { return (impl && impl->fd.get_value() >= 0) || is_pending_callable(); }
 
 bool TCPSocket::connect(const std::string &addr, uint16_t port) {
 	close();

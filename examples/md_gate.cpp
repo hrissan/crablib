@@ -30,10 +30,10 @@ class LowLatencyRetransmitter {
 public:
 	LowLatencyRetransmitter(const MDSettings &settings, std::function<void(Msg msg)> &&message_handler)
 	    : settings(settings)
-	    , upstream_socket([&]() { on_upstream_socket_data(); }, [&]() { on_upstream_socket_closed(); })
+	    , upstream_socket([&]() { upstream_socket_handler(); })
 	    , upstream_socket_buffer(4096)
-	    , udp_a(settings.md_gate_udp_a(), [&]() {})  // We just skip packets if buffer is full in UDP line A
 	    , message_handler(std::move(message_handler))
+	    , udp_a(settings.md_gate_udp_a(), [&]() {})  // We just skip packets if buffer is full in UDP line A
 	    , reconnect_timer([&]() { connect(); })
 	    , simulated_disconnect_timer([&]() { on_simulated_disconnect_timer(); }) {
 		connect();
@@ -54,7 +54,9 @@ private:
 		if (rand() % 10 == 0)
 			simulated_disconnect();
 	}
-	void on_upstream_socket_data() {
+	void upstream_socket_handler() {
+		if (!upstream_socket.is_open())
+			return on_upstream_socket_closed();
 		while (true) {
 			if (upstream_socket_buffer.size() < Msg::size)
 				upstream_socket_buffer.read_from(upstream_socket);
@@ -106,9 +108,9 @@ public:
 	    , udp_ra(settings.md_gate_udp_ra(), [&]() { broadcast_retransmission(); })
 	    , stat_timer([&]() { on_stat_timer(); })
 	    , ab([&]() { on_fast_queue_changed(); })
-	    , th(&MDGate::retransmitter_thread, this)
 	    , http_client([&]() { on_http_client_data(); }, [&]() { on_http_client_closed(); })
-	    , reconnect_timer([&]() { connect(); }) {
+	    , reconnect_timer([&]() { connect(); })
+	    , th(&MDGate::retransmitter_thread, this) {
 		connect();
 		stat_timer.once(1);
 		server.r_handler = [&](http::Client *who, http::RequestBody &&request, http::ResponseBody &response) -> bool {

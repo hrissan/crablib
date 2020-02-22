@@ -12,10 +12,7 @@ CRAB_INLINE Address::Address(const std::string &numeric_host, uint16_t port) {
 		throw std::runtime_error("Address failed to parse, numeric_host='" + numeric_host + "'");
 }
 
-CRAB_INLINE void TCPSocket::set_handlers(Handler &&rw_handler, Handler &&d_handler) {
-	this->rw_handler = std::move(rw_handler);
-	this->d_handler  = std::move(d_handler);
-}
+CRAB_INLINE void TCPSocket::set_handler(Handler &&rwd_handler) { this->rwd_handler = std::move(rwd_handler); }
 
 CRAB_INLINE void RunLoop::push_record(const char *event_type, size_t count) {
 	performance.emplace_back(std::chrono::steady_clock::now(), event_type, count);
@@ -151,7 +148,7 @@ CRAB_INLINE void Idle::set_active(bool a) {
 
 CRAB_INLINE void Idle::on_runloop_call() {
 	// We enqueue all active idle instances at once in RunLoop::run, each handler is allowed
-	// to set any other idle to incative state
+	// to set any other idle to inactive state
 	// Easy check strengthens invariant to "Only active idles run"
 	if (is_active())
 		a_handler();

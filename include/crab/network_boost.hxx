@@ -106,7 +106,7 @@ public:
 			was_owner->impl = std::make_shared<Impl>(was_owner);
 		}
 		if (was_owner && called_from_run_loop)
-			was_owner->d_handler();
+			was_owner->rwd_handler();
 	}
 	void write_shutdown() {
 		boost::system::error_code ignored_ec;
@@ -120,7 +120,7 @@ public:
 			start_read();
 			start_write();
 			if (owner)
-				owner->rw_handler(true, true);
+				owner->rwd_handler(true, true);
 			return;
 		}
 		if (e != boost::asio::error::operation_aborted) {
@@ -144,7 +144,7 @@ public:
 			incoming_buffer.did_write(bytes_transferred);
 			start_read();
 			if (owner)
-				owner->rw_handler(true, true);
+				owner->rwd_handler(true, true);
 			return;
 		}
 		if (e != boost::asio::error::operation_aborted) {
@@ -174,7 +174,7 @@ public:
 			outgoing_buffer.did_read(bytes_transferred);
 			start_write();
 			if (owner)
-				owner->rw_handler(true, true);
+				owner->rwd_handler(true, true);
 			return;
 		}
 		if (e != boost::asio::error::operation_aborted) {
@@ -183,8 +183,7 @@ public:
 	}
 };
 
-TCPSocket::TCPSocket(RW_handler rw_handler, D_handler d_handler)
-    : rw_handler(rw_handler), d_handler(d_handler), impl(std::make_shared<Impl>(this)) {}
+TCPSocket::TCPSocket(RW_handler && rwd_handler) : rwd_handler(rwd_handler), impl(std::make_shared<Impl>(this)) {}
 
 TCPSocket::~TCPSocket() { close(); }
 

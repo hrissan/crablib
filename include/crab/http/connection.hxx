@@ -9,10 +9,8 @@
 
 namespace crab {
 
-CRAB_INLINE BufferedTCPSocket::BufferedTCPSocket(Handler &&r_handler, Handler &&d_handler)
-    : r_handler(std::move(r_handler))
-    , d_handler(std::move(d_handler))
-    , sock([this]() { on_rw_handler(); }, [this]() { on_disconnect(); }) {}
+CRAB_INLINE BufferedTCPSocket::BufferedTCPSocket(Handler &&rwd_handler)
+    : rwd_handler(std::move(rwd_handler)), sock([this]() { sock_handler(); }) {}
 
 CRAB_INLINE void BufferedTCPSocket::close() {
 	data_to_write.clear();
@@ -98,30 +96,26 @@ CRAB_INLINE void BufferedTCPSocket::write() {
 	}
 }
 
-CRAB_INLINE void BufferedTCPSocket::on_rw_handler() {
-	write();
-	r_handler();
-}
-
-CRAB_INLINE void BufferedTCPSocket::on_disconnect() {
-	data_to_write.clear();
-	write_shutdown_asked = false;
-	total_buffer_size    = 0;
-	d_handler();
+CRAB_INLINE void BufferedTCPSocket::sock_handler() {
+	if (sock.is_open()) {
+		write();
+	} else {
+		data_to_write.clear();
+		write_shutdown_asked = false;
+		total_buffer_size    = 0;
+	}
+	rwd_handler();
 }
 
 namespace http {
 
-CRAB_INLINE Connection::Connection()
-    : read_buffer(8192)
-    , sock([this]() { advance_state(true); }, std::bind(&Connection::on_disconnect, this))
-    , state(SHUTDOWN) {}
+CRAB_INLINE Connection::Connection() : read_buffer(8192), sock([this]() { advance_state(true); }), state(SHUTDOWN) {}
 
 CRAB_INLINE Connection::Connection(Handler &&r_handler, Handler &&d_handler)
     : read_buffer(8192)
     , r_handler(std::move(r_handler))
     , d_handler(std::move(d_handler))
-    , sock([this]() { advance_state(true); }, std::bind(&Connection::on_disconnect, this))
+    , sock([this]() { sock_handler(); })
     , state(SHUTDOWN) {}
 
 CRAB_INLINE bool Connection::connect(const Address &address) {
@@ -275,6 +269,15 @@ CRAB_INLINE void Connection::write(WebMessage &&message) {
 		wm_close_sent = true;
 }
 
+CRAB_INLINE void Connection::sock_handler() {
+	if (!sock.is_open()) {
+		close();
+		d_handler();
+		return;
+	}
+	advance_state(true);
+}
+
 CRAB_INLINE void Connection::advance_state(bool called_from_runloop) {
 	// do not process new request if too much data waiting to be sent
 	if (sock.get_total_buffer_size() > 65536)  // TODO - constant
@@ -387,11 +390,6 @@ CRAB_INLINE void Connection::advance_state(bool called_from_runloop) {
 		sock.write_shutdown();
 		state = SHUTDOWN;
 	}
-}
-
-CRAB_INLINE void Connection::on_disconnect() {
-	close();
-	d_handler();
 }
 
 }  // namespace http

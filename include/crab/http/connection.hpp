@@ -16,7 +16,8 @@ namespace crab {
 
 class BufferedTCPSocket : public IStream, private Nocopy {
 public:
-	explicit BufferedTCPSocket(Handler &&r_handler, Handler &&d_handler);
+	explicit BufferedTCPSocket(Handler &&rwd_handler);
+	void set_handler(Handler &&rwd_handler) { this->rwd_handler = std::move(rwd_handler); }
 
 	void close();  // after close you are guaranteed that no handlers will be called
 	bool is_open() const { return sock.is_open(); }
@@ -40,11 +41,9 @@ protected:
 	bool write_shutdown_asked = false;
 
 	void write();
-	void on_rw_handler();
-	void on_disconnect();
+	void sock_handler();
 
-	Handler r_handler;
-	Handler d_handler;
+	Handler rwd_handler;
 
 	TCPSocket sock;
 };
@@ -112,9 +111,8 @@ protected:
 	bool client_side   = false;  // Web Socket encryption is one-sided
 	bool wm_close_sent = false;
 
+	void sock_handler();
 	void advance_state(bool called_from_runloop);
-
-	void on_disconnect();
 
 	Handler r_handler;
 	Handler d_handler;

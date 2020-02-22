@@ -292,17 +292,6 @@ CRAB_INLINE bool Address::is_multicast_group() const {
 	}
 }
 
-CRAB_INLINE void TCPSocket::on_runloop_call() {
-	if (!fd.is_valid())
-		return d_handler();
-	try {
-		rw_handler();
-	} catch (const std::exception &ex) {
-		close();
-		RunLoop::current()->links.add_triggered_callables(this);
-	}
-}
-
 CRAB_INLINE std::vector<Address> DNSResolver::sync_resolve(const std::string &host_name,
     uint16_t port,
     bool ipv4,
@@ -344,7 +333,7 @@ CRAB_INLINE void TCPSocket::close() {
 }
 
 CRAB_INLINE void TCPSocket::write_shutdown() {
-	if (!fd.is_valid())
+	if (!fd.is_valid() || !can_write)
 		return;
 	::shutdown(fd.get_value(), SHUT_WR);
 }
