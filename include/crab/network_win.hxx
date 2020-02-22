@@ -387,12 +387,10 @@ struct TCPSocketImpl : public OverlappedCallable {
 };
 
 void TCPSocket::close() {
-	cancel_callable();
+	rwd_handler.cancel_callable();
 	if (!impl || impl->fd.get_value() == -1)
 		return;
 	impl->close(false);
-	can_read  = false;
-	can_write = false;
 }
 
 void TCPSocket::write_shutdown() {

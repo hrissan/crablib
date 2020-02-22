@@ -65,20 +65,18 @@ private:
 #endif
 };
 
-class Watcher : private Callable {
+class Watcher {
 public:
 	explicit Watcher(Handler &&a_handler);
-	~Watcher() override { cancel(); }
+	~Watcher() { cancel(); }
 
 	void cancel();
 	// after cancel no callback is guaranted till next time call() is called
 	void call();
 	// The only method to be called from other threads when work is ready
 private:
-	void on_runloop_call() override { a_handler(); }
-
 	RunLoop *loop = nullptr;  // Will need when calling from the other threads
-	Handler a_handler;
+	Callable a_handler;
 
 #if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL || CRAB_SOCKET_WINDOWS
 	IntrusiveNode<Watcher> fired_objects_node;  // protected by runloop mutex
@@ -89,21 +87,18 @@ private:
 #endif
 };
 
-class Idle : private Callable {
+class Idle {
 public:
-	explicit Idle(Handler &&cb);
+	explicit Idle(Handler &&a_handler);
 	// Active after construction, only handlers of active Idles will run
 
 	void set_active(bool a);
 	bool is_active() { return idle_node.in_list(); }
 
 private:
-	void on_runloop_call() override;
-
 	IntrusiveNode<Idle> idle_node;
-	Handler a_handler;
+	Callable a_handler;
 
-	friend class RunLoop;
 	friend struct details::RunLoopLinks;
 };
 
@@ -130,7 +125,7 @@ private:
 };
 
 // socket is not RAII because it can go to disconnected state by external interaction
-class TCPSocket : public IStream, public OStream, private Callable {
+class TCPSocket : public IStream, public OStream {
 public:
 	explicit TCPSocket(Handler &&rwd_handler) : rwd_handler(std::move(rwd_handler)) {}
 	void set_handler(Handler &&rwd_handler);
@@ -170,9 +165,7 @@ public:
 	// Implementing in TCPSocket would require tracking state and additional checks for users, who
 	// do not use write_shutdown at all
 private:
-	void on_runloop_call() override { rwd_handler(); }
-
-	Handler rwd_handler;
+	Callable rwd_handler;
 
 #if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL
 	details::FileDescriptor fd;
@@ -182,18 +175,16 @@ private:
 #endif
 };
 
-class TCPAcceptor : private Callable {
+class TCPAcceptor {
 public:
 	explicit TCPAcceptor(const Address &address, Handler &&a_handler);
 
 	bool can_accept();
 
 private:
-	friend class TCPSocket;
+	friend class TCPSocket;  // accept needs access
 
-	void on_runloop_call() override { a_handler(); }
-
-	Handler a_handler;
+	Callable a_handler;
 
 #if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL
 	details::FileDescriptor fd;
@@ -208,17 +199,15 @@ private:
 };
 
 // Abstracts UDP outgoing buffer with event on buffer space available
-class UDPTransmitter : private Callable {
+class UDPTransmitter {
 public:
-	explicit UDPTransmitter(const Address &address, Handler &&r_handler);
+	explicit UDPTransmitter(const Address &address, Handler &&w_handler);
 
 	size_t write_datagram(const uint8_t *data, size_t count);
 	// either returns count (if written into buffer) or 0 (if buffer is full or a error occurs)
 
 private:
-	void on_runloop_call() override { r_handler(); }
-
-	Handler r_handler;
+	Callable w_handler;
 
 #if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL
 	details::FileDescriptor fd;
@@ -229,7 +218,7 @@ private:
 #endif
 };
 
-class UDPReceiver : private Callable {
+class UDPReceiver {
 public:
 	explicit UDPReceiver(const Address &address, Handler &&r_handler);
 	// address must be either local adapter address (127.0.0.1, 0.0.0.0) or multicast group address
@@ -241,9 +230,7 @@ public:
 	// cannot return size_t, because datagrams of zero size are valid
 
 private:
-	void on_runloop_call() override { r_handler(); }
-
-	Handler r_handler;
+	Callable r_handler;
 
 #if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL
 	details::FileDescriptor fd;
@@ -262,9 +249,9 @@ struct RunLoopLinks : private Nocopy {  // Common structure when implementing ov
 
 	IntrusiveList<Callable, &Callable::triggered_callables_node> triggered_callables;
 	IntrusiveList<Idle, &Idle::idle_node> idle_handlers;
+	void trigger_idle_handlers();
 	bool quit = true;
 
-	void add_triggered_callables(Callable *callable);
 	bool process_timer(const std::chrono::steady_clock::time_point &now, int &timeout_ms);
 
 	// protected queueu, below can be accessed from other threads
@@ -278,10 +265,10 @@ struct RunLoopLinks : private Nocopy {  // Common structure when implementing ov
 }  // namespace details
 #endif
 
-class RunLoop : private Callable {
+class RunLoop {
 public:
 	RunLoop();
-	~RunLoop() override;
+	~RunLoop();
 
 	static RunLoop *current() { return CurrentLoop::instance; }
 
@@ -307,22 +294,21 @@ public:
 private:
 	void step(int timeout_ms = MAX_SLEEP_MS);
 	void wakeup();
-	void on_runloop_call() override;
 
 	friend class Timer;
 	friend class Idle;
-	friend class TCPSocket;
-	friend class TCPAcceptor;
-	friend class UDPTransmitter;
-	friend class UDPReceiver;
+	//	friend class TCPSocket;
+	//	friend class TCPAcceptor;
+	//	friend class UDPTransmitter;
+	friend class Callable;
 	friend class Watcher;
 
-	friend struct TimerImpl;
-	friend struct WatcherImpl;
-	friend struct TCPSocketImpl;
-	//    friend struct UDPTransmitterImpl;
-	//    friend struct UDPReceiverImpl;
-	friend struct TCPAcceptorImpl;
+	//	friend struct TimerImpl;
+	//	friend struct WatcherImpl;
+	//	friend struct TCPSocketImpl;
+	//	friend struct UDPTransmitterImpl;
+	//	friend struct UDPReceiverImpl;
+	//	friend struct TCPAcceptorImpl;
 
 	using CurrentLoop = details::StaticHolderTL<RunLoop *>;
 
@@ -334,6 +320,7 @@ private:
 #if CRAB_SOCKET_EPOLL
 	details::FileDescriptor wake_fd;
 #endif
+	Callable wake_callable;
 #else
 	std::unique_ptr<RunLoopImpl> impl;
 #endif

@@ -72,7 +72,8 @@ constexpr int EVFILT_USER_WAKEUP = 111;
 
 }  // namespace details
 
-CRAB_INLINE RunLoop::RunLoop() : efd(kqueue(), "crab::RunLoop kqeueu failed") {
+CRAB_INLINE RunLoop::RunLoop()
+    : efd(kqueue(), "crab::RunLoop kqeueu failed"), wake_callable([this]() { links.trigger_called_watchers(); }) {
 	if (CurrentLoop::instance)
 		throw std::runtime_error("RunLoop::RunLoop Only single RunLoop per thread is allowed");
 	//	    signal(SIGINT, SIG_IGN);
@@ -100,12 +101,10 @@ CRAB_INLINE RunLoop::~RunLoop() { CurrentLoop::instance = nullptr; }
 
 CRAB_INLINE void RunLoop::wakeup() {
 	struct kevent changeLst {
-		details::EVFILT_USER_WAKEUP, EVFILT_USER, 0, NOTE_TRIGGER, 0, static_cast<Callable *>(this)
+		details::EVFILT_USER_WAKEUP, EVFILT_USER, 0, NOTE_TRIGGER, 0, &wake_callable
 	};
 	details::check(kevent(efd.get_value(), &changeLst, 1, 0, 0, NULL) >= 0, "crab::RunLoop::wakeup");
 }
-
-CRAB_INLINE void RunLoop::on_runloop_call() { links.trigger_called_watchers(); }
 
 CRAB_INLINE void RunLoop::step(int timeout_ms) {
 	struct kevent events[details::MAX_EVENTS];
@@ -122,10 +121,9 @@ CRAB_INLINE void RunLoop::step(int timeout_ms) {
 	details::StaticHolder<PerformanceStats>::instance.EPOLL_count += 1;
 	details::StaticHolder<PerformanceStats>::instance.EPOLL_size += n;
 	for (int i = 0; i != n; ++i) {
-		Callable *impl  = static_cast<Callable *>(events[i].udata);
-		impl->can_read  = impl->can_read || (events[i].filter == EVFILT_READ);
-		impl->can_write = impl->can_write || (events[i].filter == EVFILT_WRITE);
-		links.add_triggered_callables(impl);
+		auto &ev       = events[i];
+		Callable *impl = static_cast<Callable *>(ev.udata);
+		impl->add_pending_callable(ev.filter == EVFILT_READ, ev.filter == EVFILT_WRITE);
 	}
 }
 
@@ -137,7 +135,18 @@ constexpr auto EPOLLIN_TCP    = EPOLLIN | EPOLLERR | EPOLLHUP | EPOLLRDHUP | EPO
 
 }  // namespace details
 
-CRAB_INLINE RunLoop::RunLoop() : efd(epoll_create1(0)), wake_fd(eventfd(0, EFD_NONBLOCK)) {
+CRAB_INLINE RunLoop::RunLoop()
+    : efd(epoll_create1(0)), wake_fd(eventfd(0, EFD_NONBLOCK)), wake_callable([this]() {
+	    eventfd_t value = 0;
+	    eventfd_read(wake_fd.get_value(), &value);
+	    // TODO - check error
+
+	    links.trigger_called_watchers();
+	    //        struct signalfd_siginfo info;
+	    //        size_t bytes = read(signal_fd.get_value(), &info, sizeof(info));
+	    //        if( bytes == sizeof(info) && info.ssi_pid == 0) // From terminal
+	    //        quit = true;
+    }) {
 	if (CurrentLoop::instance)
 		throw std::runtime_error("RunLoop::RunLoop Only single RunLoop per thread is allowed");
 	details::check(efd.is_valid(), "crab::RunLoop epoll_create1 failed");
@@ -166,18 +175,6 @@ CRAB_INLINE void RunLoop::impl_epoll_ctl(int fd, Callable *callable, int op, uin
 	check(epoll_ctl(efd.get_value(), op, fd, &event) >= 0, "crab::add_epoll_callable failed");
 }
 
-CRAB_INLINE void RunLoop::on_runloop_call() {
-	eventfd_t value = 0;
-	eventfd_read(wake_fd.get_value(), &value);
-	// TODO - check error
-
-	links.trigger_called_watchers();
-	//        struct signalfd_siginfo info;
-	//        size_t bytes = read(signal_fd.get_value(), &info, sizeof(info));
-	//        if( bytes == sizeof(info) && info.ssi_pid == 0) // From terminal
-	//        quit = true;
-}
-
 CRAB_INLINE void RunLoop::step(int timeout_ms) {
 	epoll_event events[details::MAX_EVENTS];
 	int n = epoll_wait(efd.get_value(), events, details::MAX_EVENTS, timeout_ms);
@@ -192,10 +189,9 @@ CRAB_INLINE void RunLoop::step(int timeout_ms) {
 	details::StaticHolder<PerformanceStats>::instance.EPOLL_count += 1;
 	details::StaticHolder<PerformanceStats>::instance.EPOLL_size += n;
 	for (int i = 0; i != n; ++i) {
-		auto impl       = static_cast<Callable *>(events[i].data.ptr);
-		impl->can_read  = impl->can_read || (events[i].events & details::EPOLLIN_PLUS);
-		impl->can_write = impl->can_write || (events[i].events & EPOLLOUT);
-		links.add_triggered_callables(impl);
+		auto &ev  = events[i];
+		auto impl = static_cast<Callable *>(ev.data.ptr);
+		impl->add_pending_callables(ev.events & details::EPOLLIN_PLUS, ev.events & EPOLLOUT);
 	}
 }
 
@@ -326,19 +322,17 @@ CRAB_INLINE std::vector<Address> DNSResolver::sync_resolve(const std::string &ho
 }
 
 CRAB_INLINE void TCPSocket::close() {
-	cancel_callable();
+	rwd_handler.cancel_callable();
 	fd.reset();
-	can_read  = false;
-	can_write = false;
 }
 
 CRAB_INLINE void TCPSocket::write_shutdown() {
-	if (!fd.is_valid() || !can_write)
+	if (!fd.is_valid() || !rwd_handler.can_write)
 		return;
 	::shutdown(fd.get_value(), SHUT_WR);
 }
 
-CRAB_INLINE bool TCPSocket::is_open() const { return fd.is_valid() || is_pending_callable(); }
+CRAB_INLINE bool TCPSocket::is_open() const { return fd.is_valid() || rwd_handler.is_pending_callable(); }
 
 CRAB_INLINE bool TCPSocket::connect(const Address &address) {
 	close();
@@ -355,14 +349,13 @@ CRAB_INLINE bool TCPSocket::connect(const Address &address) {
 			return false;
 		details::setsockopt_1(tmp.get_value(), IPPROTO_TCP, TCP_NODELAY);
 #if CRAB_SOCKET_KEVENT
-		RunLoop::current()->impl_kevent(tmp.get_value(), this, EV_ADD | EV_CLEAR, EVFILT_READ, EVFILT_WRITE);
+		RunLoop::current()->impl_kevent(tmp.get_value(), &rwd_handler, EV_ADD | EV_CLEAR, EVFILT_READ, EVFILT_WRITE);
 #else
-		RunLoop::current()->impl_epoll_ctl(tmp.get_value(), this, EPOLL_CTL_ADD, EPOLLIN_TCP | EPOLLET);
+		RunLoop::current()->impl_epoll_ctl(tmp.get_value(), &rwd_handler, EPOLL_CTL_ADD, EPOLLIN_TCP | EPOLLET);
 #endif
 		if (connect_result >= 0) {
 			// On some systems if localhost socket is connected right away, no epoll happens
-			RunLoop::current()->links.add_triggered_callables(this);
-			can_read = can_write = true;
+			rwd_handler.add_pending_callable(true, true);
 		}
 		fd.swap(tmp);
 		return true;
@@ -383,39 +376,39 @@ CRAB_INLINE void TCPSocket::accept(TCPAcceptor &acceptor, Address *accepted_addr
 	fd.swap(acceptor.accepted_fd);
 	try {
 #if CRAB_SOCKET_KEVENT
-		RunLoop::current()->impl_kevent(fd.get_value(), this, EV_ADD | EV_CLEAR, EVFILT_READ, EVFILT_WRITE);
+		RunLoop::current()->impl_kevent(fd.get_value(), &rwd_handler, EV_ADD | EV_CLEAR, EVFILT_READ, EVFILT_WRITE);
 #else
-		RunLoop::current()->impl_epoll_ctl(fd.get_value(), this, EPOLL_CTL_ADD, EPOLLIN_TCP | EPOLLET);
+		RunLoop::current()->impl_epoll_ctl(fd.get_value(), &rwd_handler, EPOLL_CTL_ADD, EPOLLIN_TCP | EPOLLET);
 #endif
 	} catch (const std::exception &) {
 		// We cannot add to epoll/kevent in TCPAcceptor because we do not have
 		// TCPSocket yet, so we design accept to always succeeds, but trigger event,
 		// so that for use it will appear as socket was immediately disconnected
 		fd.reset();
-		RunLoop::current()->links.add_triggered_callables(this);
+		rwd_handler.add_pending_callable(true, false);
 		return;
 	}
 }
 
 CRAB_INLINE size_t TCPSocket::read_some(uint8_t *data, size_t count) {
-	if (!fd.is_valid() || !can_read)
+	if (!fd.is_valid() || !rwd_handler.can_read)
 		return 0;
 	details::StaticHolder<PerformanceStats>::instance.RECV_count += 1;
 	RunLoop::current()->push_record("recv", int(count));
 	ssize_t result = ::recv(fd.get_value(), data, count, details::RECV_SEND_FLAGS);
 	RunLoop::current()->push_record("R(recv)", int(result));
 	if (result != count)
-		can_read = false;
+		rwd_handler.can_read = false;
 	if (result == 0) {  // remote closed
 		close();
-		RunLoop::current()->links.add_triggered_callables(this);
+		rwd_handler.add_pending_callable(true, false);
 		return 0;
 	}
 	if (result < 0) {
 		int err = errno;
 		if (err != EAGAIN && err != EWOULDBLOCK) {  // some REAL error
 			close();
-			RunLoop::current()->links.add_triggered_callables(this);
+			rwd_handler.add_pending_callable(true, false);
 			return 0;
 		}
 		return 0;  // Will fire on_epoll_call in future automatically
@@ -425,19 +418,19 @@ CRAB_INLINE size_t TCPSocket::read_some(uint8_t *data, size_t count) {
 }
 
 CRAB_INLINE size_t TCPSocket::write_some(const uint8_t *data, size_t count) {
-	if (!fd.is_valid() || !can_write)
+	if (!fd.is_valid() || !rwd_handler.can_write)
 		return 0;
 	details::StaticHolder<PerformanceStats>::instance.SEND_count += 1;
 	RunLoop::current()->push_record("send", int(count));
 	ssize_t result = ::send(fd.get_value(), data, count, details::RECV_SEND_FLAGS);
 	RunLoop::current()->push_record("R(send)", int(result));
 	if (result != count)
-		can_write = false;
+		rwd_handler.can_write = false;
 	if (result < 0) {
 		int err = errno;
 		if (err != EAGAIN && err != EWOULDBLOCK) {  // some REAL error
 			close();
-			RunLoop::current()->links.add_triggered_callables(this);
+			rwd_handler.add_pending_callable(true, false);
 			return 0;
 		}
 		return 0;  // Will fire on_epoll_call in future automatically
@@ -446,7 +439,7 @@ CRAB_INLINE size_t TCPSocket::write_some(const uint8_t *data, size_t count) {
 	return result;
 }
 
-CRAB_INLINE TCPAcceptor::TCPAcceptor(const Address &address, Handler &&a_handler) : a_handler(std::move(a_handler)) {
+CRAB_INLINE TCPAcceptor::TCPAcceptor(const Address &address, Handler &&cb) : a_handler(std::move(cb)) {
 	details::FileDescriptor tmp(::socket(address.impl_get_sockaddr()->sa_family, SOCK_STREAM, IPPROTO_TCP),
 	    "crab::TCPAcceptor socket() failed");
 #if CRAB_SOCKET_KEVENT
@@ -459,9 +452,9 @@ CRAB_INLINE TCPAcceptor::TCPAcceptor(const Address &address, Handler &&a_handler
 	details::set_nonblocking(tmp.get_value());
 	details::check(listen(tmp.get_value(), SOMAXCONN) >= 0, "crab::TCPAcceptor listen failed");
 #if CRAB_SOCKET_KEVENT
-	RunLoop::current()->impl_kevent(tmp.get_value(), this, EV_ADD | EV_CLEAR, EVFILT_READ);
+	RunLoop::current()->impl_kevent(tmp.get_value(), &a_handler, EV_ADD | EV_CLEAR, EVFILT_READ);
 #else
-	RunLoop::current()->impl_epoll_ctl(tmp.get_value(), this, EPOLL_CTL_ADD, EPOLLIN | EPOLLET);
+	RunLoop::current()->impl_epoll_ctl(tmp.get_value(), &a_handler, EPOLL_CTL_ADD, EPOLLIN | EPOLLET);
 #endif
 	fd.swap(tmp);
 }
@@ -496,8 +489,7 @@ CRAB_INLINE bool TCPAcceptor::can_accept() {
 	}
 }
 
-CRAB_INLINE UDPTransmitter::UDPTransmitter(const Address &address, Handler &&r_handler)
-    : r_handler(std::move(r_handler)) {
+CRAB_INLINE UDPTransmitter::UDPTransmitter(const Address &address, Handler &&cb) : w_handler(std::move(cb)) {
 	details::FileDescriptor tmp(::socket(address.impl_get_sockaddr()->sa_family, SOCK_DGRAM, IPPROTO_UDP),
 	    "crab::UDPTransmitter socket() failed");
 	details::set_nonblocking(tmp.get_value());
@@ -515,27 +507,26 @@ CRAB_INLINE UDPTransmitter::UDPTransmitter(const Address &address, Handler &&r_h
 	int connect_result = ::connect(tmp.get_value(), address.impl_get_sockaddr(), address.impl_get_sockaddr_length());
 	details::check(connect_result >= 0 || errno == EINPROGRESS, "crab::UDPTransmitter connect() failed");
 #if CRAB_SOCKET_KEVENT
-	RunLoop::current()->impl_kevent(tmp.get_value(), this, EV_ADD | EV_CLEAR, EVFILT_WRITE);
+	RunLoop::current()->impl_kevent(tmp.get_value(), &w_handler, EV_ADD | EV_CLEAR, EVFILT_WRITE);
 #else
-	RunLoop::current()->impl_epoll_ctl(tmp.get_value(), this, EPOLL_CTL_ADD, EPOLLOUT | EPOLLET);
+	RunLoop::current()->impl_epoll_ctl(tmp.get_value(), &w_handler, EPOLL_CTL_ADD, EPOLLOUT | EPOLLET);
 #endif
 	if (connect_result >= 0) {
 		// On some systems if socket is connected right away, no epoll happens
-		RunLoop::current()->links.add_triggered_callables(this);
-		can_write = true;
+		w_handler.add_pending_callable(false, true);
 	}
 	fd.swap(tmp);
 }
 
 CRAB_INLINE size_t UDPTransmitter::write_datagram(const uint8_t *data, size_t count) {
-	if (!fd.is_valid() || !can_write)
+	if (!fd.is_valid() || !w_handler.can_write)
 		return 0;
 	details::StaticHolder<PerformanceStats>::instance.UDP_SEND_count += 1;
 	RunLoop::current()->push_record("sendto", int(count));
 	ssize_t result = ::sendto(fd.get_value(), data, count, details::RECV_SEND_FLAGS, nullptr, 0);
 	RunLoop::current()->push_record("R(sendto)", int(result));
 	if (result != count)
-		can_write = false;
+		w_handler.can_write = false;
 	if (result < 0) {
 		// If no one is listening on the other side, after receiving ICMP report, error 111 is returned on Linux
 		// We will ignore all errors here, in hope they will disappear soon
@@ -545,7 +536,7 @@ CRAB_INLINE size_t UDPTransmitter::write_datagram(const uint8_t *data, size_t co
 	return result;
 }
 
-CRAB_INLINE UDPReceiver::UDPReceiver(const Address &address, Handler &&r_handler) : r_handler(std::move(r_handler)) {
+CRAB_INLINE UDPReceiver::UDPReceiver(const Address &address, Handler &&cb) : r_handler(std::move(cb)) {
 	// On Linux & Mac OSX we can bind either to 0.0.0.0, adapter address or multicast group
 	details::FileDescriptor tmp(::socket(address.impl_get_sockaddr()->sa_family, SOCK_DGRAM, IPPROTO_UDP),
 	    "crab::UDPReceiver socket() failed");
@@ -574,15 +565,15 @@ CRAB_INLINE UDPReceiver::UDPReceiver(const Address &address, Handler &&r_handler
 		    "crab::UDPReceiver: Failed to join multicast group");
 	}
 #if CRAB_SOCKET_KEVENT
-	RunLoop::current()->impl_kevent(tmp.get_value(), this, EV_ADD | EV_CLEAR, EVFILT_READ);
+	RunLoop::current()->impl_kevent(tmp.get_value(), &r_handler, EV_ADD | EV_CLEAR, EVFILT_READ);
 #else
-	RunLoop::current()->impl_epoll_ctl(tmp.get_value(), this, EPOLL_CTL_ADD, EPOLLIN | EPOLLET);
+	RunLoop::current()->impl_epoll_ctl(tmp.get_value(), &r_handler, EPOLL_CTL_ADD, EPOLLIN | EPOLLET);
 #endif
 	fd.swap(tmp);
 }
 
 CRAB_INLINE bool UDPReceiver::read_datagram(uint8_t *data, size_t *size, Address *peer_addr) {
-	if (!fd.is_valid() || !can_read)
+	if (!fd.is_valid() || !r_handler.can_read)
 		return false;
 	Address in_addr;
 	socklen_t in_len = sizeof(sockaddr_storage);

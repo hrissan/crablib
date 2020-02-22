@@ -49,13 +49,19 @@ class DNSWorker;
 #if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL || CRAB_SOCKET_WINDOWS
 
 struct Callable : private Nocopy {
+	explicit Callable(Handler &&handler) : handler(handler) {}
+	Handler handler;
 	IntrusiveNode<Callable> triggered_callables_node;
 	bool can_read  = false;
 	bool can_write = false;
-	virtual ~Callable() { cancel_callable(); }
-	virtual void on_runloop_call() = 0;
-	void cancel_callable() { triggered_callables_node.unlink(); }
+
+	void cancel_callable() {
+		triggered_callables_node.unlink();
+		can_read  = false;
+		can_write = false;
+	}
 	bool is_pending_callable() const { return triggered_callables_node.in_list(); }
+	void add_pending_callable(bool can_read, bool can_write);
 };
 
 namespace details {
@@ -64,6 +70,10 @@ struct LessTimerPtr {
 };
 struct RunLoopLinks;
 }  // namespace details
+
+#else
+
+using Callable = Handler;
 
 #endif
 

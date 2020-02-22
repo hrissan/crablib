@@ -183,7 +183,7 @@ public:
 	}
 };
 
-TCPSocket::TCPSocket(RW_handler && rwd_handler) : rwd_handler(rwd_handler), impl(std::make_shared<Impl>(this)) {}
+TCPSocket::TCPSocket(RW_handler &&rwd_handler) : rwd_handler(rwd_handler), impl(std::make_shared<Impl>(this)) {}
 
 TCPSocket::~TCPSocket() { close(); }
 

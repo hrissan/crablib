@@ -12,7 +12,7 @@ CRAB_INLINE Address::Address(const std::string &numeric_host, uint16_t port) {
 		throw std::runtime_error("Address failed to parse, numeric_host='" + numeric_host + "'");
 }
 
-CRAB_INLINE void TCPSocket::set_handler(Handler &&rwd_handler) { this->rwd_handler = std::move(rwd_handler); }
+CRAB_INLINE void TCPSocket::set_handler(Handler &&rwd_handler) { this->rwd_handler.handler = std::move(rwd_handler); }
 
 CRAB_INLINE void RunLoop::push_record(const char *event_type, size_t count) {
 	performance.emplace_back(std::chrono::steady_clock::now(), event_type, count);
@@ -34,7 +34,23 @@ CRAB_INLINE void RunLoop::print_records() {
 
 #if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL || CRAB_SOCKET_WINDOWS
 
+CRAB_INLINE void Callable::add_pending_callable(bool can_read, bool can_write) {
+	this->can_read  = this->can_read || can_read;
+	this->can_write = this->can_write || can_write;
+	RunLoop::current()->links.triggered_callables.push_back(*this);
+}
+
 namespace details {
+
+CRAB_INLINE void RunLoopLinks::trigger_idle_handlers() {
+	if (!triggered_callables.empty())
+		return;
+	// Nothing triggered during poll
+	for (auto &idle : idle_handlers) {
+		triggered_callables.push_back(idle.a_handler);
+	}
+}
+
 CRAB_INLINE bool RunLoopLinks::process_timer(const std::chrono::steady_clock::time_point &now, int &timeout_ms) {
 	if (active_timers.empty())
 		return false;
@@ -61,10 +77,6 @@ CRAB_INLINE bool RunLoopLinks::process_timer(const std::chrono::steady_clock::ti
 	return false;
 }
 
-CRAB_INLINE void RunLoopLinks::add_triggered_callables(Callable *callable) {
-	triggered_callables.push_back(*callable);
-}
-
 CRAB_INLINE void RunLoopLinks::call_watcher(Watcher *watcher) {
 	std::unique_lock<std::mutex> lock(mutex);
 	fired_objects.push_back(*watcher);
@@ -78,9 +90,9 @@ CRAB_INLINE void RunLoopLinks::cancel_called_watcher(Watcher *watcher) {
 CRAB_INLINE void RunLoopLinks::trigger_called_watchers() {
 	std::unique_lock<std::mutex> lock(mutex);
 	while (!fired_objects.empty()) {
-		Watcher *watcher = &*fired_objects.begin();
-		watcher->fired_objects_node.unlink();
-		add_triggered_callables(watcher);
+		Watcher &watcher = *fired_objects.begin();
+		watcher.fired_objects_node.unlink();
+		triggered_callables.push_back(watcher.a_handler);
 	}
 }
 }  // namespace details
@@ -90,9 +102,9 @@ CRAB_INLINE void RunLoop::run() {
 	auto now   = std::chrono::steady_clock::now();
 	while (!links.quit) {
 		if (!links.triggered_callables.empty()) {
-			Callable *callable = &*links.triggered_callables.begin();
-			callable->triggered_callables_node.unlink();
-			callable->on_runloop_call();
+			Callable &callable = *links.triggered_callables.begin();
+			callable.triggered_callables_node.unlink();
+			callable.handler();
 			continue;
 		}
 		int timeout_ms = MAX_SLEEP_MS;
@@ -102,12 +114,8 @@ CRAB_INLINE void RunLoop::run() {
 		if (links.idle_handlers.empty()) {
 			step(timeout_ms);  // Just waiting
 		} else {
-			step(0);                                  // Poll
-			if (links.triggered_callables.empty()) {  // Nothing triggered during poll
-				for (auto it = links.idle_handlers.begin(); it != links.idle_handlers.end(); ++it) {
-					links.add_triggered_callables(&*it);
-				}
-			}
+			step(0);  // Poll
+			links.trigger_idle_handlers();
 		}
 		now = std::chrono::steady_clock::now();
 		// Runloop optimizes # of calls to now() because those can be slow
@@ -136,22 +144,17 @@ CRAB_INLINE bool Timer::is_set() const { return heap_index.in_heap(); }
 
 CRAB_INLINE void Timer::cancel() { RunLoop::current()->links.active_timers.erase(*this); }
 
-CRAB_INLINE Idle::Idle(Handler &&cb) : a_handler(cb) { RunLoop::current()->links.idle_handlers.push_back(*this); }
+CRAB_INLINE Idle::Idle(Handler &&cb) : a_handler(std::move(cb)) {
+	RunLoop::current()->links.idle_handlers.push_back(*this);
+}
 
 CRAB_INLINE void Idle::set_active(bool a) {
 	if (a) {
 		RunLoop::current()->links.idle_handlers.push_back(*this);
 	} else {
+		a_handler.cancel_callable();
 		idle_node.unlink();
 	}
-}
-
-CRAB_INLINE void Idle::on_runloop_call() {
-	// We enqueue all active idle instances at once in RunLoop::run, each handler is allowed
-	// to set any other idle to inactive state
-	// Easy check strengthens invariant to "Only active idles run"
-	if (is_active())
-		a_handler();
 }
 
 CRAB_INLINE Watcher::Watcher(Handler &&a_handler) : loop(RunLoop::current()), a_handler(std::move(a_handler)) {}
@@ -162,7 +165,7 @@ CRAB_INLINE void Watcher::call() {
 }
 
 CRAB_INLINE void Watcher::cancel() {
-	cancel_callable();
+	a_handler.cancel_callable();
 	loop->links.cancel_called_watcher(this);
 }
 
