@@ -24,7 +24,8 @@ set(SOURCE_FILES
 		include/crab/crab.cpp
 		include/crab/crab_version.hpp
 		include/crab/crab.hpp
-		include/crab/intrusive_node.hpp
+		include/crab/intrusive_list.hpp
+		include/crab/intrusive_heap.hpp
 		include/crab/network.hpp
 		include/crab/network.hxx
 		include/crab/network_base.hpp

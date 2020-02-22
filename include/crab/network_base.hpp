@@ -15,7 +15,8 @@
 #include <vector>
 
 #include "crab_version.hpp"
-#include "intrusive_node.hpp"
+#include "intrusive_heap.hpp"
+#include "intrusive_list.hpp"
 #include "streams.hpp"
 #include "util.hpp"
 

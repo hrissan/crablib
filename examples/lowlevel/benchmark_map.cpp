@@ -12,6 +12,8 @@
 #include <unordered_map>
 #include <unordered_set>
 
+#include <crab/intrusive_heap.hpp>
+
 static size_t count_zeroes(uint64_t val) {
 	for (size_t i = 0; i != sizeof(val) * 8; ++i)
 		if ((val & (uint64_t(1) << i)) != 0)
@@ -190,182 +192,11 @@ private:
 	Random random;
 };
 
-struct jsw_node {
-	size_t weight = 0;
-	struct jsw_node *link[2]{};
-	uint64_t data = 0;
-};
+struct HeapElement {
+	crab::IntrusiveHeapIndex heap_index;
+	uint64_t value = 0;
 
-struct jsw_node *make_node(uint64_t data) {
-	struct jsw_node *rn = new jsw_node;
-
-	rn->data    = data;
-	rn->link[0] = rn->link[1] = NULL;
-	rn->weight = 1;
-
-	return rn;
-}
-
-size_t jsw_insert2(struct jsw_node **tree, uint64_t data) {
-	for (;;) {
-		if (*tree == NULL) {
-			*tree = make_node(data);
-			return 1;
-		}
-		struct jsw_node *it = *tree;
-		if (it->data == data)
-			return 0;
-		int dir = it->data < data;
-		tree    = &it->link[dir];
-	}
-	// it->link[dir] = make_node(data);
-	// return 1;
-}
-
-static size_t jsw_found_counter     = 0;
-static size_t jsw_not_found_counter = 0;
-
-size_t jsw_find1(struct jsw_node *it, uint64_t data) {
-	//	size_t sk = 0;
-	while (it != NULL) {
-		//		sk += 1;
-        if (it->data == data) {
-			//			jsw_found_counter += sk;
-			return 1;
-		}
-		int dir = it->data < data;
-
-		it = it->link[dir];
-	}
-	//    jsw_not_found_counter += sk;
-	return 0;
-}
-
-std::pair<jsw_node *, size_t> jsw_find(struct jsw_node *it, uint64_t data) {
-	struct jsw_node *__result = nullptr;
-	size_t depth = 0;
-	while (it != nullptr) {
-        depth += 1;
-		if (it->data >= data) {
-			__result = it;
-			it       = it->link[0];
-		} else
-			it = it->link[1];
-	}
-	if (__result && data >= __result->data) {
-        return {__result, depth};
-    }
-	return {nullptr, 0};
-}
-
-size_t jsw_insert(struct jsw_node *it, uint64_t data) {
-    struct jsw_node * found = jsw_find(it, data).first;
-    if (found)
-        return 0;
-    for (;;) {
-        it->weight += 1;
-        int dir = it->data < data;
-        if (it->link[dir] == NULL) {
-            it->link[dir] = make_node(data);
-            return 1;
-        }
-        it = it->link[dir];
-    }
-}
-
-size_t jsw_find3(struct jsw_node *it, uint64_t data) {
-	while (__builtin_expect(it != NULL, 1)) {
-		if (__builtin_expect(data < it->data, 1)) {
-			it = it->link[0];
-			continue;
-		}
-		if (__builtin_expect(data > it->data, 1)) {
-			it = it->link[1];
-			continue;
-		}
-		return 1;
-	}
-	return 0;
-}
-
-// returns node and pointer to where node is stored in parent
-void jsw_pop_front(struct jsw_node **root) {
-    auto it = *root;
-    while (it->link[0]) {
-        it->weight -= 1;
-        root = &it->link[0];
-        it = it->link[0];
-    }
-    *root = it->link[1];
-    delete it;
-}
-
-size_t jsw_remove(struct jsw_node **tree, uint64_t data) {
-    struct jsw_node * found = jsw_find(*tree, data).first;
-    if (!found)
-        return 0;
-	struct jsw_node head = {};
-	struct jsw_node *it  = &head;
-	struct jsw_node *p = *tree, *f = NULL;
-	int dir = 1;
-
-	it->link[1] = *tree;
-
-	while (it->link[dir] != NULL) {
-		p   = it;
-		it  = it->link[dir];
-		dir = it->data <= data;
-        it->weight -= 1;
-
-		if (it->data == data) {
-			f = it;
-		}
-	}
-
-	f->data                   = it->data;
-	p->link[p->link[1] == it] = it->link[it->link[0] == NULL];
-	delete it;
-//    while (p) {
-//        if (p->weight == 0)
-//            throw std::logic_error("Weight update wrong");
-//        p->weight -= 1;
-//        p = p->parent;
-//    }
-	*tree = head.link[1];
-	return 1;
-}
-
-struct AVLMinusTree {
-	jsw_node * root = nullptr;
-public:
-	std::pair<int, bool> insert(uint64_t value) {
-		if (root == NULL) {
-            root = make_node(value);
-			return {1, true};
-		}
-		auto result = jsw_insert(root, value);
-		return {1, result > 0};
-	}
-    size_t count(uint64_t value) const { return jsw_find(root, value).first ? 1 : 0; }
-    size_t depth(uint64_t value) const { return jsw_find(root, value).second; }
-	size_t erase(uint64_t value) {
-	    return jsw_remove(&root, value);
-	}
-    size_t pop_front() {
-	    if (!root)
-	        return 0;
-	    jsw_pop_front(&root);
-	    return 1;
-	}
-    void print() {
-	    if (root) {
-            std::cout << "root weight=" << root->weight << std::endl;
-            if (root->link[0])
-                std::cout << "root->link[0] weight=" << root->link[0]->weight << std::endl;
-            if (root->link[1])
-                std::cout << "root->link[1] weight=" << root->link[1]->weight << std::endl;
-        }
-	}
+	bool operator<(const HeapElement &other) const { return value < other.value; }
 };
 
 // typical benchmark
@@ -384,8 +215,8 @@ std::vector<uint64_t> fill_random(uint64_t seed, size_t count) {
 	return result;
 }
 
-template<class Op>
-void benchmark_op(const char *str, const std::vector<uint64_t> &samples, Op op) {
+template<class T, class Op>
+void benchmark_op(const char *str, const std::vector<T> &samples, Op op) {
 	size_t found_counter = 0;
 	auto idea_start      = std::chrono::high_resolution_clock::now();
 	for (const auto &sample : samples)
@@ -402,48 +233,62 @@ void benchmark_sets() {
 	std::vector<uint64_t> to_count  = fill_random(2, count);
 	std::vector<uint64_t> to_erase  = fill_random(3, count);
 
-	AVLMinusTree test_avl;
+	std::vector<HeapElement *> el_to_insert;
+	std::vector<HeapElement *> el_to_count;
+	std::vector<HeapElement *> el_to_erase;
+
+	std::map<uint64_t, HeapElement> heap_storage;
+	for (auto s : to_insert)
+		el_to_insert.push_back(&heap_storage[s]);
+	for (auto s : to_count)
+		el_to_count.push_back(&heap_storage[s]);
+	for (auto s : to_erase)
+		el_to_erase.push_back(&heap_storage[s]);
+
+	crab::IntrusiveHeap<HeapElement, &HeapElement::heap_index, std::less<HeapElement>> int_heap;
+	int_heap.reserve(1000000);
 	benchmark_op(
-	    "avl-- insert ", to_insert, [&](uint64_t sample) -> size_t { return test_avl.insert(sample).second; });
-    benchmark_op("avl-- count ", to_count, [&](uint64_t sample) -> size_t { return test_avl.count(sample); });
-    std::map<size_t, size_t> tree_structure;
-    benchmark_op("avl-- depth ", to_insert, [&](uint64_t sample) -> size_t { return tree_structure[test_avl.depth(sample)] += 1; });
-    size_t sum_depth = 0;
-    size_t sum_items = 0;
-    for(const auto & s : tree_structure) {
-        std::cout << s.first << " -> " << s.second << std::endl;
-        sum_depth += s.first * s.second;
-        sum_items += s.second;
-    }
-    std::cout << "Average depth=" << double(sum_depth)/sum_items << std::endl;
-    test_avl.print();
-    benchmark_op("avl-- erase ", to_erase, [&](uint64_t sample) -> size_t { return test_avl.erase(sample); });
-    benchmark_op("avl-- pop_front ", to_insert, [&](uint64_t sample) -> size_t { return test_avl.pop_front(); });
+	    "OurHeap insert ", el_to_insert, [&](HeapElement *sample) -> size_t { return int_heap.insert(*sample); });
+	benchmark_op(
+	    "OurHeap erase ", el_to_erase, [&](HeapElement *sample) -> size_t { return int_heap.erase(*sample); });
+	benchmark_op("OurHeap pop_front ", el_to_insert, [&](HeapElement *sample) -> size_t {
+		if (int_heap.empty())
+			return 0;
+		int_heap.pop_front();
+		return 1;
+	});
 
-    std::set<uint64_t> test_set;
-    benchmark_op(
-            "std::set insert ", to_insert, [&](uint64_t sample) -> size_t { return test_set.insert(sample).second; });
-    benchmark_op("std::set count ", to_count, [&](uint64_t sample) -> size_t { return test_set.count(sample); });
-    benchmark_op("std::set erase ", to_erase, [&](uint64_t sample) -> size_t { return test_set.erase(sample); });
-    benchmark_op("std::set pop_front ", to_insert, [&](uint64_t sample) -> size_t {
-        if (!test_set.empty()) {
-            test_set.erase(test_set.begin());
-            return 1;
-        }
-        return 0;
-    });
+	std::set<uint64_t> test_set;
+	benchmark_op(
+	    "std::set insert ", to_insert, [&](uint64_t sample) -> size_t { return test_set.insert(sample).second; });
+	benchmark_op("std::set count ", to_count, [&](uint64_t sample) -> size_t { return test_set.count(sample); });
+	benchmark_op("std::set erase ", to_erase, [&](uint64_t sample) -> size_t { return test_set.erase(sample); });
+	benchmark_op("std::set pop_front ", to_insert, [&](uint64_t sample) -> size_t {
+		if (!test_set.empty()) {
+			test_set.erase(test_set.begin());
+			return 1;
+		}
+		return 0;
+	});
 
-    std::unordered_set<uint64_t> test_uset;
+	std::unordered_set<uint64_t> test_uset;
 	benchmark_op(
 	    "std::uset insert ", to_insert, [&](uint64_t sample) -> size_t { return test_uset.insert(sample).second; });
 	benchmark_op("std::uset count ", to_count, [&](uint64_t sample) -> size_t { return test_uset.count(sample); });
-	benchmark_op("std::uset erase ", to_count, [&](uint64_t sample) -> size_t { return test_uset.erase(sample); });
+	benchmark_op("std::uset erase ", to_erase, [&](uint64_t sample) -> size_t { return test_uset.erase(sample); });
+	benchmark_op("std::uset pop_front ", to_insert, [&](uint64_t sample) -> size_t {
+		if (!test_uset.empty()) {
+			test_uset.erase(test_uset.begin());
+			return 1;
+		}
+		return 0;
+	});
 
 	SkipList<uint64_t> skip_list;
 	benchmark_op(
 	    "skip_list insert ", to_insert, [&](uint64_t sample) -> size_t { return skip_list.insert(sample).second; });
 	benchmark_op("skip_list count ", to_count, [&](uint64_t sample) -> size_t { return skip_list.count(sample); });
-	benchmark_op("skip_list erase ", to_count, [&](uint64_t sample) -> size_t { return skip_list.erase(sample); });
+	benchmark_op("skip_list erase ", to_erase, [&](uint64_t sample) -> size_t { return skip_list.erase(sample); });
 
 	//	immer::set<uint64_t> immer_set;
 	//	benchmark_op("immer insert ", to_insert, [&](uint64_t sample)->size_t{

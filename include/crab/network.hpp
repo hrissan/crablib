@@ -54,12 +54,10 @@ private:
 	Handler a_handler;
 
 #if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL || CRAB_SOCKET_WINDOWS
-#if CRAB_INTRUSIVE_SET
-	IntrusiveNode<Timer> active_timers_node;
-#else
-	bool set = false;
-	friend struct details::LessTimerPtr;
-#endif
+	struct HeapPred {
+		bool operator()(const Timer &a, const Timer &b) { return a.fire_time > b.fire_time; }
+	};
+	IntrusiveHeapIndex heap_index;
 	std::chrono::steady_clock::time_point fire_time;
 	friend struct details::RunLoopLinks;
 #else
@@ -67,12 +65,6 @@ private:
 	friend struct TimerImpl;
 #endif
 };
-
-#if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL || CRAB_SOCKET_WINDOWS
-#if !CRAB_INTRUSIVE_SET
-inline bool details::LessTimerPtr::operator()(Timer *a, Timer *b) const { return a->fire_time < b->fire_time; }
-#endif
-#endif
 
 class Watcher : private Callable {
 public:
@@ -131,6 +123,7 @@ public:
 	const sockaddr *impl_get_sockaddr() const { return reinterpret_cast<const sockaddr *>(&addr); }
 	sockaddr *impl_get_sockaddr() { return reinterpret_cast<sockaddr *>(&addr); }
 	size_t impl_get_sockaddr_length() const;
+
 private:
 	sockaddr_storage addr = {};
 #else
@@ -268,11 +261,8 @@ private:
 
 namespace details {
 struct RunLoopLinks : private Nocopy {  // Common structure when implementing over low-level interface
-#if CRAB_INTRUSIVE_SET
-	IntrusiveList<Timer, &Timer::active_timer_node> active_timers;
-#else
-	std::set<Timer *, details::LessTimerPtr> active_timers;
-#endif
+	IntrusiveHeap<Timer, &Timer::heap_index, Timer::HeapPred> active_timers;
+
 	IntrusiveList<Callable, &Callable::triggered_callables_node> triggered_callables;
 	IntrusiveList<Idle, &Idle::idle_node> idle_handlers;
 	bool quit = true;

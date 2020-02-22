@@ -39,35 +39,22 @@ CRAB_INLINE void RunLoop::print_records() {
 
 namespace details {
 CRAB_INLINE bool RunLoopLinks::process_timer(const std::chrono::steady_clock::time_point &now, int &timeout_ms) {
-#if CRAB_INTRUSIVE_SET
-	IntrusiveNode<Timer> *t = &active_timers;
-	if (t->is_end())
-		return false;
-	Timer *timer = t->get_current();
-	if (timer->fire_time <= now) {
-		timer->active_timers_node.unlink(&Timer::active_timers_node);
-		timer->a_handler();
-		return true;
-	}
-#else
 	if (active_timers.empty())
 		return false;
-	Timer *timer = *active_timers.begin();
-	if (timer->fire_time <= now) {
-		active_timers.erase(active_timers.begin());
-		timer->set = false;
-		timer->a_handler();
+	Timer &timer = active_timers.front();
+	if (timer.fire_time <= now) {
+		active_timers.pop_front();
+		timer.a_handler();
 		return true;
 	}
-#endif
 	// We do not want to overlap
 	const auto now_plus_max_sleep = now + std::chrono::milliseconds(RunLoop::MAX_SLEEP_MS);
-	if (timer->fire_time >= now_plus_max_sleep)
+	if (timer.fire_time >= now_plus_max_sleep)
 		return false;
 	timeout_ms =
-	    1 + static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(timer->fire_time - now).count());
+	    1 + static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(timer.fire_time - now).count());
 	// crude way of rounding up, we do not want to wake loop up BEFORE fire_time.
-	// Moreover, 0 means "poll" and we do not want to poll waiting for timer
+	// Moreover, 0 means "poll" and we do not want to poll for 1 msec waiting for timer
 	return false;
 }
 
@@ -138,40 +125,14 @@ CRAB_INLINE void Timer::once(float after_seconds) {
 			fire_time = now + std::chrono::duration_cast<std::chrono::steady_clock::duration>(
 			                      std::chrono::duration<float>(after_seconds));
 	}
-	auto loop = RunLoop::current();
-
-#if CRAB_INTRUSIVE_SET
-	// Actual code is for intrusive list and O(N)
-	// Works very slow for 100k sockets, each with heartbit timer. TODO - intrusive balanced tree
-	auto t = loop->links.active_timers.begin();
-	auto e = loop->links.active_timers.end();
-	while (t != e && t->fire_time <= fire_time)
-		++t;
-	loop->links.active_timers.insert(t, *this);
-#else
-	loop->links.active_timers.insert(this);
-	set = true;
-#endif
+	RunLoop::current()->links.active_timers.insert(*this);
 }
 
-CRAB_INLINE bool Timer::is_set() const {
-#if CRAB_INTRUSIVE_SET
-	return active_timers_node.in_list();
-#else
-	return set;
-#endif
-}
+CRAB_INLINE bool Timer::is_set() const { return heap_index.in_heap(); }
 
 CRAB_INLINE void Timer::cancel() {
 	cancel_callable();
-#if CRAB_INTRUSIVE_SET
-	active_timers_node.unlink();
-#else
-	if (!set)
-		return;
-	RunLoop::current()->links.active_timers.erase(this);
-	set = false;
-#endif
+	RunLoop::current()->links.active_timers.erase(*this);
 }
 
 CRAB_INLINE Idle::Idle(Handler &&cb) : a_handler(cb) { RunLoop::current()->links.idle_handlers.push_back(*this); }
