@@ -64,20 +64,16 @@ struct Literal {
 
 	static constexpr size_t length(const char *str) { return *str ? 1U + length(str + 1) : 0U; }
 	int compare(const char *b, size_t bs) const {
-		if (size > bs)
-			return 1;
-		if (size < bs)
-			return -1;
+		if (size != bs)
+			return static_cast<int>(size) - static_cast<int>(bs);
 		return std::memcmp(value, b, size);
 	}
 	int compare(const std::string &b) const { return compare(b.data(), b.size()); }
 	int compare_lowcase(const char *b, size_t bs) const {
-		if (size > bs)
-			return 1;
-		if (size < bs)
-			return -1;
+		if (size != bs)
+			return static_cast<int>(size) - static_cast<int>(bs);
 		for (size_t i = 0; i != bs; ++i) {
-			auto diff = int(std::tolower(b[i])) - value[i];
+			auto diff = std::tolower(b[i]) - static_cast<int>(value[i]);
 			if (diff != 0)
 				return diff;
 		}

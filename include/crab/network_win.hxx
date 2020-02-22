@@ -381,7 +381,7 @@ CRAB_INLINE bool TCPSocket::connect(const Address &address) {
 	impl->pending_read = true;
 	RunLoop::current()->get_impl()->pending_counter += 1;
 	return true;
-}  // namespace crab
+}
 
 CRAB_INLINE size_t TCPSocket::read_some(uint8_t *data, size_t count) {
 	if (!impl || impl->fd.get_value() == -1)
