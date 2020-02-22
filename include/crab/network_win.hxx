@@ -30,12 +30,14 @@
 
 namespace crab {
 
-constexpr size_t OVERLAPPED_BUFFER_SIZE = 8192;
-constexpr int OverlappedCallableKey     = 113;  // We use arbitrary value to distinguish our overlapped calls
+namespace details {
 
-struct OverlappedCallable : public OVERLAPPED {
-	explicit OverlappedCallable() : OVERLAPPED{} {}
-	virtual ~OverlappedCallable() = default;
+constexpr size_t OVERLAPPED_BUFFER_SIZE = 8192;
+constexpr int OverlappedKey             = 113;  // We use arbitrary value to distinguish our overlapped calls
+
+struct Overlapped : public OVERLAPPED {
+	explicit Overlapped() : OVERLAPPED{} {}
+	virtual ~Overlapped() = default;
 	void zero_overlapped() { *static_cast<OVERLAPPED *>(this) = OVERLAPPED{}; }
 	virtual void on_overlapped_call(DWORD bytes, bool result) = 0;
 };
@@ -72,9 +74,13 @@ constexpr int MAX_EVENTS = 512;
 
 constexpr bool DETAILED_DEBUG = false;
 
-struct RunLoopImpl : public OverlappedCallable {
+static int tcp_id_counter = 0;  // TODO - global
+
+}  // namespace details
+
+struct RunLoopImpl : public details::Overlapped {
 	Handler wake_handler;
-	AutoHandle completion_queue;
+	details::AutoHandle completion_queue;
 	std::atomic<size_t> pending_counter{0};
 	size_t impl_counter = 0;
 
@@ -121,9 +127,9 @@ CRAB_INLINE void RunLoop::step(int timeout_ms) {
 				throw std::runtime_error("GetQueuedCompletionStatus error");
 			return;  // Timeout is ok
 		}
-		if (completionKey != OverlappedCallableKey)
+		if (completionKey != OverlappedKey)
 			return;  // not our's overlapped call, TODO - remove to speep up
-		OverlappedCallable *our_ovl = static_cast<OverlappedCallable *>(ovl);
+		Overlapped *our_ovl = static_cast<Overlapped *>(ovl);
 		our_ovl->on_overlapped_call(transferred, result);
 		return;
 	}
@@ -142,84 +148,22 @@ CRAB_INLINE void RunLoop::step(int timeout_ms) {
 	details::StaticHolder<PerformanceStats>::instance.EPOLL_count += 1;
 	details::StaticHolder<PerformanceStats>::instance.EPOLL_size += n;
 	for (int i = 0; i != n; ++i) {
-		if (events[i].lpCompletionKey != OverlappedCallableKey)
+		if (events[i].lpCompletionKey != OverlappedKey)
 			continue;
-		OverlappedCallable *our_ovl = static_cast<OverlappedCallable *>(events[i].lpOverlapped);
+		Overlapped *our_ovl = static_cast<Overlapped *>(events[i].lpOverlapped);
 		our_ovl->on_overlapped_call(events[i].dwNumberOfBytesTransferred, true);
 	}
 }
 
 CRAB_INLINE void RunLoop::wakeup() {
-	if (PostQueuedCompletionStatus(impl->completion_queue.value, 0, OverlappedCallableKey, impl.get()) == 0)
+	if (PostQueuedCompletionStatus(impl->completion_queue.value, 0, OverlappedKey, impl.get()) == 0)
 		throw std::runtime_error("crab::Watcher::call PostQueuedCompletionStatus failed");
 }
 
 CRAB_INLINE void RunLoop::cancel() { links.quit = true; }
 
-/*static std::string good_inet_ntop(const sockaddr *addr) {
-    char addr_buf[INET6_ADDRSTRLEN] = {};
-    switch (addr->sa_family) {
-    case AF_INET: {
-        const sockaddr_in *ap = reinterpret_cast<const sockaddr_in *>(addr);
-        inet_ntop(AF_INET, &ap->sin_addr, addr_buf, sizeof(addr_buf));
-        break;
-    }
-    case AF_INET6: {
-        const sockaddr_in6 *ap = reinterpret_cast<const sockaddr_in6 *>(addr);
-        inet_ntop(AF_INET6, &ap->sin6_addr, addr_buf, sizeof(addr_buf));
-        break;
-    }
-    }
-    return std::string(addr_buf);
-}
-
-static int address_from_string(const std::string &str, crab::bdata &result) {
-    bdata tmp(16, 0);
-    if (inet_pton(AF_INET6, str.c_str(), tmp.data()) == 1) {
-        result = tmp;
-        return AF_INET6;
-    }
-    tmp.resize(4);
-    if (inet_pton(AF_INET, str.c_str(), tmp.data()) == 1) {
-        result = tmp;
-        return AF_INET;
-    }
-    return 0;
-}
-
-bool DNSResolver::parse_ipaddress(const std::string &str, bdata *result) {
-    return address_from_string(str, *result) != 0;
-}
-
-CRAB_INLINE std::vector<Address> DNSResolver::sync_resolve(
-    const std::string &host_name, uint16_t port, bool ipv4, bool ipv6) {
-    std::vector<Address> names;
-    if (!ipv4 && !ipv6)
-        return names;
-    addrinfo hints = {};
-    struct AddrinfoHolder {
-        struct addrinfo *result = nullptr;
-        ~AddrinfoHolder() { freeaddrinfo(result); }
-    } holder;
-
-    hints.ai_family    = ipv4 && ipv6 ? AF_UNSPEC : ipv4 ? AF_INET : AF_INET6;
-    hints.ai_socktype  = SOCK_STREAM;
-    hints.ai_flags     = AI_V4MAPPED | AI_ADDRCONFIG;  // AI_NUMERICHOST
-    const auto service = std::to_string(port);
-
-    if (getaddrinfo(host_name.c_str(), service.c_str(), &hints, &holder.result) != 0)
-        return names;
-    for (struct addrinfo *rp = holder.result; rp != nullptr; rp = rp->ai_next) {
-        // TODO
-        names.push_back(good_inet_ntop(rp->ai_addr));
-    }
-    return names;
-}*/
-
-static int tcp_id_counter = 0;
-
-struct TCPSocketImpl : public OverlappedCallable {
-	struct WriteOverlapped : public OverlappedCallable {
+struct TCPSocketImpl : public details::Overlapped {
+	struct WriteOverlapped : public details::Overlapped {
 		// Microsoft URODI, need 2 OVERLAPPED structures in single object
 		TCPSocketImpl *owner;
 
@@ -239,7 +183,7 @@ struct TCPSocketImpl : public OverlappedCallable {
 	}
 	~TCPSocketImpl() override { loop->get_impl()->impl_counter -= 1; }
 
-	SocketDescriptor fd;
+	details::SocketDescriptor fd;
 	WriteOverlapped write_overlapped;
 	TCPSocket *owner;
 	int tcp_id;
@@ -411,11 +355,11 @@ CRAB_INLINE bool TCPSocket::connect(const Address &address) {
 	close();
 	if (!impl)
 		impl.reset(new TCPSocketImpl(this));
-	SocketDescriptor tmp(socket(address.impl_get_sockaddr()->sa_family, SOCK_STREAM, IPPROTO_TCP));
+	details::SocketDescriptor tmp(socket(address.impl_get_sockaddr()->sa_family, SOCK_STREAM, IPPROTO_TCP));
 	if (tmp.get_value() == -1)
 		return false;
 	if (CreateIoCompletionPort(
-	        tmp.handle_value(), RunLoop::current()->get_impl()->completion_queue.value, OverlappedCallableKey, 0) == NULL)
+	        tmp.handle_value(), RunLoop::current()->get_impl()->completion_queue.value, OverlappedKey, 0) == NULL)
 		return false;
 	impl->zero_overlapped();
 	DWORD numBytes              = 0;
@@ -462,14 +406,14 @@ CRAB_INLINE size_t TCPSocket::write_some(const uint8_t *data, size_t count) {
 	return result;
 }
 
-struct TCPAcceptorImpl : public OverlappedCallable {
+struct TCPAcceptorImpl : public details::Overlapped {
 	explicit TCPAcceptorImpl(TCPAcceptor *owner)
 	    : read_buf(OVERLAPPED_BUFFER_SIZE), owner(owner), loop(RunLoop::current()) {
 		loop->get_impl()->impl_counter += 1;
 	}
 	~TCPAcceptorImpl() override { loop->get_impl()->impl_counter -= 1; }
-	SocketDescriptor fd;
-	SocketDescriptor accepted_fd;  // AcceptEx requires created socket
+	details::SocketDescriptor fd;
+	details::SocketDescriptor accepted_fd;  // AcceptEx requires created socket
 	Address accepted_addr;
 	int ai_family = 0, ai_socktype = 0, ai_protocol = 0;  // for next accepted_fd
 	Buffer read_buf;
@@ -487,7 +431,7 @@ struct TCPAcceptorImpl : public OverlappedCallable {
 			return;
 		}
 		if (CreateIoCompletionPort(accepted_fd.handle_value(), RunLoop::current()->get_impl()->completion_queue.value,
-		        OverlappedCallableKey, 0) == NULL)
+		        OverlappedKey, 0) == NULL)
 			throw std::runtime_error("crab::TCPAcceptor::TCPAcceptor CreateIoCompletionPort failed");
 
 		DWORD last = 0;
@@ -504,7 +448,6 @@ struct TCPAcceptorImpl : public OverlappedCallable {
 		    read_buf.write_ptr(), 0, sizeof(sockaddr_in6) + 16, sizeof(sockaddr_in6) + 16, &la, &lalen, &ap, &aplen);
 		if (aplen <= sizeof(sockaddr_storage)) {
 			std::memcpy(accepted_addr.impl_get_sockaddr(), ap, aplen);
-
 		}
 		/*        if( WSAAddressToString(ap, aplen, nullptr, addr_buf, &addr_buf_len ) != 0){
 		            DWORD last = WSAGetLastError();
@@ -557,7 +500,8 @@ CRAB_INLINE void TCPSocket::accept(TCPAcceptor &acceptor, Address *accepted_addr
 	if (!impl)
 		impl.reset(new TCPSocketImpl(this));
 	if (DETAILED_DEBUG)
-		std::cout << "tcp_id=" << impl->tcp_id << " Accepted from addr=" << acceptor.impl->accepted_addr.get_address() << ":" << acceptor.impl->accepted_addr.get_port() << std::endl;
+		std::cout << "tcp_id=" << impl->tcp_id << " Accepted from addr=" << acceptor.impl->accepted_addr.get_address()
+		          << ":" << acceptor.impl->accepted_addr.get_port() << std::endl;
 	if (accepted_addr)
 		*accepted_addr = acceptor.impl->accepted_addr;
 	acceptor.impl->accepted_addr = Address();
@@ -583,7 +527,7 @@ CRAB_INLINE TCPAcceptor::TCPAcceptor(const Address &address, Handler &&a_handler
 	if (bind(tmp.get_value(), address.impl_get_sockaddr(), address.impl_get_sockaddr_length()) != 0)
 		throw std::runtime_error("crab::TCPAcceptor::TCPAcceptor bind(s) failed");
 	if (CreateIoCompletionPort(
-	        tmp.handle_value(), RunLoop::current()->get_impl()->completion_queue.value, OverlappedCallableKey, 0) == NULL)
+	        tmp.handle_value(), RunLoop::current()->get_impl()->completion_queue.value, OverlappedKey, 0) == NULL)
 		throw std::runtime_error("crab::TCPAcceptor::TCPAcceptor CreateIoCompletionPort failed");
 	if (listen(tmp.get_value(), SOMAXCONN) == -1)
 		throw std::runtime_error("crab::TCPAcceptor::TCPAcceptor listen failed");
@@ -602,135 +546,16 @@ CRAB_INLINE TCPAcceptor::~TCPAcceptor() {
 CRAB_INLINE bool TCPAcceptor::can_accept() { return !impl->pending_accept; }
 
 CRAB_INLINE UDPTransmitter::UDPTransmitter(const Address &address, Handler &&cb) : w_handler(std::move(cb)) {
+	throw std::runtime_error("UDPTransmitter not yet implemented on Windows");
 }
 
-CRAB_INLINE size_t UDPTransmitter::write_datagram(const uint8_t *data, size_t count) {
-	return 0;
-}
+CRAB_INLINE size_t UDPTransmitter::write_datagram(const uint8_t *data, size_t count) { return 0; }
 
 CRAB_INLINE UDPReceiver::UDPReceiver(const Address &address, Handler &&cb) : r_handler(std::move(cb)) {
+	throw std::runtime_error("UDPReceiver not yet implemented on Windows");
 }
 
-CRAB_INLINE bool UDPReceiver::read_datagram(uint8_t *data, size_t *size, Address *peer_addr) {
-	return false;
-}
-
-CRAB_INLINE Address::Address() { addr.ss_family = AF_INET; }
-
-CRAB_INLINE bool Address::parse(Address &address, const std::string &numeric_host, uint16_t port) {
-	Address tmp;
-	auto ap6 = reinterpret_cast<sockaddr_in6 *>(tmp.impl_get_sockaddr());
-	if (inet_pton(AF_INET6, numeric_host.c_str(), &ap6->sin6_addr) == 1) {
-		tmp.addr.ss_family = AF_INET6;
-		ap6->sin6_port     = htons(port);
-		address            = tmp;
-		return true;
-	}
-	auto ap = reinterpret_cast<sockaddr_in *>(tmp.impl_get_sockaddr());
-	if (inet_pton(AF_INET, numeric_host.c_str(), &ap->sin_addr) == 1) {
-		tmp.addr.ss_family = AF_INET;
-		ap->sin_port       = htons(port);
-		address            = tmp;
-		return true;
-	}
-	return false;
-}
-
-CRAB_INLINE std::string Address::get_address() const {
-	char addr_buf[INET6_ADDRSTRLEN] = {};
-	switch (addr.ss_family) {
-	case AF_INET: {
-		auto ap = reinterpret_cast<const sockaddr_in *>(impl_get_sockaddr());
-		inet_ntop(AF_INET, &ap->sin_addr, addr_buf, sizeof(addr_buf));
-		return addr_buf;
-	}
-	case AF_INET6: {
-		auto ap = reinterpret_cast<const sockaddr_in6 *>(impl_get_sockaddr());
-		inet_ntop(AF_INET6, &ap->sin6_addr, addr_buf, sizeof(addr_buf));
-		return addr_buf;
-	}
-	default:
-		return "<UnknownFamily" + std::to_string(addr.ss_family) + ">";
-	}
-}
-
-CRAB_INLINE uint16_t Address::get_port() const {
-	switch (addr.ss_family) {
-	case AF_INET: {
-		auto ap = reinterpret_cast<const sockaddr_in *>(impl_get_sockaddr());
-		return ntohs(ap->sin_port);
-	}
-	case AF_INET6: {
-		auto ap = reinterpret_cast<const sockaddr_in6 *>(impl_get_sockaddr());
-		return ntohs(ap->sin6_port);
-	}
-	default:
-		return 0;
-	}
-}
-
-CRAB_INLINE int Address::impl_get_sockaddr_length() const {
-	switch (addr.ss_family) {
-	case AF_INET: {
-		return sizeof(sockaddr_in);
-	}
-	case AF_INET6: {
-		return sizeof(sockaddr_in6);
-	}
-	default:
-		return 0;
-	}
-}
-
-CRAB_INLINE bool Address::is_multicast_group() const {
-	switch (addr.ss_family) {
-	case AF_INET: {
-		auto ap                = reinterpret_cast<const sockaddr_in *>(impl_get_sockaddr());
-		const uint8_t highbyte = *reinterpret_cast<const uint8_t *>(&ap->sin_addr);
-		return (highbyte & 0xf0U) == 0xe0U;
-	}
-	case AF_INET6: {
-		auto ap                = reinterpret_cast<const sockaddr_in6 *>(impl_get_sockaddr());
-		const uint8_t highbyte = *reinterpret_cast<const uint8_t *>(&ap->sin6_addr);
-		return highbyte == 0xff;
-	}
-	default:
-		return false;
-	}
-}
-
-CRAB_INLINE std::vector<Address> DNSResolver::sync_resolve(const std::string &host_name,
-    uint16_t port,
-    bool ipv4,
-    bool ipv6) {
-	std::vector<Address> names;
-	if (!ipv4 && !ipv6)
-		return names;
-	addrinfo hints = {};
-	struct AddrinfoHolder {
-		struct addrinfo *result = nullptr;
-		~AddrinfoHolder() { freeaddrinfo(result); }
-	} holder;
-
-	hints.ai_family   = (ipv4 && ipv6) ? AF_UNSPEC : ipv4 ? AF_INET : AF_INET6;
-	hints.ai_socktype = SOCK_STREAM;
-	hints.ai_flags    = AI_V4MAPPED | AI_ADDRCONFIG;  // AI_NUMERICHOST
-
-	auto service = std::to_string(port);
-
-	if (getaddrinfo(host_name.c_str(), service.c_str(), &hints, &holder.result) != 0)
-		return names;
-
-	for (struct addrinfo *rp = holder.result; rp != nullptr; rp = rp->ai_next) {
-		if (rp->ai_family != AF_INET && rp->ai_family != AF_INET6)
-			continue;
-		if (rp->ai_addrlen > sizeof(sockaddr_storage))
-			continue;
-		names.emplace_back();
-		std::memcpy(names.back().impl_get_sockaddr(), rp->ai_addr, rp->ai_addrlen);
-	}
-	return names;
-}
+CRAB_INLINE bool UDPReceiver::read_datagram(uint8_t *data, size_t *size, Address *peer_addr) { return false; }
 
 }  // namespace crab
 

@@ -32,6 +32,7 @@ set(SOURCE_FILES
 		include/crab/network_boost.hxx
 		include/crab/network_posix.hxx
 		include/crab/network_win.hxx
+		include/crab/network_posix_win.hxx
 		include/crab/streams.hpp
 		include/crab/streams.hxx
 		include/crab/util.hpp

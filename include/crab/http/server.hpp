@@ -10,9 +10,9 @@
 #include <memory>
 #include <stdexcept>
 #include "../network.hpp"
+#include "../util.hpp"
 #include "connection.hpp"
 #include "types.hpp"
-#include "../util.hpp"
 
 namespace crab { namespace http {
 
