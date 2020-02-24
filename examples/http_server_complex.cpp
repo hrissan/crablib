@@ -46,17 +46,17 @@ public:
 	explicit ServerComplexApp(uint16_t port) : server(port), stat_timer([&]() { on_stat_timer(); }) {
 		server.r_handler = [&](http::Client *who, http::RequestBody &&request, http::ResponseBody &response) -> bool {
 			req_counter += 1;
-			if (request.r.uri == "/") {
+			if (request.r.path == "/") {
 				response.r.status       = 200;
 				response.r.content_type = "text/html; charset=utf-8";
 				response.set_body(HTML);
 				return true;
 			}
-			if (request.r.uri == "/quit") {
+			if (request.r.path == "/quit") {
 				crab::RunLoop::current()->cancel();
 				return true;
 			}
-			if (request.r.uri == "/ws") {
+			if (request.r.path == "/ws") {
 				who->web_socket_upgrade();
 				connected_sockets.insert(who);
 				who->write(http::WebMessage("Server-initiated on connect message!"));

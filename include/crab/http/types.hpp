@@ -21,7 +21,9 @@ struct Header {
 
 struct RequestHeader {
 	std::string method;
-	std::string uri;
+	std::string path;
+	std::string query_string;
+
 	int http_version_major = 0;
 	int http_version_minor = 0;
 
@@ -45,12 +47,16 @@ struct RequestHeader {
 
 	void set_firstline(const std::string &m, const std::string &u, int ma, int mi) {
 		method             = m;
-		uri                = u;
 		http_version_major = ma;
 		http_version_minor = mi;
+		set_uri(u);
 	}
 	bool has_content_length() const { return content_length != std::numeric_limits<size_t>::max(); }
 	bool is_websocket_upgrade() const;
+
+	void set_uri(const std::string &uri);
+	std::string get_uri() const;
+
 	std::string to_string() const;
 };
 
@@ -126,8 +132,8 @@ struct RequestBody {
 		r.http_version_major = 1;
 		r.http_version_minor = 1;
 		r.method             = method;
-		r.uri                = uri;
-		r.host               = host;
+		r.set_uri(uri);
+		r.host = host;
 	}
 	void set_body(std::string &&b) {
 		body             = std::move(b);
@@ -145,10 +151,12 @@ struct ResponseBody {
 	}
 };
 
+bool is_sp(int c);
 bool is_char(int c);
 bool is_ctl(int c);
 bool is_tspecial(int c);
 bool is_digit(int c);
+void trim_right(std::string &str);
 
 const std::string &status_to_string(int status);
 

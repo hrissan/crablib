@@ -111,7 +111,7 @@ public:
 	    , ab([&]() { on_fast_queue_changed(); })
 	    , th(&MDSourceApp::generator_thread, this) {
 		server.r_handler = [&](http::Client *who, http::RequestBody &&request, http::ResponseBody &response) -> bool {
-			if (request.r.uri != "/messages")
+			if (request.r.path != "/messages")
 				return true;  // Default "not found"
 			MDRequest req;
 			crab::IStringStream is(&request.body);

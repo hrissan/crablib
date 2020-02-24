@@ -31,6 +31,8 @@ CRAB_INLINE const std::string &status_to_string(int status) {
 	return unknown_status;
 }
 
+CRAB_INLINE bool is_sp(int c) { return c == ' ' || c == '\t'; }
+
 CRAB_INLINE bool is_char(int c) { return c >= 0 && c <= 127; }
 
 CRAB_INLINE bool is_ctl(int c) { return (c >= 0 && c <= 31) || (c == 127); }
@@ -64,6 +66,12 @@ CRAB_INLINE bool is_tspecial(int c) {
 
 CRAB_INLINE bool is_digit(int c) { return c >= '0' && c <= '9'; }
 
+CRAB_INLINE void trim_right(std::string &str) {
+	// We have no backtracking, so cheat here
+	while (!str.empty() && is_sp(str.back()))
+		str.pop_back();
+}
+
 CRAB_INLINE std::string RequestHeader::content_mime_type() {
 	std::string result = content_type.substr(0, content_type.find(';'));
 	for (auto &c : result)
@@ -76,9 +84,26 @@ CRAB_INLINE bool RequestHeader::is_websocket_upgrade() const {
 	       sec_websocket_version == "13";
 }
 
+CRAB_INLINE void RequestHeader::set_uri(const std::string &uri) {
+	auto pos = uri.find('?');
+	if (pos == std::string::npos) {
+		path = uri;
+	} else {
+		path         = uri.substr(0, pos);
+		query_string = uri.substr(pos + 1);
+	}
+}
+
+CRAB_INLINE std::string RequestHeader::get_uri() const {
+	return query_string.empty() ? query_string : path + "?" + query_string;
+}
+
 CRAB_INLINE std::string RequestHeader::to_string() const {
 	std::stringstream ss;
-	ss << method << " " << uri << " "
+	ss << method << " " << path;  // TODO - uri-encode
+	if (!query_string.empty())
+		ss << "?" << query_string;  // TODO - uri-encode
+	ss << " "
 	   << "HTTP/" << http_version_major << "." << http_version_minor << "\r\n";
 	if (!host.empty())
 		ss << "Host: " << host << "\r\n";

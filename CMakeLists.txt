@@ -1,6 +1,14 @@
 cmake_minimum_required(VERSION 3.0)
 project(crablib)
 
+if(NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
+   set(CMAKE_BUILD_TYPE Release)
+endif()
+
+message("CRAB_FUZZ builds binaries for fuzzing. Disabled by default because builds only on Linux and Mac OSX (with additional dependencies)")
+option(CRAB_FUZZ "builds binaries for fuzzing" OFF)
+
+
 if(WIN32)
 #	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Ot")
     add_definitions(-D_SCL_SECURE_NO_WARNINGS=1 -D_CRT_SECURE_NO_WARNINGS=1 -D_WIN32_WINNT=0x0601)
@@ -60,7 +68,7 @@ set(SOURCE_FILES
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/bin")
 
 if(WIN32)
-    link_libraries(ws2_32 wsock32)
+# 	link_libraries(ws2_32 wsock32)
 else()
 	link_libraries(pthread)
 endif(WIN32)
@@ -86,6 +94,34 @@ add_executable(benchmark_atomic ${SOURCE_FILES} examples/lowlevel/benchmark_atom
 add_executable(benchmark_chrono ${SOURCE_FILES} examples/lowlevel/benchmark_chrono.cpp)
 add_executable(benchmark_map ${SOURCE_FILES} examples/lowlevel/benchmark_map.cpp)
 add_executable(benchmark_getifaddrs ${SOURCE_FILES} examples/lowlevel/benchmark_getifaddrs.cpp)
+
+# tests
+add_executable(test_http_parsers ${SOURCE_FILES} test/test_http_parsers.cpp test/test_http_parsers_data.hpp)
+
+if(CRAB_FUZZ)
+	# fuzzing
+	# to compile with fuzzing On Mac OSX, run cmake after
+	# brew install llvm
+	# export CC=/usr/local/opt/llvm/bin/clang
+	# export CXX=/usr/local/opt/llvm/bin/clang++
+	# to run
+	# ../bin/fuzz_http_request ../test/HTTP_REQUEST_CORPUS/ -dict=../test/HTTP_DICT.txt -jobs=8 -workers=8
+	# ../bin/fuzz_http_response ../test/HTTP_RESPONSE_CORPUS/ -dict=../test/HTTP_DICT.txt -jobs=8 -workers=8
+	# ../bin/fuzz_http_body ../test/HTTP_BODY_CORPUS/ -dict=../test/HTTP_DICT.txt -jobs=8 -workers=8
+	set(CRAB_FUZZ_PROPS "-fno-omit-frame-pointer -fsanitize=fuzzer,address,undefined")
+
+	add_executable(fuzz_http_request ${SOURCE_FILES} test/fuzz_http_request.cpp)
+	SET_TARGET_PROPERTIES(fuzz_http_request PROPERTIES COMPILE_FLAGS "${CRAB_FUZZ_PROPS}")
+	SET_TARGET_PROPERTIES(fuzz_http_request PROPERTIES LINK_FLAGS "${CRAB_FUZZ_PROPS}")
+
+	add_executable(fuzz_http_response ${SOURCE_FILES} test/fuzz_http_response.cpp)
+	SET_TARGET_PROPERTIES(fuzz_http_response PROPERTIES COMPILE_FLAGS "${CRAB_FUZZ_PROPS}")
+	SET_TARGET_PROPERTIES(fuzz_http_response PROPERTIES LINK_FLAGS "${CRAB_FUZZ_PROPS}")
+
+	add_executable(fuzz_http_body ${SOURCE_FILES} test/fuzz_http_body.cpp)
+	SET_TARGET_PROPERTIES(fuzz_http_body PROPERTIES COMPILE_FLAGS "${CRAB_FUZZ_PROPS}")
+	SET_TARGET_PROPERTIES(fuzz_http_body PROPERTIES LINK_FLAGS "${CRAB_FUZZ_PROPS}")
+endif()
 
 # Examples below are of very low quality and must be rewritten
 add_executable(client_simple ${SOURCE_FILES} examples/client_simple.cpp)

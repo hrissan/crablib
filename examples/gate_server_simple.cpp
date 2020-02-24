@@ -21,7 +21,7 @@ int test_http(size_t num, uint16_t port) {
 	std::set<http::Client *> connected_sockets;
 	http::Server server(port);
 	server.r_handler = [&](http::Client *who, http::RequestBody &&request, http::ResponseBody &response) -> bool {
-		if (request.r.uri == "/latency") {
+		if (request.r.path == "/latency") {
 			who->web_socket_upgrade();
 			connected_sockets.insert(who);
 			return false;

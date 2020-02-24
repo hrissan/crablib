@@ -56,7 +56,7 @@ int test_client(int num, const std::string &host, uint16_t port) {
 
 	http::RequestHeader req;
 	req.host = host;
-	req.uri  = "/latency";
+	req.path = "/latency";
 	rws->connect(crab::Address(host, port), req);
 
 	stat_timer.reset(new Timer([&]() {

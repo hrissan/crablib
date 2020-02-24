@@ -17,6 +17,8 @@ CRAB_INLINE void RequestParser::parse(Buffer &buf) {
 	buf.did_read(ptr - buf.read_ptr());
 }
 
+// We tolerate \n instead of \r\n according to recomendation
+// https://www.w3.org/Protocols/rfc2616/rfc2616-sec19.html#sec19.3
 CRAB_INLINE RequestParser::State RequestParser::consume(char input) {
 	CRAB_LITERAL(lowcase_connection, "connection");
 	CRAB_LITERAL(lowcase_transfer_encoding, "transfer-encoding");
@@ -25,37 +27,108 @@ CRAB_INLINE RequestParser::State RequestParser::consume(char input) {
 
 	switch (state) {
 	case METHOD_START:
+		// Skip empty lines https://tools.ietf.org/html/rfc2616#section-4.1
+		if (input == '\r')
+			return METHOD_START_LF;
+		if (input == '\n')
+			return METHOD;
 		if (!is_char(input) || is_ctl(input) || is_tspecial(input))
 			throw std::runtime_error("Invalid character at method start");
 		req.method.push_back(input);
 		return METHOD;
+	case METHOD_START_LF:
+		if (input != '\n')
+			throw std::runtime_error("Invalid LF at method start");
+		return METHOD_START;
 	case METHOD:
-		if (input == ' ')
-			return URI;
+		if (is_sp(input))
+			return URI_START;
 		if (!is_char(input) || is_ctl(input) || is_tspecial(input))
 			throw std::runtime_error("Invalid character in method");
 		req.method.push_back(input);
 		return METHOD;
+	case URI_START:
+		if (is_sp(input))
+			return URI_START;
+		if (is_ctl(input))
+			throw std::runtime_error("Invalid (control) character at uri start");
+		if (input == '#')
+			throw std::runtime_error("Invalid '#' character at uri start");
+		if (input == '?')
+			throw std::runtime_error("Invalid '?' character at uri start");
+		if (input == '%')
+			return URI_PERCENT1;
+		req.path.push_back(input);
+		return URI;
 	case URI:
-		if (input == ' ')
+		if (is_sp(input))
 			return HTTP_VERSION_H;
 		if (is_ctl(input))
 			throw std::runtime_error("Invalid (control) character in uri");
-		req.uri.push_back(input);
+		if (input == '#')
+			return URI_ANCHOR;
+		if (input == '?')
+			return URI_QUERY_STRING;
+		if (input == '%')
+			return URI_PERCENT1;
+		req.path.push_back(input);
 		return URI;
+	case URI_PERCENT1:
+		percent1_hex_digit = from_hex_digit(input);
+		if (percent1_hex_digit < 0)
+			throw std::runtime_error("URI percent-encoding invalid first hex digit");
+		return URI_PERCENT2;
+	case URI_PERCENT2: {
+		int digit2 = from_hex_digit(input);
+		if (digit2 < 0)
+			throw std::runtime_error("URI percent-encoding invalid second hex digit");
+		req.path.push_back(static_cast<uint8_t>(percent1_hex_digit * 16 + digit2));
+		return URI;
+	}
+	case URI_QUERY_STRING:
+		if (is_sp(input))
+			return HTTP_VERSION_H;
+		if (is_ctl(input))
+			throw std::runtime_error("Invalid (control) character in uri");
+		if (input == '#')
+			return URI_ANCHOR;
+		if (input == '%')
+			return URI_QUERY_STRING_PERCENT1;
+		req.query_string.push_back(input);
+		return URI_QUERY_STRING;
+	case URI_QUERY_STRING_PERCENT1:
+		percent1_hex_digit = from_hex_digit(input);
+		if (percent1_hex_digit < 0)
+			throw std::runtime_error("URI percent-encoding invalid first hex digit");
+		return URI_QUERY_STRING_PERCENT2;
+	case URI_QUERY_STRING_PERCENT2: {
+		int digit2 = from_hex_digit(input);
+		if (digit2 < 0)
+			throw std::runtime_error("URI percent-encoding invalid second hex digit");
+		req.query_string.push_back(static_cast<uint8_t>(percent1_hex_digit * 16 + digit2));
+		return URI_QUERY_STRING;
+	}
+	case URI_ANCHOR:
+		if (is_sp(input))
+			return HTTP_VERSION_H;
+		if (is_ctl(input))
+			throw std::runtime_error("Invalid (control) character in uri");
+		return URI_ANCHOR;
 	case HTTP_VERSION_H:
+		if (is_sp(input))
+			return HTTP_VERSION_H;
 		if (input != 'H')
 			throw std::runtime_error("Invalid http version, 'H' is expected");
-		return HTTP_VERSION_T_1;
-	case HTTP_VERSION_T_1:
+		return HTTP_VERSION_HT;
+	case HTTP_VERSION_HT:
 		if (input != 'T')
 			throw std::runtime_error("Invalid http version, 'T' is expected");
-		return HTTP_VERSION_T_2;
-	case HTTP_VERSION_T_2:
+		return HTTP_VERSION_HTT;
+	case HTTP_VERSION_HTT:
 		if (input != 'T')
 			throw std::runtime_error("Invalid http version, 'T' is expected");
-		return HTTP_VERSION_P;
-	case HTTP_VERSION_P:
+		return HTTP_VERSION_HTTP;
+	case HTTP_VERSION_HTTP:
 		if (input != 'P')
 			throw std::runtime_error("Invalid http version, 'P' is expected");
 		return HTTP_VERSION_SLASH;
@@ -66,7 +139,7 @@ CRAB_INLINE RequestParser::State RequestParser::consume(char input) {
 	case HTTP_VERSION_MAJOR_START:
 		if (!is_digit(input))
 			throw std::runtime_error("Invalid http version major start, must be digit");
-		req.http_version_major = req.http_version_major * 10 + input - '0';
+		req.http_version_major = input - '0';
 		return HTTP_VERSION_MAJOR;
 	case HTTP_VERSION_MAJOR:
 		if (input == '.')
@@ -74,101 +147,110 @@ CRAB_INLINE RequestParser::State RequestParser::consume(char input) {
 		if (!is_digit(input))
 			throw std::runtime_error("Invalid http version major, must be digit");
 		req.http_version_major = req.http_version_major * 10 + input - '0';
+		if (req.http_version_major > 1)
+			throw std::runtime_error("Unsupported http version");
 		return HTTP_VERSION_MAJOR;
 	case HTTP_VERSION_MINOR_START:
 		if (!is_digit(input))
 			throw std::runtime_error("Invalid http version minor start, must be digit");
-		req.http_version_minor = req.http_version_minor * 10 + input - '0';
+		req.http_version_minor = input - '0';
 		return HTTP_VERSION_MINOR;
 	case HTTP_VERSION_MINOR:
-		if (input == '\r') {
-			req.keep_alive = req.http_version_major == 1 && req.http_version_minor == 1;
-			return NEWLINE_N1;
-		}
+		if (input == '\r')
+			return STATUS_LINE_LF;
+		if (input == '\n')
+			return FIRST_HEADER_LINE_START;
+		if (is_sp(input))
+			return STATUS_LINE_CR;
 		if (!is_digit(input))
 			throw std::runtime_error("Invalid http version minor, must be digit");
 		req.http_version_minor = req.http_version_minor * 10 + input - '0';
+		if (req.http_version_minor > 99)
+			throw std::runtime_error("Invalid http version minor, too big");
 		return HTTP_VERSION_MINOR;
-	case NEWLINE_N1:
+	case STATUS_LINE_CR:
+		if (is_sp(input))
+			return STATUS_LINE_CR;
 		if (input != '\n')
 			throw std::runtime_error("Newline is expected");
+		return STATUS_LINE_LF;
+	case STATUS_LINE_LF:
+		if (input != '\n')
+			throw std::runtime_error("Newline is expected");
+		return FIRST_HEADER_LINE_START;
+	case FIRST_HEADER_LINE_START:  // Cannot contain LWS
+		req.keep_alive = req.http_version_major == 1 && req.http_version_minor >= 1;
 		req.headers.reserve(20);
-		return HEADER_LINE_START;
-	case HEADER_LINE_START:
 		if (input == '\r')
-			return NEWLINE_N3;
-		if (input == ' ' || input == '\t')
-			return HEADER_LWS;  // Leading non-standard whitespace
+			return FINAL_LF;
+		if (input == '\n')
+			return GOOD;
 		if (!is_char(input) || is_ctl(input) || is_tspecial(input))
 			throw std::runtime_error("Invalid character at header line start");
 		header.name.push_back(input);
 		lowcase_name.push_back(std::tolower(input));
 		return HEADER_NAME;
-	case HEADER_LWS:
-		if (input == '\r')
-			return NEWLINE_N2;
-		if (input == ' ' || input == '\t')
-			return HEADER_LWS;
-		if (is_ctl(input))
-			throw std::runtime_error("Invalid character at header name");
-		header.value.push_back(input);
-		return HEADER_VALUE;
-	case HEADER_NAME:
-		if (input == ':') {
-			// We will add other comma-separated headers if we need them later
-			if (lowcase_name == lowcase_connection)
-				return SPACE_BEFORE_HEADER_VALUE_COMMA_SEPARATED;
-			if (lowcase_name == lowcase_transfer_encoding)
-				return SPACE_BEFORE_HEADER_VALUE_COMMA_SEPARATED;
-			return SPACE_BEFORE_HEADER_VALUE;
+	case HEADER_LINE_START:
+		if (is_sp(input)) {
+			header.value.push_back(input);
+			return HEADER_VALUE;  // value continuation
 		}
+		process_ready_header();
+		header.name.clear();
+		header.value.clear();
+		lowcase_name.clear();
+		if (input == '\r')
+			return FINAL_LF;
+		if (input == '\n')
+			return GOOD;
 		if (!is_char(input) || is_ctl(input) || is_tspecial(input))
-			throw std::runtime_error("Invalid character at header name");
+			throw std::runtime_error("Invalid character at header line start");
 		header.name.push_back(input);
 		lowcase_name.push_back(std::tolower(input));
 		return HEADER_NAME;
+	case HEADER_NAME:
+		// We relax https://tools.ietf.org/html/rfc7230#section-3.2.4
+		if (is_sp(input))
+			return HEADER_COLON;
+		if (input != ':') {
+			if (!is_char(input) || is_ctl(input) || is_tspecial(input))
+				throw std::runtime_error("Invalid character at header name");
+			header.name.push_back(input);
+			lowcase_name.push_back(std::tolower(input));
+			return HEADER_NAME;
+		}
+		// Fall Throught
+	case HEADER_COLON:
+		if (is_sp(input))
+			return HEADER_COLON;
+		if (input != ':')
+			throw std::runtime_error("':' expected");
+		// We will add other comma-separated headers if we need them later
+		header_cms_list = (lowcase_name == lowcase_connection) || (lowcase_name == lowcase_transfer_encoding);
+		return SPACE_BEFORE_HEADER_VALUE;
 	case SPACE_BEFORE_HEADER_VALUE:
-		if (input == ' ' || input == '\t')
+		if (is_sp(input))
 			return SPACE_BEFORE_HEADER_VALUE;
 		// Fall Throught
 	case HEADER_VALUE:
-		if (input == '\r') {
-			process_ready_header();
-			header.name.clear();
-			header.value.clear();
-			lowcase_name.clear();
-			return NEWLINE_N2;
-		}
+		if (input == '\r')
+			return HEADER_LF;
+		if (input == '\n')
+			return HEADER_LINE_START;
 		if (is_ctl(input))
 			throw std::runtime_error("Invalid character (control) in header value");
+		if (header_cms_list && input == ',') {
+			process_ready_header();
+			header.value.clear();
+			return SPACE_BEFORE_HEADER_VALUE;
+		}
 		header.value.push_back(input);
 		return HEADER_VALUE;
-	case SPACE_BEFORE_HEADER_VALUE_COMMA_SEPARATED:
-		if (input == ' ' || input == '\t')
-			return SPACE_BEFORE_HEADER_VALUE_COMMA_SEPARATED;
-		// Fall Throught
-	case HEADER_VALUE_COMMA_SEPARATED:
-		if (input == '\r') {
-			process_ready_header();
-			header.name.clear();
-			header.value.clear();
-			lowcase_name.clear();
-			return NEWLINE_N2;
-		}
-		if (input == ',') {
-			process_ready_header();
-			header.value.clear();
-			return SPACE_BEFORE_HEADER_VALUE_COMMA_SEPARATED;
-		}
-		if (is_ctl(input))
-			throw std::runtime_error("Invalid character (control) in header value");
-		header.value.push_back(input);
-		return HEADER_VALUE_COMMA_SEPARATED;
-	case NEWLINE_N2:
+	case HEADER_LF:
 		if (input != '\n')
 			throw std::runtime_error("Expecting newline");
 		return HEADER_LINE_START;
-	case NEWLINE_N3:
+	case FINAL_LF:
 		if (input != '\n')
 			throw std::runtime_error("Expecting final newline");
 		return GOOD;
@@ -179,12 +261,12 @@ CRAB_INLINE RequestParser::State RequestParser::consume(char input) {
 
 CRAB_INLINE void RequestParser::process_ready_header() {
 	// We have no backtracking, so cheat here
-	while (!header.value.empty() && (header.value.back() == ' ' || header.value.back() == '\t'))
-		header.value.pop_back();
+	trim_right(header.value);
 	CRAB_LITERAL(lowcase_content_length, "content-length");
 	CRAB_LITERAL(lowcase_content_type, "content-type");
 	CRAB_LITERAL(lowcase_transfer_encoding, "transfer-encoding");
 	CRAB_LITERAL(lowcase_chunked, "chunked");
+	CRAB_LITERAL(lowcase_identity, "identity");
 	CRAB_LITERAL(lowcase_host, "host");
 	CRAB_LITERAL(lowcase_origin, "origin");
 	CRAB_LITERAL(lowcase_connection, "connection");
@@ -200,7 +282,6 @@ CRAB_INLINE void RequestParser::process_ready_header() {
 	if (lowcase_name == lowcase_content_length) {
 		try {
 			req.content_length = std::stoull(header.value);
-			// common::integer_cast<decltype(req.content_length)>(lowcase.value);
 		} catch (const std::exception &) {
 			std::throw_with_nested(std::runtime_error("Content length is not a number"));
 		}
@@ -210,6 +291,9 @@ CRAB_INLINE void RequestParser::process_ready_header() {
 		if (lowcase_chunked.compare_lowcase(header.value) == 0) {
 			req.transfer_encoding_chunked = true;
 			return;
+		}
+		if (lowcase_identity.compare_lowcase(header.value) == 0) {
+			return;  // like chunked, it is transparent to user
 		}
 		req.transfer_encoding = header.value;
 		return;
@@ -227,6 +311,8 @@ CRAB_INLINE void RequestParser::process_ready_header() {
 		return;
 	}
 	if (lowcase_name == lowcase_connection) {
+		if (header.value.empty())  // Allowed in CMS-list
+			return;
 		if (lowcase_close.compare_lowcase(header.value) == 0) {
 			req.keep_alive = false;
 			return;
@@ -246,12 +332,14 @@ CRAB_INLINE void RequestParser::process_ready_header() {
 		if (value.size() < lowcase_basic.size || lowcase_basic.compare_lowcase(value.data(), lowcase_basic.size) != 0)
 			return;
 		size_t start = lowcase_basic.size;
-		while (start < value.size() && (value[start] == ' ' || value[start] == '\t'))
+		while (start < value.size() && is_sp(value[start]))
 			start += 1;
 		req.basic_authorization = value.substr(start);
 		return;
 	}
 	if (lowcase_name == lowcase_upgrade) {
+		if (header.value.empty())  // Allowed in CMS-list
+			return;
 		if (lowcase_websocket.compare_lowcase(header.value) == 0) {
 			req.upgrade_websocket = true;
 			return;
@@ -270,12 +358,20 @@ CRAB_INLINE void RequestParser::process_ready_header() {
 }
 
 CRAB_INLINE BodyParser::BodyParser(size_t content_length, bool chunked) {
+	if (chunked) {
+		// ignore content_length, even if set. Motivation - if client did not use
+		// chunked encoding, will throw in chunk header parser
+		// but if client did, we will correctly parse body
+		state = CHUNK_SIZE_START;
+		return;
+	}
 	if (content_length != std::numeric_limits<size_t>::max()) {
-		if (chunked)
-			throw std::runtime_error("Body cannot have both Content-Length and chunked encoding");
+		// If content_length not set, we presume request with no body.
+		// Rules about which requests and responses should and should not have body
+		// are complicated.
 		remaining_bytes = content_length;
 	}
-	state = chunked ? CHUNK_SIZE_START : (remaining_bytes == 0) ? GOOD : CONTENT_LENGTH_BODY;
+	state = (remaining_bytes == 0) ? GOOD : CONTENT_LENGTH_BODY;
 }
 
 CRAB_INLINE void BodyParser::parse(Buffer &buf) {
@@ -299,90 +395,98 @@ CRAB_INLINE const uint8_t *BodyParser::consume(const uint8_t *begin, const uint8
 		body.write(begin, wr);
 		begin += wr;
 		remaining_bytes -= wr;
-		if (remaining_bytes == 0)
-			state = NEWLINE_R2;
+		if (remaining_bytes == 0) {
+			chunk_header_total_length = 0;
+			state                     = CHUNK_BODY_CR;
+		}
 		return begin;
 	}
 	default:
 		break;
 	}
-	if (chunk_header_total_length > max_chunk_header_total_length)
-		throw std::runtime_error("HTTP Chunk Header too long - security violation");
-	if (trailers_total_length > max_trailers_total_length)
-		throw std::runtime_error("HTTP Trailer too long - security violation");
 	state = consume(*begin++);
 	return begin;
 }
 
 CRAB_INLINE BodyParser::State BodyParser::consume(uint8_t input) {
+	if (chunk_header_total_length > max_chunk_header_total_length)
+		throw std::runtime_error("HTTP Chunk Header too long - security violation");
+	if (trailers_total_length > max_trailers_total_length)
+		throw std::runtime_error("HTTP Trailer too long - security violation");
 	switch (state) {
-	case CHUNK_SIZE_START:
+	case CHUNK_BODY_CR:
 		chunk_header_total_length += 1;
-		if (input == ' ')
+		if (is_sp(input))
+			return CHUNK_BODY_CR;
+		if (input == '\r')
+			return CHUNK_BODY_LF;
+		if (input == '\n')
 			return CHUNK_SIZE_START;
-		if (from_hex_digit(input) < 0)
+		throw std::runtime_error("CR is expected after chunk body");
+	case CHUNK_BODY_LF:
+		chunk_header_total_length += 1;
+		if (input != '\n')
+			throw std::runtime_error("LF is expected after chunk body");
+		return CHUNK_SIZE_START;
+	case CHUNK_SIZE_START: {
+		chunk_header_total_length += 1;
+		if (is_sp(input))
+			return CHUNK_SIZE_START;
+		int digit = from_hex_digit(input);
+		if (digit < 0)
 			throw std::runtime_error("Chunk size must start with hex digit");
-		chunk_size.push_back(input);
+		remaining_bytes = digit;
 		return CHUNK_SIZE;
-	case CHUNK_SIZE:
+	}
+	case CHUNK_SIZE: {
 		chunk_header_total_length += 1;
-		if (input == ' ' || input == ';')
-			return CHUNK_SIZE_PADDING;
+		if (is_sp(input) || input == ';')
+			return CHUNK_SIZE_EXTENSION;
 		if (input == '\r')
-			return NEWLINE_N1;
-		if (from_hex_digit(input) < 0)
+			return CHUNK_SIZE_LF;
+		if (input == '\n')
+			return (remaining_bytes == 0) ? TRAILER_LINE_START : CHUNK_BODY;
+		int digit = from_hex_digit(input);
+		if (digit < 0)
 			throw std::runtime_error("Chunk size must be hex number");
-		if (chunk_size.size() >= sizeof(size_t) * 2)
+		if (remaining_bytes > (std::numeric_limits<decltype(remaining_bytes)>::max() - 15) / 16)
 			throw std::runtime_error("Chunk size too big");
-		chunk_size.push_back(input);
+		remaining_bytes = remaining_bytes * 16 + digit;
 		return CHUNK_SIZE;
-	case CHUNK_SIZE_PADDING:
+	}
+	case CHUNK_SIZE_EXTENSION:
 		chunk_header_total_length += 1;
-		// Actual grammar here is complicated, we just skip to \r
+		// Actual grammar here is complicated, we just skip to newline
 		if (input == '\r')
-			return NEWLINE_N1;
-		return CHUNK_SIZE_PADDING;
-	case NEWLINE_N1:
+			return CHUNK_SIZE_LF;
+		if (input == '\n')
+			return (remaining_bytes == 0) ? TRAILER_LINE_START : CHUNK_BODY;
+		return CHUNK_SIZE_EXTENSION;
+	case CHUNK_SIZE_LF:
 		chunk_header_total_length += 1;
 		if (input != '\n')
 			throw std::runtime_error("Newline is expected");
-		// We already checked that chunk_size contains only hex digits and is not empty
-		remaining_bytes = 0;
-		for (auto c : chunk_size)
-			remaining_bytes = remaining_bytes * 16 + from_hex_digit(c);
-		chunk_size.clear();
-		chunk_header_total_length = 0;
-		if (remaining_bytes == 0)
-			return TRAILER_LINE_START;
-		return CHUNK_BODY;
+		return (remaining_bytes == 0) ? TRAILER_LINE_START : CHUNK_BODY;
 	case TRAILER_LINE_START:
 		trailers_total_length += 1;
 		if (input == '\r')
-			return NEWLINE_N3;
+			return FINAL_LF;
+		if (input == '\n')
+			return GOOD;
 		if (!is_char(input) || is_ctl(input) || is_tspecial(input))
 			throw std::runtime_error("Invalid character at header line start");
 		return TRAILER;
 	case TRAILER:
 		trailers_total_length += 1;
 		if (input == '\r')
-			return NEWLINE_N1;
+			return TRAILER_LF;
 		return TRAILER;
-	case NEWLINE_R2:
-		trailers_total_length += 1;
-		if (input != '\r')
-			throw std::runtime_error("Newline is expected");
-		return NEWLINE_N2;
-	case NEWLINE_N2:
+	case TRAILER_LF:
 		trailers_total_length += 1;
 		if (input != '\n')
 			throw std::runtime_error("Newline is expected");
-		return CHUNK_SIZE_START;
-	case NEWLINE_R3:
-		trailers_total_length += 1;
-		if (input != '\r')
-			throw std::runtime_error("Newline is expected");
-		return NEWLINE_N3;
-	case NEWLINE_N3:
+		return TRAILER_LINE_START;
+	case FINAL_LF:
 		trailers_total_length += 1;
 		if (input != '\n')
 			throw std::runtime_error("Newline is expected");
