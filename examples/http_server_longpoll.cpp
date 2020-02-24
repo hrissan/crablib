@@ -37,8 +37,8 @@ private:
 			waiting_clients.erase(who);
 
 			http::ResponseBody response;
-			response.r.status       = 200;
-			response.r.content_type = "text/plain; charset=utf-8";
+			response.r.status = 200;
+			response.r.set_content_type("text/plain", "charset=utf-8");
 			response.set_body("Hello, Crab " + std::to_string(ticks_counter) + "!");
 			who->write(std::move(response));
 		}

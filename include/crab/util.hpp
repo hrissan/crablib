@@ -69,17 +69,6 @@ struct Literal {
 		return std::memcmp(value, b, size);
 	}
 	int compare(const std::string &b) const { return compare(b.data(), b.size()); }
-	int compare_lowcase(const char *b, size_t bs) const {
-		if (size != bs)
-			return static_cast<int>(size) - static_cast<int>(bs);
-		for (size_t i = 0; i != bs; ++i) {
-			auto diff = std::tolower(b[i]) - static_cast<int>(value[i]);
-			if (diff != 0)
-				return diff;
-		}
-		return 0;
-	}
-	int compare_lowcase(const std::string &b) const { return compare_lowcase(b.data(), b.size()); }
 };
 
 inline bool operator==(const std::string &a, const Literal &b) { return b.compare(a) == 0; }

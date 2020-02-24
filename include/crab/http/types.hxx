@@ -72,11 +72,44 @@ CRAB_INLINE void trim_right(std::string &str) {
 		str.pop_back();
 }
 
-CRAB_INLINE std::string RequestHeader::content_mime_type() {
-	std::string result = content_type.substr(0, content_type.find(';'));
-	for (auto &c : result)
+CRAB_INLINE void tolower(std::string &str) {
+	for (auto &c : str)
 		c = std::tolower(c);
-	return result;
+}
+
+CRAB_INLINE void parse_content_type_value(const std::string &value, std::string &mime, std::string &suffix) {
+	size_t start = value.find_first_of("; \t", 0, 3);
+	mime         = value.substr(0, start);
+	tolower(mime);
+	while (start < value.size() && is_sp(value[start]))
+		start += 1;
+	if (start < value.size() && value[start] == ';')
+		start += 1;  // We simply allow whitespaces instead of ;
+	while (start < value.size() && is_sp(value[start]))
+		start += 1;
+	suffix = value.substr(start);
+	return true;
+}
+
+CRAB_INLINE bool parse_authorization_basic(const std::string &value, std::string &auth) {
+	if (value.size() < 6 || std::tolower(value[0]) != 'b' || std::tolower(value[1]) != 'a' ||
+	    std::tolower(value[2]) != 's' || std::tolower(value[3]) != 'i' || std::tolower(value[4]) != 'c' ||
+	    !is_sp(value[5]))
+		return false;
+	size_t start = 6;
+	while (start < value.size() && is_sp(value[start]))
+		start += 1;
+	auth = value.substr(start);
+	return true;
+}
+
+CRAB_INLINE void RequestResponseHeader::set_content_type(const std::string &content_type) {
+	parse_content_type_value(content_type, content_type_mime, content_type_suffix);
+}
+
+CRAB_INLINE void RequestResponseHeader::set_content_type(const std::string &mime, const std::string &suffix) {
+	content_type_mime   = mime;
+	content_type_suffix = suffix;
 }
 
 CRAB_INLINE bool RequestHeader::is_websocket_upgrade() const {
@@ -98,52 +131,58 @@ CRAB_INLINE std::string RequestHeader::get_uri() const {
 	return query_string.empty() ? query_string : path + "?" + query_string;
 }
 
-CRAB_INLINE std::string RequestHeader::to_string() const {
-	std::stringstream ss;
-	ss << method << " " << path;  // TODO - uri-encode
-	if (!query_string.empty())
-		ss << "?" << query_string;  // TODO - uri-encode
-	ss << " "
-	   << "HTTP/" << http_version_major << "." << http_version_minor << "\r\n";
-	if (!host.empty())
-		ss << "Host: " << host << "\r\n";
-	if (!origin.empty())
-		ss << "Origin: " << origin << "\r\n";
-	for (auto &&h : headers)
-		ss << h.name << ": " << h.value << "\r\n";
-	if (!basic_authorization.empty())
-		ss << "Authorization: Basic " << basic_authorization << "\r\n";
-	if (http_version_major == 1 && http_version_minor == 0 && keep_alive) {
-		ss << "Connection: keep-alive\r\n";
-	} else if (connection_upgrade && upgrade_websocket) {
-		ss << "Connection: upgrade\r\n";
-		ss << "Upgrade: websocket\r\n";
-		if (!sec_websocket_key.empty())
-			ss << "Sec-WebSocket-Key: " << sec_websocket_key << "\r\n";
-		if (!sec_websocket_version.empty())
-			ss << "Sec-WebSocket-Version: " << sec_websocket_version << "\r\n";
+namespace details {
+
+CRAB_INLINE void to_string_common(const RequestResponseHeader &req, std::stringstream &ss) {
+	if (!req.content_type_mime.empty()) {
+		ss << "content-type: " << req.content_type_mime;
+		if (!req.content_type_suffix.empty())
+			ss << "; " << req.content_type_suffix;
+		ss << "\r\n";
 	}
-	if (!content_type.empty())
-		ss << "Content-Type: " << content_type << "\r\n";
-	if (has_content_length()) {
-		ss << "Content-Length: " << content_length << "\r\n\r\n";
+	if (req.has_content_length()) {
+		ss << "content-length: " << req.content_length << "\r\n\r\n";
 	} else {
 		ss << "\r\n";
 	}
-	if (!transfer_encoding.empty() && transfer_encoding_chunked)
-		ss << "Transfer-Encoding: " << transfer_encoding << ", chunked\r\n";
-	if (transfer_encoding.empty() && transfer_encoding_chunked)
-		ss << "Transfer-Encoding: chunked\r\n";
-	if (!transfer_encoding.empty() && !transfer_encoding_chunked)
-		ss << "Transfer-Encoding: " << transfer_encoding << "\r\n";
-	return ss.str();
+	if (req.http_version_major == 1 && req.http_version_minor == 0 && req.keep_alive) {
+		ss << "connection: keep-alive\r\n";
+	} else if (req.http_version_major == 1 && req.http_version_minor == 1 && !req.keep_alive) {
+		ss << "connection: close\r\n";
+	} else if (req.connection_upgrade && req.upgrade_websocket) {
+		ss << "connection: upgrade\r\n";
+		ss << "upgrade: websocket\r\n";
+	}
+	if (!req.transfer_encoding.empty() && req.transfer_encoding_chunked)
+		ss << "transfer-encoding: " << req.transfer_encoding << ", chunked\r\n";
+	if (req.transfer_encoding.empty() && req.transfer_encoding_chunked)
+		ss << "transfer-encoding: chunked\r\n";
+	if (!req.transfer_encoding.empty() && !req.transfer_encoding_chunked)
+		ss << "transfer-encoding: " << req.transfer_encoding << "\r\n";
+	for (auto &&h : req.headers)
+		ss << h.name << ": " << h.value << "\r\n";
 }
 
-CRAB_INLINE std::string ResponseHeader::content_mime_type() {
-	std::string result = content_type.substr(0, content_type.find(';'));
-	for (auto &c : result)
-		c = std::tolower(c);
-	return result;
+}  // namespace details
+
+CRAB_INLINE std::string RequestHeader::to_string() const {
+	std::stringstream ss;
+	ss << method << " " << path;  // TODO - uri-encode path
+	if (!query_string.empty())
+		ss << "?" << query_string;  // query_string must be already encoded
+	ss << " HTTP/" << http_version_major << "." << http_version_minor << "\r\n";
+	if (!host.empty())
+		ss << "host: " << host << "\r\n";
+	if (!origin.empty())
+		ss << "origin: " << origin << "\r\n";
+	if (!basic_authorization.empty())
+		ss << "authorization: basic " << basic_authorization << "\r\n";
+	details::to_string_common(*this, ss);
+	if (!sec_websocket_key.empty())
+		ss << "sec-websocket-key: " << sec_websocket_key << "\r\n";
+	if (!sec_websocket_version.empty())
+		ss << "sec-websocket-version: " << sec_websocket_version << "\r\n";
+	return ss.str();
 }
 
 CRAB_INLINE bool ResponseHeader::is_websocket_upgrade() const {
@@ -154,31 +193,11 @@ CRAB_INLINE std::string ResponseHeader::to_string() const {
 	std::stringstream ss;
 	ss << "HTTP/" << http_version_major << "." << http_version_minor << " " << status << " "
 	   << (status_text.empty() ? status_to_string(status) : status_text) << "\r\n";
-	for (auto &&h : headers)
-		ss << h.name << ": " << h.value << "\r\n";
-	if (http_version_major == 1 && http_version_minor == 0 && keep_alive) {
-		ss << "Connection: keep-alive\r\n";
-	} else if (connection_upgrade && upgrade_websocket) {
-		ss << "Connection: upgrade\r\n";
-		ss << "Upgrade: websocket\r\n";
-		if (!sec_websocket_accept.empty())
-			ss << "Sec-WebSocket-Accept: " << sec_websocket_accept << "\r\n";
-	}
-	if (!content_type.empty())
-		ss << "Content-Type: " << content_type << "\r\n";
 	if (!date.empty())
-		ss << "Date: " << date << "\r\n";
-	if (has_content_length()) {
-		ss << "Content-Length: " << content_length << "\r\n\r\n";
-	} else {
-		ss << "\r\n";
-	}
-	if (!transfer_encoding.empty() && transfer_encoding_chunked)
-		ss << "Transfer-Encoding: " << transfer_encoding << ", chunked\r\n";
-	if (transfer_encoding.empty() && transfer_encoding_chunked)
-		ss << "Transfer-Encoding: chunked\r\n";
-	if (!transfer_encoding.empty() && !transfer_encoding_chunked)
-		ss << "Transfer-Encoding: " << transfer_encoding << "\r\n";
+		ss << "date: " << date << "\r\n";
+	details::to_string_common(*this, ss);
+	if (!sec_websocket_accept.empty())
+		ss << "sec-websocket-accept: " << sec_websocket_accept << "\r\n";
 	return ss.str();
 }
 

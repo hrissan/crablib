@@ -65,9 +65,9 @@ public:
 private:
 	enum State { BODY, GOOD } state = GOOD;
 
-	size_t remaining_bytes = 0;
-	uint32_t masking_key   = 0;
-	size_t masking_shift   = 0;
+	uint64_t remaining_bytes = 0;
+	uint32_t masking_key     = 0;
+	size_t masking_shift     = 0;
 
 	const uint8_t *consume(const uint8_t *begin, const uint8_t *end);
 };

@@ -120,8 +120,8 @@ public:
 			crab::IStringStream is(&request.body);
 			req.read(&is);
 			if (req.end <= req.begin) {
-				response.r.status       = 400;
-				response.r.content_type = "text/plain; charset=utf-8";
+				response.r.status = 400;
+				response.r.set_content_type("text/plain", "charset=utf-8");
 				response.set_body("Invalid request range - inverted or empty!");
 				return true;
 			}

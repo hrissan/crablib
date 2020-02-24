@@ -130,7 +130,7 @@ CRAB_INLINE void MessageBodyParser::parse(Buffer &buf) {
 
 CRAB_INLINE void MessageBodyParser::add_chunk(const WebMessageChunk &chunk) {
 	remaining_bytes += chunk.payload_len;
-	if (chunk.fin)  // Good optimization for common single-fragment messages
+	if (chunk.fin && chunk.payload_len < 1024 * 1024)  // Good optimization for common single-fragment messages
 		body.get_buffer().reserve(body.get_buffer().size() + chunk.payload_len);
 	masking_key   = chunk.masking_key;
 	masking_shift = 0;
@@ -139,7 +139,7 @@ CRAB_INLINE void MessageBodyParser::add_chunk(const WebMessageChunk &chunk) {
 
 CRAB_INLINE const uint8_t *MessageBodyParser::consume(const uint8_t *begin, const uint8_t *end) {
 	if (state == BODY) {
-		size_t wr = std::min<size_t>(end - begin, remaining_bytes);
+		size_t wr = static_cast<size_t>(std::min<uint64_t>(end - begin, remaining_bytes));
 		body.write(begin, wr);
 
 		if (masking_key) {

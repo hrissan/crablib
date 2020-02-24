@@ -19,39 +19,40 @@ struct Header {
 	std::string value;
 };
 
-struct RequestHeader {
+struct RequestResponseHeader {
+	int http_version_major = 1;
+	int http_version_minor = 1;
+
+	std::vector<Header> headers;  // names are lower-case
+
+	bool keep_alive         = true;
+	uint64_t content_length = std::numeric_limits<uint64_t>::max();
+	bool has_content_length() const { return content_length != std::numeric_limits<uint64_t>::max(); }
+
+	bool transfer_encoding_chunked = false;
+	std::string transfer_encoding;  // lower-case, other than chunked, identity
+
+	bool connection_upgrade = false;
+	bool upgrade_websocket  = false;  // Upgrade: WebSocket
+
+	std::string content_type_mime;    // lower-case
+	std::string content_type_suffix;  // after ";"
+	void set_content_type(const std::string &content_type);
+	void set_content_type(const std::string &mime, const std::string &suffix);
+};
+
+struct RequestHeader : public RequestResponseHeader {
 	std::string method;
-	std::string path;
-	std::string query_string;
+	std::string path;          // URL-decoded automatically on parse, encoded on send
+	std::string query_string;  // not URL-decoded (would otherwise lose separators)
 
-	int http_version_major = 0;
-	int http_version_minor = 0;
-
-	std::vector<Header> headers;
 	std::string basic_authorization;
 	std::string host;
 	std::string origin;
 
-	bool keep_alive                = true;
-	size_t content_length          = std::numeric_limits<size_t>::max();
-	bool transfer_encoding_chunked = false;
-	std::string transfer_encoding;  // Other than chunked
-
-	std::string content_type;
-	std::string content_mime_type();  // lowercase content_type, with part after ; stripped
-
-	bool connection_upgrade = false;
-	bool upgrade_websocket  = false;  // Upgrade: WebSocket
 	std::string sec_websocket_key;
 	std::string sec_websocket_version;
 
-	void set_firstline(const std::string &m, const std::string &u, int ma, int mi) {
-		method             = m;
-		http_version_major = ma;
-		http_version_minor = mi;
-		set_uri(u);
-	}
-	bool has_content_length() const { return content_length != std::numeric_limits<size_t>::max(); }
 	bool is_websocket_upgrade() const;
 
 	void set_uri(const std::string &uri);
@@ -65,7 +66,7 @@ struct WebMessageChunk {
 	bool mask            = false;
 	int opcode           = 0;
 	uint32_t masking_key = 0;
-	size_t payload_len   = 0;
+	uint64_t payload_len = 0;
 };
 
 struct WebMessage {
@@ -89,37 +90,24 @@ struct WebMessage {
 	WebMessage(int opcode, std::string body) : opcode(opcode), body(std::move(body)) {}
 };
 
-struct ResponseHeader {
-	int http_version_major = 0;
-	int http_version_minor = 0;
-
+struct ResponseHeader : public RequestResponseHeader {
 	int status = 0;
 	std::string status_text;
-	std::vector<Header> headers;
+	std::vector<Header> headers;  // names are lower-case
 
-	bool keep_alive                = true;
-	size_t content_length          = std::numeric_limits<size_t>::max();
-	bool transfer_encoding_chunked = false;
-	std::string transfer_encoding;  // Other than chunked
-
-	bool connection_upgrade = false;
-	bool upgrade_websocket  = false;  // Upgrade: WebSocket
 	std::string sec_websocket_accept;
 
 	static std::string generate_sec_websocket_accept(const std::string &sec_websocket_key);
 
-	bool has_content_length() const { return content_length != std::numeric_limits<size_t>::max(); }
 	bool is_websocket_upgrade() const;
 
-	std::string content_type;
-	std::string content_mime_type();  // lowercase content_type, with part after ; stripped
 	std::string date;
 
 	std::string to_string() const;
 
 	void add_headers_nocache() {
-		headers.push_back(Header{"Cache-Control", "no-cache, no-store, must-revalidate"});
-		headers.push_back(Header{"Expires", "0"});
+		headers.push_back(Header{"cache-control", "no-cache, no-store, must-revalidate"});
+		headers.push_back(Header{"expires", "0"});
 	}
 };
 
@@ -157,6 +145,10 @@ bool is_ctl(int c);
 bool is_tspecial(int c);
 bool is_digit(int c);
 void trim_right(std::string &str);
+void tolower(std::string &str);
+
+void parse_content_type_value(const std::string &value, std::string &mime, std::string &suffix);
+bool parse_authorization_basic(const std::string &value, std::string &auth);
 
 const std::string &status_to_string(int status);
 

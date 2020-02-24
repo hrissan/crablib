@@ -114,8 +114,8 @@ CRAB_INLINE void Server::on_client_handle_request(Client *who, RequestBody &&req
 	}
 	if (result) {
 		if (response.r.status == 404 && !response.r.has_content_length()) {
-			response.r.content_type = "text/plain; charset=utf-8";
-			response.set_body("404 not found");
+			response.r.set_content_type("text/html", "charset=utf-8");
+			response.set_body("<html><body>404 Not Found</body></html>");
 		}
 		who->write(std::move(response));
 	}

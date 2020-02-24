@@ -128,8 +128,7 @@ CRAB_INLINE ResponseParser::State ResponseParser::consume(char input) {
 			return GOOD;
 		if (!is_char(input) || is_ctl(input) || is_tspecial(input))
 			throw std::runtime_error("Invalid character at header line start");
-		header.name.push_back(input);
-		lowcase_name.push_back(std::tolower(input));
+		header.name.push_back(std::tolower(input));
 		return HEADER_NAME;
 	case HEADER_LINE_START:
 		if (is_sp(input)) {
@@ -139,15 +138,13 @@ CRAB_INLINE ResponseParser::State ResponseParser::consume(char input) {
 		process_ready_header();
 		header.name.clear();
 		header.value.clear();
-		lowcase_name.clear();
 		if (input == '\r')
 			return FINAL_LF;
 		if (input == '\n')
 			return GOOD;
 		if (!is_char(input) || is_ctl(input) || is_tspecial(input))
 			throw std::runtime_error("Invalid character at header line start");
-		header.name.push_back(input);
-		lowcase_name.push_back(std::tolower(input));
+		header.name.push_back(std::tolower(input));
 		return HEADER_NAME;
 	case HEADER_NAME:
 		// We relax https://tools.ietf.org/html/rfc7230#section-3.2.4
@@ -156,8 +153,7 @@ CRAB_INLINE ResponseParser::State ResponseParser::consume(char input) {
 		if (input != ':') {
 			if (!is_char(input) || is_ctl(input) || is_tspecial(input))
 				throw std::runtime_error("Invalid character at header name");
-			header.name.push_back(input);
-			lowcase_name.push_back(std::tolower(input));
+			header.name.push_back(std::tolower(input));
 			return HEADER_NAME;
 		}
 		// Fall Throught
@@ -167,7 +163,7 @@ CRAB_INLINE ResponseParser::State ResponseParser::consume(char input) {
 		if (input != ':')
 			throw std::runtime_error("':' expected");
 		// We will add other comma-separated headers if we need them later
-		header_cms_list = (lowcase_name == lowcase_connection) || (lowcase_name == lowcase_transfer_encoding);
+		header_cms_list = (header.name == lowcase_connection) || (header.name == lowcase_transfer_encoding);
 		return SPACE_BEFORE_HEADER_VALUE;
 	case SPACE_BEFORE_HEADER_VALUE:
 		if (is_sp(input))
@@ -204,6 +200,8 @@ CRAB_INLINE ResponseParser::State ResponseParser::consume(char input) {
 CRAB_INLINE void ResponseParser::process_ready_header() {
 	// We have no backtracking, so cheat here
 	trim_right(header.value);
+	if (header_cms_list && header.value.empty())
+		return;  // Empty is NOP in CMS list, like "  ,,keep-alive"
 	CRAB_LITERAL(lowcase_content_length, "content-length");
 	CRAB_LITERAL(lowcase_content_type, "content-type");
 	CRAB_LITERAL(lowcase_transfer_encoding, "transfer-encoding");
@@ -217,60 +215,61 @@ CRAB_INLINE void ResponseParser::process_ready_header() {
 	CRAB_LITERAL(lowcase_sec_websocket_accept, "sec-websocket-accept");
 	CRAB_LITERAL(lowcase_date, "date");
 	// Those comparisons are by size first so very fast
-	if (lowcase_name == lowcase_content_length) {
+	if (header.name == lowcase_content_length) {
 		try {
 			req.content_length = std::stoull(header.value);
 		} catch (const std::exception &) {
 			std::throw_with_nested(std::runtime_error("Content length is not a number"));
 		}
+		if (!req.has_content_length())
+			throw std::runtime_error("content length of 2^64-1 is not allowed");
 		return;
 	}
-	if (lowcase_name == lowcase_transfer_encoding) {
-		if (lowcase_chunked.compare_lowcase(header.value) == 0) {
+	if (header.name == lowcase_transfer_encoding) {
+		tolower(header.value);
+		if (header.value == lowcase_chunked) {
 			req.transfer_encoding_chunked = true;
 			return;
 		}
-		if (lowcase_identity.compare_lowcase(header.value) == 0) {
+		if (header.value == lowcase_identity) {
 			return;  // like chunked, it is transparent to user
 		}
 		req.transfer_encoding = header.value;
 		return;
 	}
-	if (lowcase_name == lowcase_content_type) {
-		req.content_type = header.value;
+	if (header.name == lowcase_content_type) {
+		parse_content_type_value(header.value, req.content_type_mime, req.content_type_suffix);
 		return;
 	}
-	if (lowcase_name == lowcase_connection) {
-		if (header.value.empty())  // Allowed in CMS-list
-			return;
-		if (lowcase_close.compare_lowcase(header.value) == 0) {
+	if (header.name == lowcase_connection) {
+		tolower(header.value);
+		if (header.value == lowcase_close) {
 			req.keep_alive = false;
 			return;
 		}
-		if (lowcase_keep_alive.compare_lowcase(header.value) == 0) {
+		if (header.value == lowcase_keep_alive) {
 			req.keep_alive = true;
 			return;
 		}
-		if (lowcase_upgrade.compare_lowcase(header.value) == 0) {
+		if (header.value == lowcase_upgrade) {
 			req.connection_upgrade = true;
 			return;
 		}
 		throw std::runtime_error("Invalid 'connection' header value");
 	}
-	if (lowcase_name == lowcase_upgrade) {
-		if (header.value.empty())  // Allowed in CMS-list
-			return;
-		if (lowcase_websocket.compare_lowcase(header.value) == 0) {
+	if (header.name == lowcase_upgrade) {
+		tolower(header.value);
+		if (header.value == lowcase_websocket) {
 			req.upgrade_websocket = true;
 			return;
 		}
 		throw std::runtime_error("Invalid 'upgrade' header value");
 	}
-	if (lowcase_name == lowcase_sec_websocket_accept) {
+	if (header.name == lowcase_sec_websocket_accept) {
 		req.sec_websocket_accept = header.value;  // Copy is better here
 		return;
 	}
-	if (lowcase_name == lowcase_date) {
+	if (header.name == lowcase_date) {
 		req.date = header.value;
 		return;
 	}

@@ -89,8 +89,8 @@ int test_http(size_t num, uint16_t port) {
 	http::Server server(port);
 	server.r_handler = [&](http::Client *who, http::RequestBody &&request, http::ResponseBody &response) -> bool {
 		if (request.r.path == "/") {
-			response.r.status       = 200;
-			response.r.content_type = "text/html; charset=utf-8";
+			response.r.status = 200;
+			response.r.set_content_type("text/html", "charset=utf-8");
 			response.set_body(HTML);
 			return true;
 		}
@@ -104,8 +104,8 @@ int test_http(size_t num, uint16_t port) {
 			who->write(http::WebMessage("Server first!"));
 			return false;
 		}
-		response.r.status       = 200;
-		response.r.content_type = "text/plain; charset=utf-8";
+		response.r.status = 200;
+		response.r.set_content_type("text/plain", "charset=utf-8");
 		response.set_body("Hello, Crab!");
 		req_counter += 1;
 		return true;

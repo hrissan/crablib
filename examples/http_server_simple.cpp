@@ -14,8 +14,8 @@ int main() {
 	http::Server server(7000);
 
 	server.r_handler = [&](http::Client *who, http::RequestBody &&request, http::ResponseBody &response) -> bool {
-		response.r.status       = 200;
-		response.r.content_type = "text/plain; charset=utf-8";
+		response.r.status = 200;
+		response.r.set_content_type("text/plain", "charset=utf-8");
 		response.set_body("Hello, Crab!");
 		return true;
 	};

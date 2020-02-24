@@ -117,8 +117,8 @@ public:
 			crab::IStringStream is(&request.body);
 			req.read(&is);
 			if (req.end <= req.begin) {
-				response.r.status       = 400;
-				response.r.content_type = "text/plain; charset=utf-8";
+				response.r.status = 400;
+				response.r.set_content_type("text/plain", "charset=utf-8");
 				response.set_body("Invalid request range - inverted or empty!");
 				return true;
 			}
@@ -174,8 +174,8 @@ private:
 	}
 	bool create_response(http::ResponseBody &response, uint64_t begin, uint64_t end) {
 		if (messages.empty() || begin < messages.front().seqnum) {
-			response.r.status       = 400;
-			response.r.content_type = "text/plain; charset=utf-8";
+			response.r.status = 400;
+			response.r.set_content_type("text/plain", "charset=utf-8");
 			response.set_body("Invalid request range - before start!");
 			return true;
 		}
@@ -189,8 +189,8 @@ private:
 		for (auto s = begin; s != end; ++s) {
 			messages.at(s - messages_start).write(&body);
 		}
-		response.r.status       = 200;
-		response.r.content_type = "text/plain; charset=utf-8";
+		response.r.status = 200;
+		response.r.set_content_type("text/plain", "charset=utf-8");
 		response.set_body(std::move(body.get_buffer()));
 		return true;
 	}

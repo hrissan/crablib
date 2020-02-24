@@ -187,8 +187,7 @@ CRAB_INLINE RequestParser::State RequestParser::consume(char input) {
 			return GOOD;
 		if (!is_char(input) || is_ctl(input) || is_tspecial(input))
 			throw std::runtime_error("Invalid character at header line start");
-		header.name.push_back(input);
-		lowcase_name.push_back(std::tolower(input));
+		header.name.push_back(std::tolower(input));
 		return HEADER_NAME;
 	case HEADER_LINE_START:
 		if (is_sp(input)) {
@@ -198,15 +197,13 @@ CRAB_INLINE RequestParser::State RequestParser::consume(char input) {
 		process_ready_header();
 		header.name.clear();
 		header.value.clear();
-		lowcase_name.clear();
 		if (input == '\r')
 			return FINAL_LF;
 		if (input == '\n')
 			return GOOD;
 		if (!is_char(input) || is_ctl(input) || is_tspecial(input))
 			throw std::runtime_error("Invalid character at header line start");
-		header.name.push_back(input);
-		lowcase_name.push_back(std::tolower(input));
+		header.name.push_back(std::tolower(input));
 		return HEADER_NAME;
 	case HEADER_NAME:
 		// We relax https://tools.ietf.org/html/rfc7230#section-3.2.4
@@ -215,8 +212,7 @@ CRAB_INLINE RequestParser::State RequestParser::consume(char input) {
 		if (input != ':') {
 			if (!is_char(input) || is_ctl(input) || is_tspecial(input))
 				throw std::runtime_error("Invalid character at header name");
-			header.name.push_back(input);
-			lowcase_name.push_back(std::tolower(input));
+			header.name.push_back(std::tolower(input));
 			return HEADER_NAME;
 		}
 		// Fall Throught
@@ -226,7 +222,7 @@ CRAB_INLINE RequestParser::State RequestParser::consume(char input) {
 		if (input != ':')
 			throw std::runtime_error("':' expected");
 		// We will add other comma-separated headers if we need them later
-		header_cms_list = (lowcase_name == lowcase_connection) || (lowcase_name == lowcase_transfer_encoding);
+		header_cms_list = (header.name == lowcase_connection) || (header.name == lowcase_transfer_encoding);
 		return SPACE_BEFORE_HEADER_VALUE;
 	case SPACE_BEFORE_HEADER_VALUE:
 		if (is_sp(input))
@@ -262,6 +258,8 @@ CRAB_INLINE RequestParser::State RequestParser::consume(char input) {
 CRAB_INLINE void RequestParser::process_ready_header() {
 	// We have no backtracking, so cheat here
 	trim_right(header.value);
+	if (header_cms_list && header.value.empty())
+		return;  // Empty is NOP in CMS list, like "  ,,keep-alive"
 	CRAB_LITERAL(lowcase_content_length, "content-length");
 	CRAB_LITERAL(lowcase_content_type, "content-type");
 	CRAB_LITERAL(lowcase_transfer_encoding, "transfer-encoding");
@@ -271,7 +269,6 @@ CRAB_INLINE void RequestParser::process_ready_header() {
 	CRAB_LITERAL(lowcase_origin, "origin");
 	CRAB_LITERAL(lowcase_connection, "connection");
 	CRAB_LITERAL(lowcase_authorization, "authorization");
-	CRAB_LITERAL(lowcase_basic, "basic");
 	CRAB_LITERAL(lowcase_close, "close");
 	CRAB_LITERAL(lowcase_keep_alive, "keep-alive");
 	CRAB_LITERAL(lowcase_upgrade, "upgrade");
@@ -279,85 +276,80 @@ CRAB_INLINE void RequestParser::process_ready_header() {
 	CRAB_LITERAL(lowcase_sec_websocket_key, "sec-websocket-key");
 	CRAB_LITERAL(lowcase_sec_websocket_version, "sec-websocket-version");
 	// Those comparisons are by size first so very fast
-	if (lowcase_name == lowcase_content_length) {
+	if (header.name == lowcase_content_length) {
 		try {
 			req.content_length = std::stoull(header.value);
 		} catch (const std::exception &) {
 			std::throw_with_nested(std::runtime_error("Content length is not a number"));
 		}
+		if (!req.has_content_length())
+			throw std::runtime_error("content length of 2^64-1 is not allowed");
 		return;
 	}
-	if (lowcase_name == lowcase_transfer_encoding) {
-		if (lowcase_chunked.compare_lowcase(header.value) == 0) {
+	if (header.name == lowcase_transfer_encoding) {
+		tolower(header.value);
+		if (header.value == lowcase_chunked) {
 			req.transfer_encoding_chunked = true;
 			return;
 		}
-		if (lowcase_identity.compare_lowcase(header.value) == 0) {
+		if (header.value == lowcase_identity) {
 			return;  // like chunked, it is transparent to user
 		}
 		req.transfer_encoding = header.value;
 		return;
 	}
-	if (lowcase_name == lowcase_host) {
+	if (header.name == lowcase_host) {
 		req.host = header.value;
 		return;
 	}
-	if (lowcase_name == lowcase_origin) {
+	if (header.name == lowcase_origin) {
 		req.origin = header.value;
 		return;
 	}
-	if (lowcase_name == lowcase_content_type) {
-		req.content_type = header.value;
+	if (header.name == lowcase_content_type) {
+		parse_content_type_value(header.value, req.content_type_mime, req.content_type_suffix);
 		return;
 	}
-	if (lowcase_name == lowcase_connection) {
-		if (header.value.empty())  // Allowed in CMS-list
-			return;
-		if (lowcase_close.compare_lowcase(header.value) == 0) {
+	if (header.name == lowcase_connection) {
+		tolower(header.value);
+		if (header.value == lowcase_close) {
 			req.keep_alive = false;
 			return;
 		}
-		if (lowcase_keep_alive.compare_lowcase(header.value) == 0) {
+		if (header.value == lowcase_keep_alive) {
 			req.keep_alive = true;
 			return;
 		}
-		if (lowcase_upgrade.compare_lowcase(header.value) == 0) {
+		if (header.value == lowcase_upgrade) {
 			req.connection_upgrade = true;
 			return;
 		}
 		throw std::runtime_error("Invalid 'connection' header value");
 	}
-	if (lowcase_name == lowcase_authorization) {
-		const std::string &value = header.value;
-		if (value.size() < lowcase_basic.size || lowcase_basic.compare_lowcase(value.data(), lowcase_basic.size) != 0)
-			return;
-		size_t start = lowcase_basic.size;
-		while (start < value.size() && is_sp(value[start]))
-			start += 1;
-		req.basic_authorization = value.substr(start);
+	if (header.name == lowcase_authorization) {
+		parse_authorization_basic(header.value, req.basic_authorization);
 		return;
 	}
-	if (lowcase_name == lowcase_upgrade) {
-		if (header.value.empty())  // Allowed in CMS-list
-			return;
-		if (lowcase_websocket.compare_lowcase(header.value) == 0) {
+	if (header.name == lowcase_upgrade) {
+		tolower(header.value);
+		if (header.value == lowcase_websocket) {
 			req.upgrade_websocket = true;
 			return;
 		}
 		throw std::runtime_error("Invalid 'upgrade' header value");
 	}
-	if (lowcase_name == lowcase_sec_websocket_key) {
+	if (header.name == lowcase_sec_websocket_key) {
 		req.sec_websocket_key = header.value;  // Copy is better here
 		return;
 	}
-	if (lowcase_name == lowcase_sec_websocket_version) {
+	if (header.name == lowcase_sec_websocket_version) {
 		req.sec_websocket_version = header.value;  // Copy is better here
 		return;
 	}
 	req.headers.emplace_back(header);  // Copy is better here
 }
 
-CRAB_INLINE BodyParser::BodyParser(size_t content_length, bool chunked) {
+CRAB_INLINE BodyParser::BodyParser(uint64_t content_length, bool chunked) {
 	if (chunked) {
 		// ignore content_length, even if set. Motivation - if client did not use
 		// chunked encoding, will throw in chunk header parser
@@ -365,7 +357,7 @@ CRAB_INLINE BodyParser::BodyParser(size_t content_length, bool chunked) {
 		state = CHUNK_SIZE_START;
 		return;
 	}
-	if (content_length != std::numeric_limits<size_t>::max()) {
+	if (content_length != std::numeric_limits<uint64_t>::max()) {
 		// If content_length not set, we presume request with no body.
 		// Rules about which requests and responses should and should not have body
 		// are complicated.
@@ -382,7 +374,7 @@ CRAB_INLINE void BodyParser::parse(Buffer &buf) {
 CRAB_INLINE const uint8_t *BodyParser::consume(const uint8_t *begin, const uint8_t *end) {
 	switch (state) {
 	case CONTENT_LENGTH_BODY: {
-		size_t wr = std::min<size_t>(end - begin, remaining_bytes);
+		size_t wr = static_cast<size_t>(std::min<uint64_t>(end - begin, remaining_bytes));
 		body.write(begin, wr);
 		begin += wr;
 		remaining_bytes -= wr;
@@ -391,7 +383,7 @@ CRAB_INLINE const uint8_t *BodyParser::consume(const uint8_t *begin, const uint8
 		return begin;
 	}
 	case CHUNK_BODY: {
-		size_t wr = std::min<size_t>(end - begin, remaining_bytes);
+		size_t wr = static_cast<size_t>(std::min<uint64_t>(end - begin, remaining_bytes));
 		body.write(begin, wr);
 		begin += wr;
 		remaining_bytes -= wr;
@@ -449,7 +441,7 @@ CRAB_INLINE BodyParser::State BodyParser::consume(uint8_t input) {
 		int digit = from_hex_digit(input);
 		if (digit < 0)
 			throw std::runtime_error("Chunk size must be hex number");
-		if (remaining_bytes > (std::numeric_limits<decltype(remaining_bytes)>::max() - 15) / 16)
+		if (remaining_bytes > (std::numeric_limits<uint64_t>::max() - 15) / 16)
 			throw std::runtime_error("Chunk size too big");
 		remaining_bytes = remaining_bytes * 16 + digit;
 		return CHUNK_SIZE;

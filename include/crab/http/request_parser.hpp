@@ -66,7 +66,6 @@ public:
 private:
 	void process_ready_header();
 	Header header;
-	std::string lowcase_name;
 	bool header_cms_list   = false;
 	int percent1_hex_digit = 0;
 	size_t total_length    = 0;
@@ -92,7 +91,7 @@ struct BodyParser {
 
 public:
 	BodyParser() = default;
-	BodyParser(size_t content_length, bool chunked);
+	BodyParser(uint64_t content_length, bool chunked);
 
 	StringStream body;
 	size_t max_chunk_header_total_length = 256;
@@ -108,7 +107,7 @@ public:
 	void parse(Buffer &buf);
 
 private:
-	size_t remaining_bytes           = 0;
+	uint64_t remaining_bytes         = 0;
 	size_t chunk_header_total_length = 0;
 	size_t trailers_total_length     = 0;
 	const uint8_t *consume(const uint8_t *begin, const uint8_t *end);
