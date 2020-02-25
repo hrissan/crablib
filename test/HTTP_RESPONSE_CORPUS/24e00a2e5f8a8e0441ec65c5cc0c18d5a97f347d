@@ -1,0 +1,16 @@
+HTTP/1.0		006
+contength:6
+content-length:0
+.th :6
+content-length:6
+tn :6
+content-length:0
+.th :6
+content-length :6
+content-length:0
+.th :6
+content-length:0
+content-length:0
+.th :6
+content-length:0
+.			.		

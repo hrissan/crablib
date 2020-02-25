@@ -1,0 +1,18 @@
+#b Æ1 HTTP/1.05
+authorization 		:basic  T
+authorization 	:basic :T
+authorization:basic//0
+authorization :basic  /0
+authorization 		:basic T
+authorization 		:basic/5
+authorization 		:basic/0
+authorization :basicT
+authorization	:basic/01
+authorization :basicTT
+authorization 		:basic/0/0
+authorization:basic  0
+authorization 	:basic c
+authorization 		:basic:/0
+authorization		:basic ° 
+authorization 		:basic5
+uÿ

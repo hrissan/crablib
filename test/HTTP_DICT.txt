@@ -1,0 +1,21 @@
+# Lines starting with '#' and empty lines are ignored.
+
+# Adds "blah" (w/o quotes) to the dictionary.
+"HTTP/"
+"connection"
+"transfer-encoding"
+"content-length"
+"content-type"
+"chunked"
+"identity"
+"host"
+"origin"
+"connection"
+"authorization"
+"basic"
+"close"
+"keep-alive"
+"upgrade"
+"websocket"
+"sec-websocket-key"
+"sec-websocket-version"
