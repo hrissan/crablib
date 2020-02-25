@@ -277,6 +277,8 @@ CRAB_INLINE void RequestParser::process_ready_header() {
 	CRAB_LITERAL(lowcase_sec_websocket_version, "sec-websocket-version");
 	// Those comparisons are by size first so very fast
 	if (header.name == lowcase_content_length) {
+		if (req.has_content_length())
+			throw std::runtime_error("content length specified more than once");
 		try {
 			req.content_length = std::stoull(header.value);
 		} catch (const std::exception &) {
@@ -289,13 +291,15 @@ CRAB_INLINE void RequestParser::process_ready_header() {
 	if (header.name == lowcase_transfer_encoding) {
 		tolower(header.value);
 		if (header.value == lowcase_chunked) {
+			if (!req.transfer_encodings.empty())
+				throw std::runtime_error("chunk encoding must be applied last");
 			req.transfer_encoding_chunked = true;
 			return;
 		}
 		if (header.value == lowcase_identity) {
 			return;  // like chunked, it is transparent to user
 		}
-		req.transfer_encoding = header.value;
+		req.transfer_encodings.push_back(header.value);
 		return;
 	}
 	if (header.name == lowcase_host) {

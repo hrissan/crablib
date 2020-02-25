@@ -30,7 +30,7 @@ struct RequestResponseHeader {
 	bool has_content_length() const { return content_length != std::numeric_limits<uint64_t>::max(); }
 
 	bool transfer_encoding_chunked = false;
-	std::string transfer_encoding;  // lower-case, other than chunked, identity
+	std::vector<std::string> transfer_encodings;  // lower-case, other than chunked, identity
 
 	bool connection_upgrade = false;
 	bool upgrade_websocket  = false;  // Upgrade: WebSocket

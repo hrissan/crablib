@@ -153,12 +153,15 @@ CRAB_INLINE void to_string_common(const RequestResponseHeader &req, std::strings
 		ss << "connection: upgrade\r\n";
 		ss << "upgrade: websocket\r\n";
 	}
-	if (!req.transfer_encoding.empty() && req.transfer_encoding_chunked)
-		ss << "transfer-encoding: " << req.transfer_encoding << ", chunked\r\n";
-	if (req.transfer_encoding.empty() && req.transfer_encoding_chunked)
-		ss << "transfer-encoding: chunked\r\n";
-	if (!req.transfer_encoding.empty() && !req.transfer_encoding_chunked)
-		ss << "transfer-encoding: " << req.transfer_encoding << "\r\n";
+	if (!req.transfer_encodings.empty() || req.transfer_encoding_chunked) {
+		ss << "transfer-encoding:";
+		size_t pos = 0;
+		for (const auto &te : req.transfer_encodings)
+			ss << (pos++ ? ", " : " ") << te;
+		if (req.transfer_encoding_chunked)
+			ss << (pos++ ? ", chunked" : " chunked");
+		ss << "\r\n";
+	}
 	for (auto &&h : req.headers)
 		ss << h.name << ": " << h.value << "\r\n";
 }
