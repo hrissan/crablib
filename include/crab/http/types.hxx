@@ -88,7 +88,6 @@ CRAB_INLINE void parse_content_type_value(const std::string &value, std::string 
 	while (start < value.size() && is_sp(value[start]))
 		start += 1;
 	suffix = value.substr(start);
-	return true;
 }
 
 CRAB_INLINE bool parse_authorization_basic(const std::string &value, std::string &auth) {

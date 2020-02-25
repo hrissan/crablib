@@ -7,6 +7,7 @@
 #pragma once
 
 #include "util.hpp"
+#include <algorithm>
 
 namespace crab {
 

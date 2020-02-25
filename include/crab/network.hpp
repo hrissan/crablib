@@ -300,18 +300,8 @@ private:
 
 	friend class Timer;
 	friend class Idle;
-	//	friend class TCPSocket;
-	//	friend class TCPAcceptor;
-	//	friend class UDPTransmitter;
 	friend struct Callable;
 	friend class Watcher;
-
-	//	friend struct TimerImpl;
-	//	friend struct WatcherImpl;
-	//	friend struct TCPSocketImpl;
-	//	friend struct UDPTransmitterImpl;
-	//	friend struct UDPReceiverImpl;
-	//	friend struct TCPAcceptorImpl;
 
 	using CurrentLoop = details::StaticHolderTL<RunLoop *>;
 

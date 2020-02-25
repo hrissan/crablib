@@ -131,7 +131,7 @@ CRAB_INLINE void RunLoop::step(int timeout_ms) {
 namespace details {
 
 constexpr int RECV_SEND_FLAGS = MSG_DONTWAIT | MSG_NOSIGNAL;
-constexpr auto EPOLLIN_TCP    = EPOLLIN | EPOLLERR | EPOLLHUP | EPOLLRDHUP | EPOLLOUT;
+constexpr auto EPOLLIN_TCP    = EPOLLIN | EPOLLERR | EPOLLHUP | EPOLLRDHUP;
 
 }  // namespace details
 
@@ -151,7 +151,7 @@ CRAB_INLINE RunLoop::RunLoop()
 		throw std::runtime_error("RunLoop::RunLoop Only single RunLoop per thread is allowed");
 	details::check(efd.is_valid(), "crab::RunLoop epoll_create1 failed");
 	details::check(wake_fd.is_valid(), "crab::RunLoop eventfd failed");
-	impl_epoll_ctl(wake_fd.get_value(), this, EPOLL_CTL_ADD, EPOLLIN | EPOLLET);
+	impl_epoll_ctl(wake_fd.get_value(), &wake_callable, EPOLL_CTL_ADD, EPOLLIN | EPOLLET);
 	/*      Experimental code to handle Ctrl~C, code interferes with debugger operations, though
 	        TODO - create crab::SignalHandler to process UNIX signals
 	        on Windows use https://stackoverflow.com/questions/18291284/handle-ctrlc-on-win32
@@ -172,7 +172,7 @@ CRAB_INLINE RunLoop::~RunLoop() { CurrentLoop::instance = nullptr; }
 
 CRAB_INLINE void RunLoop::impl_epoll_ctl(int fd, Callable *callable, int op, uint32_t events) {
 	epoll_event event = {events, {.ptr = callable}};
-	check(epoll_ctl(efd.get_value(), op, fd, &event) >= 0, "crab::add_epoll_callable failed");
+	details::check(epoll_ctl(efd.get_value(), op, fd, &event) >= 0, "crab::add_epoll_callable failed");
 }
 
 CRAB_INLINE void RunLoop::step(int timeout_ms) {
@@ -191,7 +191,7 @@ CRAB_INLINE void RunLoop::step(int timeout_ms) {
 	for (int i = 0; i != n; ++i) {
 		auto &ev  = events[i];
 		auto impl = static_cast<Callable *>(ev.data.ptr);
-		impl->add_pending_callables(ev.events & details::EPOLLIN_PLUS, ev.events & EPOLLOUT);
+		impl->add_pending_callable(ev.events & details::EPOLLIN_TCP, ev.events & EPOLLOUT);
 	}
 }
 
@@ -234,7 +234,7 @@ CRAB_INLINE bool TCPSocket::connect(const Address &address) {
 #if CRAB_SOCKET_KEVENT
 		RunLoop::current()->impl_kevent(tmp.get_value(), &rwd_handler, EV_ADD | EV_CLEAR, EVFILT_READ, EVFILT_WRITE);
 #else
-		RunLoop::current()->impl_epoll_ctl(tmp.get_value(), &rwd_handler, EPOLL_CTL_ADD, EPOLLIN_TCP | EPOLLET);
+		RunLoop::current()->impl_epoll_ctl(tmp.get_value(), &rwd_handler, EPOLL_CTL_ADD, details::EPOLLIN_TCP | EPOLLOUT | EPOLLET);
 #endif
 		if (connect_result >= 0) {
 			// On some systems if localhost socket is connected right away, no epoll happens
@@ -261,7 +261,7 @@ CRAB_INLINE void TCPSocket::accept(TCPAcceptor &acceptor, Address *accepted_addr
 #if CRAB_SOCKET_KEVENT
 		RunLoop::current()->impl_kevent(fd.get_value(), &rwd_handler, EV_ADD | EV_CLEAR, EVFILT_READ, EVFILT_WRITE);
 #else
-		RunLoop::current()->impl_epoll_ctl(fd.get_value(), &rwd_handler, EPOLL_CTL_ADD, EPOLLIN_TCP | EPOLLET);
+		RunLoop::current()->impl_epoll_ctl(fd.get_value(), &rwd_handler, EPOLL_CTL_ADD, details::EPOLLIN_TCP | EPOLLOUT | EPOLLET);
 #endif
 	} catch (const std::exception &) {
 		// We cannot add to epoll/kevent in TCPAcceptor because we do not have
