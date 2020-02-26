@@ -96,7 +96,7 @@ add_executable(benchmark_map ${SOURCE_FILES} examples/lowlevel/benchmark_map.cpp
 add_executable(benchmark_getifaddrs ${SOURCE_FILES} examples/lowlevel/benchmark_getifaddrs.cpp)
 
 # tests
-add_executable(test_http_parsers ${SOURCE_FILES} test/test_http_parsers.cpp test/test_http_parsers_data.hpp)
+add_executable(test_http_parsers ${SOURCE_FILES} test/test_http_parsers.cpp test/test_http_data.c)
 
 if(CRAB_FUZZ)
 	# fuzzing
