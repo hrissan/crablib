@@ -1,9 +1,3 @@
-# Where is history
-
-Secrets were accidentally checked in.
-
-So repository had to be wiped, then added again.   
-
 # How to build and run examples
 
 ```
@@ -36,7 +30,7 @@ A project using crab was successfully ported to iOS using CFRunLoopTimer, CFStre
 
 A project using crab derivative was successfully ported to Web Assembly, using emscripten_async_call for timers, EM_ASM_INT to interface to JS http requests and Web Workers. This was a bit of stretch, because required customizing at the level above network, but it worked.
 
-# Which project types crab was succesfully used in
+# Which project types crab was/is succesfully used in
 
 Very fast HTTP to custom protocol proxy.
 
@@ -46,7 +40,7 @@ Implementation of popular P2P protocol network node.
 
 Web application backend which used long-polling (before web sockets were widely supported on iOS/Android) to implement stream of updates from the server.   
 
-Lower-than-average latency bridges/gates with fairness requirements (Experimental)
+Lower-than-average latency bridges/gates with fairness requirements.
 
 
 # What crab is not
@@ -59,17 +53,24 @@ There was custom protocol-specific encryption/certification when it was used as 
 
 It was used in protected environment, when acting as a bridge/gate.
 
-Crab focus is not on HTTP server, but on low-level network and timers. HTTP server was implemented as a test of concept, then suddenly started to be used in actual projects. 
+Crab focus is not on HTTP server, but on low-level network and timers. HTTP server was implemented as a test of concept, then suddenly started to be used in actual projects.
+
+There is currently a private crab branch with SSL support via openssl, but it adds dependency and requires platform-specific code to look for certification chains (On Linux, certificates can exist in bunch of places). Project using crab with SSL is just compiled with a list of popular certification centres as trusted roots, I have to investigate all pros and cons of this approach before merging SSL into master.  
 
 ## Design
 
 # multithreading
 
-Crab was designed to be used in a very specific multi-threaded environments with tight thread incapsulation and limited state sharing between threads (similar to Web Workers). In crab, all objects are strictly bound to thread they were created in. You can access them only from that thread (the only exception is Watcher::call).
+Crab was designed to have a runloop per thread, and pointer to per thread runloop instance is stored in `thread_local` variable, objects are created in that runloop automatically. You can access them only from that thread (the only exception is Watcher::call).
 
-If some heavy processing tasks are required, black box with a thread loop inside is created, then communicates to callers via Watcher (one example is DNSWorker in crab sources).
+I personally prefer multi-threaded environments with tight thread incapsulation and limited state sharing between threads (similar to Web Workers).  
 
-Another example is in `crab_heavy_lifting.cpp` (TODO - rewrite and add this example to repository)
+If some heavy processing tasks are required, black box with a thread loop inside is created, work is added to queue protected with `std::mutex`, then result readiness is communicated to callers via `Watcher`.
+
+Most cases are with single caller/multiple workers, like in `crab_heavy_lifting.cpp` (TODO - rewrite and add this example to repository)
+
+When multiple callers are required, code is a bit more complicated, for an example, see `details::DNSWorker` in crab sources.
+ 
 
 # shared_from_this, using shared pointers, lifetimes
 
@@ -93,7 +94,7 @@ Also, exception is runloop itself. You cannot destroy runloop while some objects
 
 When crab is implemented over boost::asio or windows overlapped IO, which do not allow to immediately cancel asynchronous operation, crab uses `trampolines` with pointer to original object, owned by both object and pending asynchronous operations (see `network_win.hxx`, for example). If object is destroyed, pointer in trampoline is set to nullptr, then when the last synchronous operation eventually completes, trampoline is also destroyed.
 
-Trampolines use primitive `unique_ptr`, not more complex `shared_ptr`. Runloop waits for all trampolines to be destroyed in its destructor, so there is no memory leaks if runloop itself is destroyed before operations are completed.
+Trampolines use simple and fast `unique_ptr`, not slow (due to `atomic` counter) `shared_ptr`. Runloop waits for all trampolines to be destroyed in its destructor, so there is no memory leaks if runloop itself is destroyed before operations are completed.
 
 # on design of callbacks
 
@@ -105,19 +106,22 @@ Same principle applies to HTTP connection, for example. In socket callback is re
 
 # repeating timers
 
-Crab does not have repeating timers, you just call once() in timer callback if you need to. Now this leads to timer creep (less than requested average ticks per second), this will be addressed in future by advancing timer clock relative to previous value, instead of `now()`, if `once()` called from callback.
+Crab does not have repeating timers, you just call once() in timer callback if you need to.
 
 Arguably this design leads to less logic in application components, than more common approach with `repeat()`, then `cancel()` when timer is no more needed.
 
-You can of course `cancel()` or destroy crab timer any time you wish. 
+This design (together with rounding up runloop sleep time) leads to timer creep (less than requested average ticks per second), This can be addressed by advancing timer clock relative to previous value, instead of `now()`, if `once()` called from callback. The problem with stable timers, though, that they tend to stress system, if set to low value. I prefer to use `Timer` as a signalling mechanism only. If I need to measure time, use clock.
+
+You can of course `cancel()` or destroy crab timer any time you wish, and use `is_set` in an application logic. 
 
 # Memory efficiency
 
 Crab uses intrusive lists to track objects to minimize allocations.
 
-Timers must be sorted, so crab used skip list implementation for some time, until it was benchmarked and found to be 4x slower than std::set :).
+Timers must be sorted, so they use intrusive binary heap. 
 
-Probably, an intrusive tree must be used instead. 
+Crab stored timers in skip list for years, then in `std::set`. Benchmarks show that heap is 4x faster than `std::set` which is 2x faster than skiplist. There is rumors that 8-way heap is even faster, may be I should look into it.
+ 
 
 # syscall efficiency
 
@@ -125,7 +129,7 @@ Crab reads lots (512 for now) of signalled objects from `epoll()` and `kevent()`
 
 As each object is removed from all intrusive lists in destructor, this leads to clean and fast implementation, each callback can destroy any subset of objects, including those read from `epoll` in the same batch after current one.
 
-Author have seen some popular libraries just `SEGFAULT`ing in this case, some other libraries make `epoll()' call per signalled object, greatly degrading performance when using lots of sockets at once.
+I have seen some popular libraries just `SEGFAULT`ing in this case, some other libraries make `epoll()` call per signalled object, greatly degrading performance when using lots of sockets at once.
 
 # busy polling, tricks to reduce latency
 
@@ -149,9 +153,11 @@ Contract is that client sends no more data during wait, so if it does, connectio
 
 HTTP standard is utter crap, every tiny feature is broken.
 
-Example - you cannot easily know if request has body or not (depends on lots of factors)
+Example - there is a bunch of rarely used features, like trailers.
 
 Example - many HTTP headers have unique parser grammar.
+
+Example - you cannot easily know if request/response has body or not (depends on lots of factors).
 
 Parts that were working for some time can suddenly stop working. For example, Chrome always sent 'connection: upgrade' when connecting to web sockets, but since some version started sending 'connection: upgrade, keep-alive' (WHAAT?), so web socket stopped working until patched.
 
@@ -159,7 +165,7 @@ Server was endlessly tweaked in the past and will be tweaked in foreseeable futu
 
 # HTTP Server security - redesign in progress
 
-There is a plan to fuzz HTTP parsers. This was done year+ ago, but they significantly changed since then.
+HTTP parsers were fuzzed for some time, no crashes/undefined behaviour was found.
 
 Crab HTTP was never used to download, upload arbitrary large files, etc, being used for Json RPC API and proxying of small messages.
 
@@ -171,9 +177,9 @@ For Json RPC API limit on # of connections was 1K, while request size was limite
 
 For other projects, limit were also customized directly in crab sources, with some tweaks.
 
-During HTTP server redesign those simple checks were removed.
+During HTTP server redesign, some of those simple checks were removed.
 
-Now the aim is to make the server memory-bound (so you can instruct it to use no more than approximately 500MB of memory), with customization of other limits.
+Now the limits are slowly added back again, with goal to limit total memory used by the server (500 MB for example), with customization of this and other limits.
 
 In regards to connections left behind by clients without FIN, there were experiments with both application-level timeouts and TCP keep-alives.
 
@@ -185,9 +191,9 @@ Some ideas are described here (Linux-specific)) https://blog.cloudflare.com/when
 
 Currently, the server reads the whole request body, then creates the whole response body. This is good for small requests and responses, but cannot be used to upload/download large files, for example.
 
-The plans are to change HTTP server interface to allow both request body and response body streaming.
+The plans are to tweak HTTP server interface to allow both request body and response body streaming.
 
-HTTP server is currently very good for long-polling, if you choose to delay response, you just save `Client *` to your data structure, then either client disconnects and you remove it from your data structure in 'd_handler', or you become ready to send a response and you just do it.  
+HTTP server is currently very good for long-polling, if you choose to delay response, you just save `Client *` to your data structure, then either client disconnects and you remove it from your data structure in 'd_handler', or you become ready to send a response and you just do it. (See `http_server_longpoll.cpp` in examples).
 
 WebSockets are very recent experimental implementation, and currently not being used in any production environment. 
 
@@ -195,14 +201,24 @@ WebSockets are very recent experimental implementation, and currently not being 
 
 Crab is in process of rework in regard to exception handling in callbacks. Early versions required that users handle all exceptions, otherwise it will fly up from crab runloop run() method.
 
-As an experiment, if `TCPSocket` catches exception in `rw_handler()`, it disconnects socket. This violates principle that you can destroy any crab object any time, because if you destroy socket in rw_handler, then throw, crab will attempt to call disconnect on destroyed socket.
+The code to disconnect socket in case handler has thrown exception was removed, because it violated "you can destroy any object in any handler" principle. If client has already destroyed socket, we cannot schedule on close callback, and scheduling callback before handler call and removing afterward (if soecket was not destroyed) is slow and unnecessary in 100% cases for most applications.
 
-To implement
+Then, there was code to catch and ignore all exceptions from handlers, this code is also removed for now.
+
+For now, clients should use try-block in handlers, otherwise the exception will be thrown out of `RunLoop::run()` function.
 
 # UDP
 
 There is a proprietary project ongoing now, using crab, which promises to share UDP implementation some day. 
 
-# Other async - Signals, Files, etc
+# Other async - Files, etc
 
-As systems in general do not have common mechanism for all async ops, crab has nothing to abstract.
+Crab has low-level plugs into RunLoop, as a common interface to OS async mechanism used. Unfortunately it is platform-specific.
+
+Probably, an example of asynchronous file reader should be added to examples.
+
+# Commit history is very short
+
+Secrets were accidentally committed.
+
+So repository had to be wiped, then added again.   
