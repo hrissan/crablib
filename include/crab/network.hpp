@@ -193,6 +193,16 @@ private:
 	// We actually accept in can_accept, so that TCPSocket::accept never fails
 	details::FileDescriptor accepted_fd;
 	Address accepted_addr;
+
+	Timer fd_limit_timer;
+	// In Linux/BSD, when accept() returns EMFILE, ENFILE, ENOBUFS, ENOMEM, entry remains
+	// in backlog, and fd will not be placed in signalled state again when descriptors are freed.
+	// Best approach for us would be to drop() backlog, alas there is no such functions
+	// We cannot close/reopen accept fd (due to bunch of possible problems)
+	// Also we cannot count file descriptors.
+	// So, if the user-code limits (for example in HTTP-server, etc) are not set, and
+	// we are out of file descriptors, we will simply set this timer to 1 second, and retry
+	// accept.
 #else
 	std::unique_ptr<TCPAcceptorImpl> impl;
 	friend struct TCPAcceptorImpl;
@@ -284,7 +294,9 @@ public:
 
 	static const PerformanceStats &get_stats() { return details::StaticHolder<PerformanceStats>::instance; }
 
-	enum { MAX_SLEEP_MS = 60 * 60 * 1000 };  // Arbitrary max poll wait time
+	enum { MAX_SLEEP_MS = 30 * 60 * 1000 };  // 30 minutes
+	// On some systems, epoll_wait() timeouts greater than 35.79 minutes are treated as infinity.
+	// Spurious wakeup once every 30 minutes is harmless, timeout can be reduced further if needed.
 
 #if CRAB_SOCKET_WINDOWS
 	RunLoopImpl *get_impl() const { return impl.get(); }

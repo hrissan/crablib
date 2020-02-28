@@ -22,6 +22,7 @@ private:
 	crab::TCPAcceptor la_socket;
 
 	struct Client {
+		size_t client_id = 0;
 		crab::BufferedTCPSocket socket;
 		crab::Buffer socket_buffer;
 		crab::IntrusiveNode<Client> fair_queue_node;
@@ -44,6 +45,7 @@ private:
 
 	crab::Timer stat_timer;
 	size_t requests_processed = 0;
+	size_t clients_accepted   = 0;
 
 	uint64_t seqnum = 0;
 	enum { REQUEST_SIZE = 1 };
@@ -110,16 +112,21 @@ private:
 	}
 	void on_client_disconnected(ClientList::iterator it) {
 		clients.erase(it);  // automatically unlinks from fair_queue
-		std::cout << "Fair Client disconnected, total number of clients is=" << clients.size() << std::endl;
+		std::cout << "Fair Client " << clients.back().client_id
+		          << " disconnected, current number of clients is=" << clients.size() << std::endl;
 	}
 	void accept_all() {
+		std::cout << "accept_all current number of clients is=" << clients.size() << std::endl;
 		while (la_socket.can_accept()) {  // && clients.size() < max_incoming_connections &&
 			clients.emplace_back();
 			auto it = --clients.end();
+			clients_accepted += 1;
+			clients.back().client_id = clients_accepted;
 			clients.back().socket.set_handler([this, it]() { on_client_handler(it); });
 			crab::Address addr;
 			clients.back().socket.accept(la_socket, &addr);
-			std::cout << "Fair Client accepted, total number of clients is=" << clients.size()
+			std::cout << "Fair Client " << clients.back().client_id
+			          << " accepted, current number of clients is=" << clients.size()
 			          << " addr=" << addr.get_address() << ":" << addr.get_port() << std::endl;
 
 			// Before login, clients are assigned low-priority
@@ -145,9 +152,13 @@ int main(int argc, char *argv[]) {
 	std::cout << "This server responds to requests from bunch of fair_client via TCP in fair manner -" << std::endl;
 	std::cout << "    clients who send batches are served in round-robin fashion, while those" << std::endl;
 	std::cout << "    who send single requests are served immediately" << std::endl;
+	if (argc < 2) {
+		std::cout << "Usage: fair_server <port>" << std::endl;
+		return 0;
+	}
 	crab::RunLoop runloop;
 
-	FairServerApp app(crab::Address("0.0.0.0", 7000));
+	FairServerApp app(crab::Address("0.0.0.0", std::stoull(argv[1])));
 
 	runloop.run();
 	return 0;

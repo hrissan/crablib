@@ -5,6 +5,8 @@
 #include <iostream>
 #include "network.hpp"
 
+// TODO - play with SO_PRIORITY
+
 namespace crab {
 
 CRAB_INLINE Address::Address(const std::string &numeric_host, uint16_t port) {
@@ -66,7 +68,7 @@ CRAB_INLINE bool RunLoopLinks::process_timer(const std::chrono::steady_clock::ti
 		timer.a_handler();
 		return true;
 	}
-	// We do not want to overlap
+	// We do not want to overlap duration_cast
 	const auto now_plus_max_sleep = now + std::chrono::milliseconds(RunLoop::MAX_SLEEP_MS);
 	if (timer.fire_time >= now_plus_max_sleep)
 		return false;

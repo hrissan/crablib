@@ -34,7 +34,7 @@ namespace details {
 
 CRAB_INLINE void check(bool cond, const char *msg) {
 	if (!cond)
-		throw std::runtime_error(msg + std::to_string(errno));
+		throw std::runtime_error(std::string(msg) + " errno=" + std::to_string(errno));
 }
 
 CRAB_INLINE FileDescriptor::FileDescriptor(int value, const char *throw_if_invalid_message) : value(value) {
@@ -111,9 +111,8 @@ CRAB_INLINE void RunLoop::step(int timeout_ms) {
 	struct timespec tmout = {timeout_ms / 1000, (timeout_ms % 1000) * 1000 * 1000};
 	int n                 = kevent(efd.get_value(), 0, 0, events, details::MAX_EVENTS, &tmout);
 	if (n < 0) {  // SIGNAL or error
-		n = errno;
-		if (n != EINTR)
-			std::cout << "RunLoop::step kevent error=" << n << std::endl;
+		if (errno != EINTR)
+			std::cout << "RunLoop::step kevent errno=" << errno << std::endl;
 		return;
 	}
 	if (n)
@@ -179,9 +178,8 @@ CRAB_INLINE void RunLoop::step(int timeout_ms) {
 	epoll_event events[details::MAX_EVENTS];
 	int n = epoll_wait(efd.get_value(), events, details::MAX_EVENTS, timeout_ms);
 	if (n < 0) {
-		n = errno;
-		if (n != EINTR)
-			std::cout << "RunLoop::step epoll_wait error=" << n << std::endl;
+		if (errno != EINTR)
+			std::cout << "RunLoop::step epoll_wait errno=" << errno << std::endl;
 		return;
 	}
 	if (n)
@@ -234,7 +232,8 @@ CRAB_INLINE bool TCPSocket::connect(const Address &address) {
 #if CRAB_SOCKET_KEVENT
 		RunLoop::current()->impl_kevent(tmp.get_value(), &rwd_handler, EV_ADD | EV_CLEAR, EVFILT_READ, EVFILT_WRITE);
 #else
-		RunLoop::current()->impl_epoll_ctl(tmp.get_value(), &rwd_handler, EPOLL_CTL_ADD, details::EPOLLIN_TCP | EPOLLOUT | EPOLLET);
+		RunLoop::current()->impl_epoll_ctl(
+		    tmp.get_value(), &rwd_handler, EPOLL_CTL_ADD, details::EPOLLIN_TCP | EPOLLOUT | EPOLLET);
 #endif
 		if (connect_result >= 0) {
 			// On some systems if localhost socket is connected right away, no epoll happens
@@ -261,7 +260,8 @@ CRAB_INLINE void TCPSocket::accept(TCPAcceptor &acceptor, Address *accepted_addr
 #if CRAB_SOCKET_KEVENT
 		RunLoop::current()->impl_kevent(fd.get_value(), &rwd_handler, EV_ADD | EV_CLEAR, EVFILT_READ, EVFILT_WRITE);
 #else
-		RunLoop::current()->impl_epoll_ctl(fd.get_value(), &rwd_handler, EPOLL_CTL_ADD, details::EPOLLIN_TCP | EPOLLOUT | EPOLLET);
+		RunLoop::current()->impl_epoll_ctl(
+		    fd.get_value(), &rwd_handler, EPOLL_CTL_ADD, details::EPOLLIN_TCP | EPOLLOUT | EPOLLET);
 #endif
 	} catch (const std::exception &) {
 		// We cannot add to epoll/kevent in TCPAcceptor because we do not have
@@ -288,8 +288,7 @@ CRAB_INLINE size_t TCPSocket::read_some(uint8_t *data, size_t count) {
 		return 0;
 	}
 	if (result < 0) {
-		int err = errno;
-		if (err != EAGAIN && err != EWOULDBLOCK) {  // some REAL error
+		if (errno != EAGAIN && errno != EWOULDBLOCK) {  // some REAL error
 			close();
 			rwd_handler.add_pending_callable(true, false);
 			return 0;
@@ -310,8 +309,7 @@ CRAB_INLINE size_t TCPSocket::write_some(const uint8_t *data, size_t count) {
 	if (result != count)
 		rwd_handler.can_write = false;
 	if (result < 0) {
-		int err = errno;
-		if (err != EAGAIN && err != EWOULDBLOCK) {  // some REAL error
+		if (errno != EAGAIN && errno != EWOULDBLOCK) {  // some REAL error
 			close();
 			rwd_handler.add_pending_callable(true, false);
 			return 0;
@@ -322,7 +320,8 @@ CRAB_INLINE size_t TCPSocket::write_some(const uint8_t *data, size_t count) {
 	return result;
 }
 
-CRAB_INLINE TCPAcceptor::TCPAcceptor(const Address &address, Handler &&cb) : a_handler(std::move(cb)) {
+CRAB_INLINE TCPAcceptor::TCPAcceptor(const Address &address, Handler &&cb)
+    : a_handler(std::move(cb)), fd_limit_timer([&]() { a_handler.handler(); }) {
 	details::FileDescriptor tmp(::socket(address.impl_get_sockaddr()->sa_family, SOCK_STREAM, IPPROTO_TCP),
 	    "crab::TCPAcceptor socket() failed");
 #if CRAB_SOCKET_KEVENT
@@ -358,8 +357,17 @@ CRAB_INLINE bool TCPAcceptor::can_accept() {
 			details::FileDescriptor sd(
 			    ::accept4(fd.get_value(), in_addr.impl_get_sockaddr(), &in_len, SOCK_NONBLOCK));
 #endif
-			if (!sd.is_valid())
+			if (!sd.is_valid()) {
+				// All errors are divided into 2 classes - those that remove entry from backlog
+				// and those that do not. If we hit any system limit, entry remains in backlog
+				if (errno == EMFILE || errno == ENFILE || errno == ENOBUFS || errno == ENOMEM) {
+					// This message is not a security risk, will not be printed more than once/sec
+					std::cout << "TCPAcceptor accept() call hit system limits, errno=" << errno
+					          << ", please increase system limits or set lower limits in user code" << std::endl;
+					fd_limit_timer.once(1);
+				}
 				return false;
+			}
 #if CRAB_SOCKET_KEVENT
 			details::setsockopt_1(sd.get_value(), SOL_SOCKET, SO_NOSIGPIPE);
 #endif
