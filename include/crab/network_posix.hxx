@@ -33,8 +33,11 @@ namespace crab {
 namespace details {
 
 CRAB_INLINE void check(bool cond, const char *msg) {
-	if (!cond)
-		throw std::runtime_error(std::string(msg) + " errno=" + std::to_string(errno));
+	if (!cond) {
+		//	    if (errno == EADDRINUSE)
+		//            throw std::runtime_error(std::string(msg) + " errno= Address In Use");
+		throw std::runtime_error(std::string(msg) + " errno=" + std::to_string(errno) + ", " + strerror(errno));
+	}
 }
 
 CRAB_INLINE FileDescriptor::FileDescriptor(int value, const char *throw_if_invalid_message) : value(value) {
@@ -280,8 +283,6 @@ CRAB_INLINE size_t TCPSocket::read_some(uint8_t *data, size_t count) {
 	RunLoop::current()->push_record("recv", int(count));
 	ssize_t result = ::recv(fd.get_value(), data, count, details::RECV_SEND_FLAGS);
 	RunLoop::current()->push_record("R(recv)", int(result));
-	if (result != count)
-		rwd_handler.can_read = false;
 	if (result == 0) {  // remote closed
 		close();
 		rwd_handler.add_pending_callable(true, false);
@@ -293,6 +294,7 @@ CRAB_INLINE size_t TCPSocket::read_some(uint8_t *data, size_t count) {
 			rwd_handler.add_pending_callable(true, false);
 			return 0;
 		}
+		rwd_handler.can_read = false;
 		return 0;  // Will fire on_epoll_call in future automatically
 	}
 	details::StaticHolder<PerformanceStats>::instance.RECV_size += result;
@@ -306,14 +308,13 @@ CRAB_INLINE size_t TCPSocket::write_some(const uint8_t *data, size_t count) {
 	RunLoop::current()->push_record("send", int(count));
 	ssize_t result = ::send(fd.get_value(), data, count, details::RECV_SEND_FLAGS);
 	RunLoop::current()->push_record("R(send)", int(result));
-	if (result != count)
-		rwd_handler.can_write = false;
 	if (result < 0) {
 		if (errno != EAGAIN && errno != EWOULDBLOCK) {  // some REAL error
 			close();
 			rwd_handler.add_pending_callable(true, false);
 			return 0;
 		}
+		rwd_handler.can_write = false;
 		return 0;  // Will fire on_epoll_call in future automatically
 	}
 	details::StaticHolder<PerformanceStats>::instance.SEND_size += result;
@@ -418,11 +419,13 @@ CRAB_INLINE size_t UDPTransmitter::write_datagram(const uint8_t *data, size_t co
 	RunLoop::current()->push_record("sendto", int(count));
 	ssize_t result = ::sendto(fd.get_value(), data, count, details::RECV_SEND_FLAGS, nullptr, 0);
 	RunLoop::current()->push_record("R(sendto)", int(result));
-	if (result != count)
-		w_handler.can_write = false;
 	if (result < 0) {
-		// If no one is listening on the other side, after receiving ICMP report, error 111 is returned on Linux
-		// We will ignore all errors here, in hope they will disappear soon
+		if (errno != EAGAIN && errno != EWOULDBLOCK) {  // some REAL error
+			// If no one is listening on the other side, after receiving ICMP report, error 111 is returned on Linux
+			// We will ignore all errors here, in hope they will disappear soon
+			return 0;
+		}
+		w_handler.can_write = false;
 		return 0;  // Will fire on_epoll_call in future automatically
 	}
 	details::StaticHolder<PerformanceStats>::instance.UDP_SEND_size += result;
