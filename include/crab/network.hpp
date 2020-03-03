@@ -102,6 +102,30 @@ private:
 	friend struct details::RunLoopLinks;
 };
 
+// Handler of both SIGINT and SIGTERM, if you need to do something on Ctrl-C
+// Very platform-dependent, must be created in main thread before other threads
+// are started, due signal masks being per thread and inherited
+
+// Does not prevent SIGTRIP (sudden loss of power :) though, beware
+
+// Common approach is call RunLoop::current()->cancel(), and make application components
+// destructors to close/flush/commit all held resources.
+class SignalStop {
+public:
+	explicit SignalStop(Handler &&a_handler);
+	~SignalStop();
+
+	static bool running_under_debugger();
+	// Sometimes signals interfere with debugger. Check this before creating SignalStop
+private:
+	Callable a_handler;
+#if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL
+	details::FileDescriptor fd;
+#else
+	// on Windows we can use https://stackoverflow.com/questions/18291284/handle-ctrlc-on-win32
+#endif
+};
+
 class Address {
 public:
 	Address();

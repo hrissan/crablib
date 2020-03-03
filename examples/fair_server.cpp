@@ -26,6 +26,8 @@ private:
 		crab::BufferedTCPSocket socket;
 		crab::Buffer socket_buffer;
 		crab::IntrusiveNode<Client> fair_queue_node;
+		size_t total_read    = 0;
+		size_t total_written = 0;
 
 		Client() : socket(crab::empty_handler), socket_buffer(4096) {}
 	};
@@ -80,7 +82,7 @@ private:
 		}
 		if (client.socket_buffer.size() < REQUEST_SIZE) {
 			// Must have at least capacity of 2 * REQUEST_SIZE for the logic to work correctly
-			client.socket_buffer.read_from(client.socket);
+			client.total_read += client.socket_buffer.read_from(client.socket);
 			if (client.socket_buffer.size() < REQUEST_SIZE) {
 				return true;  // No more requests
 			}
@@ -90,6 +92,7 @@ private:
 		seqnum += 1;
 		client.socket.write(reinterpret_cast<const uint8_t *>(&seqnum), sizeof(uint64_t), true);
 		client.socket.write(reinterpret_cast<const uint8_t *>(&seqnum), sizeof(uint64_t));
+		client.total_written += 2 * sizeof(uint64_t);
 		requests_processed += 1;
 		return false;  // client.socket_buffer.size() < REQUEST_SIZE;  // No more requests
 	}
@@ -144,6 +147,15 @@ private:
 	void print_stats() {
 		stat_timer.once(1);
 		std::cout << "requests processed (during last second)=" << requests_processed << std::endl;
+		if (!clients.empty()) {
+			std::cout << "Client.front read=" << clients.front().total_read
+			          << " written=" << clients.front().total_written << std::endl;
+			//            if (requests_processed == 0 && clients.front().total_written > 2000) {
+			//                uint8_t buf[100]{};
+			//                clients.front().socket.write(buf, sizeof(buf));
+			//                std::cout << "Written 100 bytes" << std::endl;
+			//            }
+		}
 		requests_processed = 0;
 	}
 };

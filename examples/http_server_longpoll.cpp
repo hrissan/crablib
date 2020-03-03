@@ -54,6 +54,11 @@ int main(int argc, char *argv[]) {
 	std::cout << "This server responds to requests approximately after 5 seconds" << std::endl;
 	crab::RunLoop runloop;
 
+	crab::SignalStop sig([&]() {
+		std::cout << "Good bye" << std::endl;
+		crab::RunLoop::current()->cancel();
+	});
+
 	ServerLongPollApp app(7000);
 
 	runloop.run();

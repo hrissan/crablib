@@ -374,12 +374,54 @@ int int_gen(size_t c) { return int(c); }
 
 int small_int_gen(size_t c) { return int(c % 256); }
 
+struct OrderId {
+	uint64_t arr[4] = {};
+
+	bool operator==(const OrderId &b) const {
+		return arr[0] == b.arr[0] && arr[1] == b.arr[1] && arr[2] == b.arr[2] && arr[3] == b.arr[3];
+	}
+	bool operator!=(const OrderId &b) const { return !operator==(b); }
+};
+
+OrderId order_id_gen(size_t c) {
+	OrderId id;
+	id.arr[0] = 12345678;
+	id.arr[1] = 87654321;
+	id.arr[2] = c % COUNT;
+	id.arr[3] = 88888888;
+	return id;
+}
+
+template<typename T>
+inline void hash_combine(std::size_t &seed, T const &v) {
+	seed ^= std::hash<T>()(v) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
+	//    seed ^= std::hash<T>()(v) + 0x9e3779b9 * seed;
+}
+
+namespace std {
+
+template<>
+struct hash<OrderId> {
+	std::size_t operator()(const OrderId &w) const {
+		size_t hash = 0;
+		hash_combine(hash, w.arr[0]);
+		hash_combine(hash, w.arr[1]);
+		hash_combine(hash, w.arr[2]);
+		hash_combine(hash, w.arr[3]);
+		return hash;
+	}
+};
+
+}  // namespace std
+
 int main() {
-	benchmark_sets();
+	//	benchmark_sets();
 	std::cout << "Testing std::map<std::string> count=" << COUNT << std::endl;
 	benchmark<std::string, std::map<std::string, size_t>>(string_gen);
 	std::cout << "Testing std::unordered<std::string> count=" << COUNT << std::endl;
 	benchmark<std::string, std::unordered_map<std::string, size_t>>(string_gen);
+	std::cout << "Testing std::unordered<OrderId> count=" << COUNT << std::endl;
+	benchmark<OrderId, std::unordered_map<OrderId, size_t>>(order_id_gen);
 	std::cout << "----" << std::endl;
 
 	std::cout << "Testing std::map<int> count=" << COUNT << std::endl;

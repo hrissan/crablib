@@ -162,6 +162,12 @@ CRAB_INLINE void RunLoop::wakeup() {
 
 CRAB_INLINE void RunLoop::cancel() { links.quit = true; }
 
+CRAB_INLINE bool SignalStop::running_under_debugger() { return false; }
+
+CRAB_INLINE SignalStop::SignalStop(Handler &&cb) : a_handler(std::move(cb)) {}
+
+CRAB_INLINE SignalStop::~SignalStop() = default;
+
 struct TCPSocketImpl {
 	explicit TCPSocketImpl(TCPSocket *owner)
 	    : read_overlapped([&](DWORD b, bool r) { on_overlapped_read(b, r); })

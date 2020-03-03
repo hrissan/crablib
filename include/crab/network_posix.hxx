@@ -12,7 +12,9 @@
 #include <fcntl.h>
 #include <netdb.h>
 #include <netinet/tcp.h>
+#include <sys/ptrace.h>
 #include <sys/socket.h>
+#include <sys/types.h>
 #include <unistd.h>
 
 #if CRAB_SOCKET_KEVENT
@@ -64,13 +66,37 @@ CRAB_INLINE void set_nonblocking(int fd) {
 	check(fcntl(fd, F_SETFL, flags) >= 0, "crab::set_nonblocking set flags failed");
 }
 
+CRAB_INLINE int stop_signals_enable(bool enable) {
+	sigset_t mask;
+	sigemptyset(&mask);
+	sigaddset(&mask, SIGINT);
+	sigaddset(&mask, SIGTERM);
+	return sigprocmask(enable ? SIG_UNBLOCK : SIG_BLOCK, &mask, nullptr);
+}
+
 }  // namespace details
+
+CRAB_INLINE bool SignalStop::running_under_debugger() {
+	// Solution from https://forum.juce.com/t/detecting-if-a-process-is-being-run-under-a-debugger/2098
+	static bool isCheckedAlready = false;
+	static bool underDebugger    = false;
+	if (!isCheckedAlready) {
+		isCheckedAlready = true;
+		if (ptrace(PTRACE_TRACEME, 0, 1, 0) < 0) {
+			underDebugger = true;
+			std::cout << "crab running under debugger" << std::endl;
+		} else {
+			ptrace(PTRACE_DETACH, 0, 1, 0);
+		}
+	}
+	return underDebugger == 1;
+}
 
 #if CRAB_SOCKET_KEVENT
 
 namespace details {
 
-constexpr int RECV_SEND_FLAGS    = MSG_DONTWAIT;
+constexpr int CRAB_MSG_NOSIGNAL  = 0;
 constexpr int EVFILT_USER_WAKEUP = 111;
 
 }  // namespace details
@@ -79,9 +105,6 @@ CRAB_INLINE RunLoop::RunLoop()
     : efd(kqueue(), "crab::RunLoop kqeueu failed"), wake_callable([this]() { links.trigger_called_watchers(); }) {
 	if (CurrentLoop::instance)
 		throw std::runtime_error("RunLoop::RunLoop Only single RunLoop per thread is allowed");
-	//	    signal(SIGINT, SIG_IGN);
-	//	    struct kevent changeLst{SIGINT, EVFILT_SIGNAL, EV_ADD, 0, 0, impl};
-	//        kevent_modify(efd.get_value(), &changeLst);
 	struct kevent changeLst {
 		details::EVFILT_USER_WAKEUP, EVFILT_USER, EV_ADD | EV_CLEAR, 0, 0, nullptr
 	};
@@ -129,11 +152,24 @@ CRAB_INLINE void RunLoop::step(int timeout_ms) {
 	}
 }
 
+CRAB_INLINE SignalStop::SignalStop(Handler &&cb) : a_handler(std::move(cb)) {
+	details::check(details::stop_signals_enable(false) >= 0, "crab::Signal sigprocmask failed");
+
+	struct kevent changeLst[] = {
+	    {SIGINT, EVFILT_SIGNAL, EV_ADD, 0, 0, &a_handler}, {SIGTERM, EVFILT_SIGNAL, EV_ADD, 0, 0, &a_handler}};
+	RunLoop::current()->impl_kevent(&changeLst, 2);
+}
+
+CRAB_INLINE SignalStop::~SignalStop() {
+	// We do not remember if signals were enabled
+	if (details::stop_signals_enable(true) < 0)
+		std::cout << "crab::Signal sigprocmask failed" << std::endl;
+}
+
 #elif CRAB_SOCKET_EPOLL
 namespace details {
 
-constexpr int RECV_SEND_FLAGS = MSG_DONTWAIT | MSG_NOSIGNAL;
-constexpr auto EPOLLIN_TCP    = EPOLLIN | EPOLLERR | EPOLLHUP | EPOLLRDHUP;
+constexpr int CRAB_MSG_NOSIGNAL = MSG_NOSIGNAL;
 
 }  // namespace details
 
@@ -144,29 +180,12 @@ CRAB_INLINE RunLoop::RunLoop()
 	    // TODO - check error
 
 	    links.trigger_called_watchers();
-	    //        struct signalfd_siginfo info;
-	    //        size_t bytes = read(signal_fd.get_value(), &info, sizeof(info));
-	    //        if( bytes == sizeof(info) && info.ssi_pid == 0) // From terminal
-	    //        quit = true;
     }) {
 	if (CurrentLoop::instance)
 		throw std::runtime_error("RunLoop::RunLoop Only single RunLoop per thread is allowed");
 	details::check(efd.is_valid(), "crab::RunLoop epoll_create1 failed");
 	details::check(wake_fd.is_valid(), "crab::RunLoop eventfd failed");
 	impl_epoll_ctl(wake_fd.get_value(), &wake_callable, EPOLL_CTL_ADD, EPOLLIN | EPOLLET);
-	/*      Experimental code to handle Ctrl~C, code interferes with debugger operations, though
-	        TODO - create crab::SignalHandler to process UNIX signals
-	        on Windows use https://stackoverflow.com/questions/18291284/handle-ctrlc-on-win32
-	        sigset_t mask;
-	        sigemptyset(&mask);
-	        sigaddset(&mask, SIGINT);
-	        if (sigprocmask(SIG_BLOCK, &mask, NULL) == -1)
-	            throw std::runtime_error("RunLoop::RunLoop sigprocmask failed");
-	        signal_fd.reset( signalfd(-1, &mask, 0) );
-	        if (signal_fd.get_value() == -1)
-	            throw std::runtime_error("RunLoop::RunLoop signalfd failed");
-	        if( !add_epoll_callable(signal_fd.get_value(), EPOLLIN, this))
-	            throw std::runtime_error("RunLoop::RunLoop add_epoll_callable signal failed");*/
 	CurrentLoop::instance = this;
 }
 
@@ -190,15 +209,46 @@ CRAB_INLINE void RunLoop::step(int timeout_ms) {
 	details::StaticHolder<PerformanceStats>::instance.EPOLL_count += 1;
 	details::StaticHolder<PerformanceStats>::instance.EPOLL_size += n;
 	for (int i = 0; i != n; ++i) {
-		auto &ev  = events[i];
-		auto impl = static_cast<Callable *>(ev.data.ptr);
-		impl->add_pending_callable(ev.events & details::EPOLLIN_TCP, ev.events & EPOLLOUT);
+		auto &ev               = events[i];
+		auto impl              = static_cast<Callable *>(ev.data.ptr);
+		const auto read_events = EPOLLIN | EPOLLERR | EPOLLHUP | EPOLLRDHUP;
+		// Those events will trigger socket close after recv() returns -1 or 0
+		impl->add_pending_callable(ev.events & read_events, ev.events & EPOLLOUT);
 	}
 }
 
 CRAB_INLINE void RunLoop::wakeup() {
-	eventfd_write(wake_fd.get_value(), 1);
-	// TODO - check errors here
+	// Returns error on counter overflow, as we reset counter to 0 on every read, error is extremely unlikely
+	details::check(eventfd_write(wake_fd.get_value(), 1) >= 0, "crab::RunLoop wake_fd counter overflow");
+}
+
+CRAB_INLINE SignalStop::SignalStop(Handler &&cb)
+    : a_handler([&, cb = std::move(cb)]() {
+	    signalfd_siginfo info{};
+	    while (true) {
+		    // Several signals can be merged, we read all of them
+		    ssize_t bytes = read(fd.get_value(), &info, sizeof(info));
+		    if (bytes < 0)
+			    break;
+		    // Condition (bytes >= sizeof(info) && info.ssi_pid == 0) is true if called from terminal
+	    }
+	    cb();
+    }) {
+	sigset_t mask;
+	sigemptyset(&mask);
+	sigaddset(&mask, SIGINT);
+	sigaddset(&mask, SIGTERM);
+	details::check(sigprocmask(SIG_BLOCK, &mask, nullptr) >= 0, "crab::Signal sigprocmask failed");
+	fd.reset(signalfd(-1, &mask, 0));
+	details::check(fd.get_value() >= 0, "crab::Signal signalfd failed");
+	details::set_nonblocking(fd.get_value());
+	RunLoop::current()->impl_epoll_ctl(fd.get_value(), &this->a_handler, EPOLL_CTL_ADD, EPOLLIN | EPOLLET);
+}
+
+CRAB_INLINE SignalStop::~SignalStop() {
+	// We do not remember if signals were enabled
+	if (details::stop_signals_enable(true) < 0)
+		std::cout << "crab::Signal sigprocmask failed" << std::endl;
 }
 
 #endif
@@ -236,7 +286,7 @@ CRAB_INLINE bool TCPSocket::connect(const Address &address) {
 		RunLoop::current()->impl_kevent(tmp.get_value(), &rwd_handler, EV_ADD | EV_CLEAR, EVFILT_READ, EVFILT_WRITE);
 #else
 		RunLoop::current()->impl_epoll_ctl(
-		    tmp.get_value(), &rwd_handler, EPOLL_CTL_ADD, details::EPOLLIN_TCP | EPOLLOUT | EPOLLET);
+		    tmp.get_value(), &rwd_handler, EPOLL_CTL_ADD, EPOLLRDHUP | EPOLLIN | EPOLLOUT | EPOLLET);
 #endif
 		if (connect_result >= 0) {
 			// On some systems if localhost socket is connected right away, no epoll happens
@@ -264,7 +314,7 @@ CRAB_INLINE void TCPSocket::accept(TCPAcceptor &acceptor, Address *accepted_addr
 		RunLoop::current()->impl_kevent(fd.get_value(), &rwd_handler, EV_ADD | EV_CLEAR, EVFILT_READ, EVFILT_WRITE);
 #else
 		RunLoop::current()->impl_epoll_ctl(
-		    fd.get_value(), &rwd_handler, EPOLL_CTL_ADD, details::EPOLLIN_TCP | EPOLLOUT | EPOLLET);
+		    fd.get_value(), &rwd_handler, EPOLL_CTL_ADD, EPOLLRDHUP | EPOLLIN | EPOLLOUT | EPOLLET);
 #endif
 	} catch (const std::exception &) {
 		// We cannot add to epoll/kevent in TCPAcceptor because we do not have
@@ -281,7 +331,7 @@ CRAB_INLINE size_t TCPSocket::read_some(uint8_t *data, size_t count) {
 		return 0;
 	details::StaticHolder<PerformanceStats>::instance.RECV_count += 1;
 	RunLoop::current()->push_record("recv", int(count));
-	ssize_t result = ::recv(fd.get_value(), data, count, details::RECV_SEND_FLAGS);
+	ssize_t result = ::recv(fd.get_value(), data, count, details::CRAB_MSG_NOSIGNAL);
 	RunLoop::current()->push_record("R(recv)", int(result));
 	if (result == 0) {  // remote closed
 		close();
@@ -306,7 +356,7 @@ CRAB_INLINE size_t TCPSocket::write_some(const uint8_t *data, size_t count) {
 		return 0;
 	details::StaticHolder<PerformanceStats>::instance.SEND_count += 1;
 	RunLoop::current()->push_record("send", int(count));
-	ssize_t result = ::send(fd.get_value(), data, count, details::RECV_SEND_FLAGS);
+	ssize_t result = ::send(fd.get_value(), data, count, details::CRAB_MSG_NOSIGNAL);
 	RunLoop::current()->push_record("R(send)", int(result));
 	if (result < 0) {
 		if (errno != EAGAIN && errno != EWOULDBLOCK) {  // some REAL error
@@ -417,7 +467,7 @@ CRAB_INLINE size_t UDPTransmitter::write_datagram(const uint8_t *data, size_t co
 		return 0;
 	details::StaticHolder<PerformanceStats>::instance.UDP_SEND_count += 1;
 	RunLoop::current()->push_record("sendto", int(count));
-	ssize_t result = ::sendto(fd.get_value(), data, count, details::RECV_SEND_FLAGS, nullptr, 0);
+	ssize_t result = ::sendto(fd.get_value(), data, count, details::CRAB_MSG_NOSIGNAL, nullptr, 0);
 	RunLoop::current()->push_record("R(sendto)", int(result));
 	if (result < 0) {
 		if (errno != EAGAIN && errno != EWOULDBLOCK) {  // some REAL error
@@ -476,7 +526,7 @@ CRAB_INLINE bool UDPReceiver::read_datagram(uint8_t *data, size_t *size, Address
 	details::StaticHolder<PerformanceStats>::instance.UDP_RECV_count += 1;
 	RunLoop::current()->push_record("recvfrom", int(MAX_DATAGRAM_SIZE));
 	ssize_t result = recvfrom(
-	    fd.get_value(), data, MAX_DATAGRAM_SIZE, details::RECV_SEND_FLAGS, in_addr.impl_get_sockaddr(), &in_len);
+	    fd.get_value(), data, MAX_DATAGRAM_SIZE, details::CRAB_MSG_NOSIGNAL, in_addr.impl_get_sockaddr(), &in_len);
 	RunLoop::current()->push_record("R(recvfrom)", int(result));
 	if (result < 0) {
 		// Sometimes (for example during adding/removing network adapters), errors could be returned on Linux
