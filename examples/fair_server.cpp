@@ -64,8 +64,9 @@ private:
 			}
 			fair_queue.push_back(c);
 		}
+		accept_single();
 		if (sleep_thread)
-			idle.set_active(!fair_queue.empty());
+			idle.set_active(!fair_queue.empty() || la_socket.can_accept());
 	}
 	static void busy_sleep_microseconds(int msec) {
 		auto start = std::chrono::steady_clock::now();
@@ -111,38 +112,40 @@ private:
 		// Then, if more requests requests pending, add client into fair_queue
 		fair_queue.push_back(*it);  // Will have at least REQUEST_SIZE in buffer
 		if (sleep_thread)
-			idle.set_active(!fair_queue.empty());
+			idle.set_active(!fair_queue.empty() || la_socket.can_accept());
 	}
 	void on_client_disconnected(ClientList::iterator it) {
 		clients.erase(it);  // automatically unlinks from fair_queue
-		std::cout << "Fair Client " << clients.back().client_id
-		          << " disconnected, current number of clients is=" << clients.size() << std::endl;
+		                    //		std::cout << "Fair Client " << clients.back().client_id
+		//		          << " disconnected, current number of clients is=" << clients.size() << std::endl;
 	}
 	void accept_all() {
-		std::cout << "accept_all current number of clients is=" << clients.size() << std::endl;
-		while (la_socket.can_accept()) {  // && clients.size() < max_incoming_connections &&
-			clients.emplace_back();
-			auto it = --clients.end();
-			clients_accepted += 1;
-			clients.back().client_id = clients_accepted;
-			clients.back().socket.set_handler([this, it]() { on_client_handler(it); });
-			crab::Address addr;
-			clients.back().socket.accept(la_socket, &addr);
-			std::cout << "Fair Client " << clients.back().client_id
-			          << " accepted, current number of clients is=" << clients.size()
-			          << " addr=" << addr.get_address() << ":" << addr.get_port() << std::endl;
+		std::cout << "accept socket event, current number of clients is=" << clients.size() << std::endl;
+		accept_single();
+		if (sleep_thread)
+			idle.set_active(!fair_queue.empty() || la_socket.can_accept());
+	}
+	void accept_single() {
+		if (!la_socket.can_accept())  // || clients.size() >= max_incoming_connections &&
+			return;
+		clients.emplace_back();
+		auto it = --clients.end();
+		clients_accepted += 1;
+		clients.back().client_id = clients_accepted;
+		clients.back().socket.set_handler([this, it]() { on_client_handler(it); });
+		crab::Address addr;
+		clients.back().socket.accept(la_socket, &addr);
+		//            std::cout << "Fair Client " << clients.back().client_id
+		//                      << " accepted, current number of clients is=" << clients.size()
+		//                      << " addr=" << addr.get_address() << ":" << addr.get_port() << std::endl;
 
-			// Before login, clients are assigned low-priority
-			// In actual fair server, there would be separate queue for not-yet-logged in clients
-			// so that server can select ratio between processing logged-in versus not logged-in clients
+		// Before login, clients are assigned low-priority
+		// In actual fair server, there would be separate queue for not-yet-logged in clients
+		// so that server can select ratio between processing logged-in versus not logged-in clients
 
-			// also actual fair server will ensure that 2 connections from the same login are either not allowed
-			// or at least occupy single slot in fair_queue, and have timeouts for connections
-			fair_queue.push_back(clients.back());
-			//            std::cout << "Adding to fair_queue" << std::endl;
-			if (sleep_thread)
-				idle.set_active(!fair_queue.empty());
-		}
+		// also actual fair server will ensure that 2 connections from the same login are either not allowed
+		// or at least occupy single slot in fair_queue, and have timeouts for connections
+		fair_queue.push_back(clients.back());
 	}
 	void print_stats() {
 		stat_timer.once(1);
@@ -170,7 +173,7 @@ int main(int argc, char *argv[]) {
 	}
 	crab::RunLoop runloop;
 
-	FairServerApp app(crab::Address("0.0.0.0", std::stoull(argv[1])));
+	FairServerApp app(crab::Address("0.0.0.0", std::stoi(argv[1])));
 
 	runloop.run();
 	return 0;

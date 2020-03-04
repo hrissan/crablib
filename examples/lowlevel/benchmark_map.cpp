@@ -104,12 +104,13 @@ public:
 		//		blake2b_update(&ctx, &keybuf, sizeof(keybuf));
 		//		blake2b_final(&ctx, &keybuf);
 
-		const size_t height = std::min<size_t>(LEVELS, 1 + count_zeroes(random.rnd()) / 3);       // keybuf[0]
-		Item *new_item      = (Item *)malloc(sizeof(Item) - (LEVELS - height) * sizeof(Item *));  // new Item{};
-		new_item->prev      = insert_ptr.previous_levels.at(0);
-		next_curr->prev     = new_item;
-		new_item->height    = height;
-		size_t i            = 0;
+		const size_t height = std::min<size_t>(LEVELS, 1 + count_zeroes(random.rnd()) / 3);  // keybuf[0]
+		Item *new_item =
+		    reinterpret_cast<Item *>(malloc(sizeof(Item) - (LEVELS - height) * sizeof(Item *)));  // new Item{};
+		new_item->prev   = insert_ptr.previous_levels.at(0);
+		next_curr->prev  = new_item;
+		new_item->height = height;
+		size_t i         = 0;
 		for (; i != height; ++i) {
 			new_item->nexts(i)                         = insert_ptr.previous_levels.at(i)->nexts(i);
 			insert_ptr.previous_levels.at(i)->nexts(i) = new_item;

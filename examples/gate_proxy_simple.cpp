@@ -65,8 +65,8 @@ int test_proxy(int num, uint16_t port, uint16_t upstream_port) {
 		runloop.print_records();
 	};
 
-	size_t message_counter = 0;
-	auto message_start     = std::chrono::high_resolution_clock::now();
+	// size_t message_counter = 0;
+	// auto message_start     = std::chrono::high_resolution_clock::now();
 
 	rws.reset(new http::WebSocket(
 	    [&]() {

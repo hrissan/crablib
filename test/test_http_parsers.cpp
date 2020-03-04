@@ -72,11 +72,11 @@ int main() {
 		//		std::ofstream freq("req" + std::to_string(request_count) + ".txt");
 		//		freq.write(msg.raw, pos - msg.raw);
 		http::BodyParser bp{req.req.content_length, req.req.transfer_encoding_chunked};
-		auto pos2 = bp.parse((const uint8_t *)pos, (const uint8_t *)end);
+		auto pos2 = bp.parse(reinterpret_cast<const uint8_t *>(pos), reinterpret_cast<const uint8_t *>(end));
 		if (!bp.is_good())
 			throw std::logic_error("Body failed to parse");
 		message_eq(msg, req.req, bp.body.get_buffer());
-		if (pos2 - (const uint8_t *)pos == 0)
+		if (pos2 - reinterpret_cast<const uint8_t *>(pos) == 0)
 			continue;
 		// Code used to create initial corpus for fuzzing
 		//		std::ofstream fbody("req_body" + std::to_string(request_count) + ".txt");
@@ -96,11 +96,11 @@ int main() {
 		//		std::ofstream freq("resp" + std::to_string(request_count) + ".txt");
 		//		freq.write(msg.raw, pos - msg.raw);
 		http::BodyParser bp{req.req.content_length, req.req.transfer_encoding_chunked};
-		auto pos2 = bp.parse((const uint8_t *)pos, (const uint8_t *)end);
+		auto pos2 = bp.parse(reinterpret_cast<const uint8_t *>(pos), reinterpret_cast<const uint8_t *>(end));
 		if (!bp.is_good())
 			throw std::logic_error("Body failed to parse");
 		message_eq(msg, req.req, bp.body.get_buffer());
-		if (pos2 - (const uint8_t *)pos == 0)
+		if (pos2 - reinterpret_cast<const uint8_t *>(pos) == 0)
 			continue;
 		// Code used to create initial corpus for fuzzing
 		//		std::ofstream fbody("resp_body" + std::to_string(request_count) + ".txt");
@@ -133,13 +133,13 @@ static const char data[] =
 
 static const size_t data_len = sizeof(data) - 1;
 
-const size_t iterations = kBytes / (int64_t)data_len;
+const size_t iterations = kBytes / int64_t(data_len);
 
 int main2() {
 	std::cout << "Running benchmark..." << std::endl;
 
-	auto start    = std::chrono::steady_clock::now();
-	size_t result = 0;
+	auto start = std::chrono::steady_clock::now();
+	int result = 0;
 	http::RequestParser req;
 	for (size_t i = 0; i < iterations; i++) {
 		req = http::RequestParser{};

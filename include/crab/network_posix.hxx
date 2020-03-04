@@ -66,14 +66,6 @@ CRAB_INLINE void set_nonblocking(int fd) {
 	check(fcntl(fd, F_SETFL, flags) >= 0, "crab::set_nonblocking set flags failed");
 }
 
-CRAB_INLINE int stop_signals_enable(bool enable) {
-	sigset_t mask;
-	sigemptyset(&mask);
-	sigaddset(&mask, SIGINT);
-	sigaddset(&mask, SIGTERM);
-	return sigprocmask(enable ? SIG_UNBLOCK : SIG_BLOCK, &mask, nullptr);
-}
-
 }  // namespace details
 
 CRAB_INLINE bool SignalStop::running_under_debugger() {
@@ -155,7 +147,6 @@ CRAB_INLINE void RunLoop::step(int timeout_ms) {
 CRAB_INLINE SignalStop::SignalStop(Handler &&cb) : a_handler(std::move(cb)) {
 	signal(SIGINT, SIG_IGN);
 	signal(SIGTERM, SIG_IGN);
-	//	details::check(details::stop_signals_enable(false) >= 0, "crab::Signal sigprocmask failed");
 
 	struct kevent changeLst[] = {
 	    {SIGINT, EVFILT_SIGNAL, EV_ADD, 0, 0, &a_handler}, {SIGTERM, EVFILT_SIGNAL, EV_ADD, 0, 0, &a_handler}};
@@ -166,8 +157,6 @@ CRAB_INLINE SignalStop::~SignalStop() {
 	// We do not remember if signals were enabled
 	signal(SIGINT, SIG_DFL);
 	signal(SIGTERM, SIG_DFL);
-	//	if (details::stop_signals_enable(true) < 0)
-	//		std::cout << "crab::Signal sigprocmask failed" << std::endl;
 }
 
 #elif CRAB_SOCKET_EPOLL
@@ -251,8 +240,12 @@ CRAB_INLINE SignalStop::SignalStop(Handler &&cb)
 
 CRAB_INLINE SignalStop::~SignalStop() {
 	// We do not remember if signals were enabled
-	if (details::stop_signals_enable(true) < 0)
-		std::cout << "crab::Signal sigprocmask failed" << std::endl;
+	sigset_t mask;
+	sigemptyset(&mask);
+	sigaddset(&mask, SIGINT);
+	sigaddset(&mask, SIGTERM);
+	if (sigprocmask(SIG_UNBLOCK, &mask, nullptr) < 0)
+		std::cout << "crab::~Signal restoring sigprocmask failed" << std::endl;
 }
 
 #endif

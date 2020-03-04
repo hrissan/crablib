@@ -38,7 +38,7 @@ CRAB_INLINE bool from_hex(bdata &data, const std::string &str) {
 		return false;
 	bdata result;
 	result.reserve(str.size() / 2);
-	for (int i = 0; i != str.size(); i += 2) {
+	for (size_t i = 0; i != str.size(); i += 2) {
 		auto d0 = from_hex_digit(str[i]);
 		auto d1 = from_hex_digit(str[i + 1]);
 		if (d0 < 0 || d1 < 0)

@@ -14,7 +14,8 @@ if(WIN32)
     add_definitions(-D_SCL_SECURE_NO_WARNINGS=1 -D_CRT_SECURE_NO_WARNINGS=1 -D_WIN32_WINNT=0x0601)
     add_compile_options(/we4715) # not all paths return value is error
 else()
-	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -Werror=return-type")
+	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -Wall -Wextra -Werror=return-type -Wno-unused-parameter")
+	# Also usefull flags -Wold-style-cast -Wconversion
 	set(CMAKE_CXX_FLAGS_DEBUG "-O0")
 	set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 	set(CMAKE_C_COMPILER_WORKS 1)

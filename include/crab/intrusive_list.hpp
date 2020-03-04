@@ -45,8 +45,9 @@ public:
 	T *operator->() {
 		// offsetof is undefined for non-standard layout types.
 		alignas(T) char buffer[sizeof(T)];
-		IntrusiveNode<T> *link_ptr = &(reinterpret_cast<T *>(buffer)->*Link);
-		auto delta                 = reinterpret_cast<char *>(link_ptr) - buffer;
+		char *pbuffer              = buffer;  // Workaround for strict aliasing rule warning
+		IntrusiveNode<T> *link_ptr = &(reinterpret_cast<T *>(pbuffer)->*Link);
+		auto delta                 = reinterpret_cast<char *>(link_ptr) - pbuffer;
 		return reinterpret_cast<T *>(reinterpret_cast<char *>(current->next) - delta);
 	}
 	bool operator==(IntrusiveIterator const &other) const { return current == other.current; }

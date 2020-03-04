@@ -28,7 +28,7 @@ int main() { return 0; }
 
 int main() {
 	sockaddr_storage salocal{};
-	sockaddr_in *sin = (sockaddr_in *)&salocal;
+	sockaddr_in *sin = reinterpret_cast<sockaddr_in *>(&salocal);
 	sin->sin_family  = AF_INET;
 	sin->sin_port    = htons(54321);
 
@@ -40,7 +40,7 @@ int main() {
 		printf("socket() failed\n");
 		return 1;
 	}
-	if (bind(fd, (sockaddr *)sin, sizeof(*sin)) < 0) {
+	if (bind(fd, reinterpret_cast<sockaddr *>(sin), sizeof(*sin)) < 0) {
 		printf("bind() failed\n");
 		return 1;
 	}
@@ -57,7 +57,7 @@ int main() {
 
 	while (true) {
 		memcpy(buf, &packet_id, sizeof(packet_id));
-		auto res = sendto(fd, buf, BUF_SIZE, MSG_DONTWAIT, (sockaddr *)sin, sizeof(*sin));
+		auto res = sendto(fd, buf, BUF_SIZE, MSG_DONTWAIT, reinterpret_cast<sockaddr *>(sin), sizeof(*sin));
 		if (res < 0) {
 			if (errno == EAGAIN || errno == EWOULDBLOCK) {
 				printf("sendto() returned EAGAIN after %d\n", int(count));
