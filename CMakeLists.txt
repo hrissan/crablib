@@ -5,7 +5,7 @@ if(NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
    set(CMAKE_BUILD_TYPE Release)
 endif()
 
-message("CRAB_FUZZ builds binaries for fuzzing. Disabled by default because builds only on Linux and Mac OSX (with additional dependencies)")
+message("-DCRAB_FUZZ=1 builds binaries for fuzzing. Disabled by default because builds only on Linux and Mac OSX (with additional dependencies)")
 option(CRAB_FUZZ "builds binaries for fuzzing" OFF)
 
 
@@ -109,6 +109,9 @@ if(CRAB_FUZZ)
 	# ../bin/fuzz_http_request ../test/HTTP_REQUEST_CORPUS/ -dict=../test/HTTP_DICT.txt -jobs=8 -workers=8
 	# ../bin/fuzz_http_response ../test/HTTP_RESPONSE_CORPUS/ -dict=../test/HTTP_DICT.txt -jobs=8 -workers=8
 	# ../bin/fuzz_http_body ../test/HTTP_BODY_CORPUS/ -dict=../test/HTTP_DICT.txt -jobs=8 -workers=8
+	# ../bin/fuzz_web_message ../test/WEB_MESSAGE_CORPUS/ -dict=../test/HTTP_DICT.txt -jobs=8 -workers=8
+	# to reduce file set, move HTTP_BODY_CORPUS content into MERGE, then run
+	# ../bin/fuzz_http_body ../test/HTTP_BODY_CORPUS/ ../test/MERGE -merge=1
 	set(CRAB_FUZZ_PROPS "-fno-omit-frame-pointer -fsanitize=fuzzer,address,undefined")
 
 	add_executable(fuzz_http_request ${SOURCE_FILES} test/fuzz_http_request.cpp)
@@ -122,6 +125,10 @@ if(CRAB_FUZZ)
 	add_executable(fuzz_http_body ${SOURCE_FILES} test/fuzz_http_body.cpp)
 	SET_TARGET_PROPERTIES(fuzz_http_body PROPERTIES COMPILE_FLAGS "${CRAB_FUZZ_PROPS}")
 	SET_TARGET_PROPERTIES(fuzz_http_body PROPERTIES LINK_FLAGS "${CRAB_FUZZ_PROPS}")
+
+	add_executable(fuzz_web_message ${SOURCE_FILES} test/fuzz_web_message.cpp)
+	SET_TARGET_PROPERTIES(fuzz_web_message PROPERTIES COMPILE_FLAGS "${CRAB_FUZZ_PROPS}")
+	SET_TARGET_PROPERTIES(fuzz_web_message PROPERTIES LINK_FLAGS "${CRAB_FUZZ_PROPS}")
 endif()
 
 # Examples below are of very low quality and must be rewritten
