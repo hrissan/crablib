@@ -12,6 +12,7 @@
 #include <fcntl.h>
 #include <netdb.h>
 #include <netinet/tcp.h>
+#include <signal.h>
 #include <sys/ptrace.h>
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -24,7 +25,6 @@
 #endif
 
 #if CRAB_SOCKET_EPOLL
-#include <signal.h>
 #include <sys/epoll.h>
 #include <sys/eventfd.h>
 #include <sys/signalfd.h>
@@ -78,18 +78,18 @@ CRAB_INLINE int stop_signals_enable(bool enable) {
 
 CRAB_INLINE bool SignalStop::running_under_debugger() {
 	// Solution from https://forum.juce.com/t/detecting-if-a-process-is-being-run-under-a-debugger/2098
-	static bool isCheckedAlready = false;
-	static bool underDebugger    = false;
-	if (!isCheckedAlready) {
-		isCheckedAlready = true;
-		if (ptrace(PTRACE_TRACEME, 0, 1, 0) < 0) {
-			underDebugger = true;
-			std::cout << "crab running under debugger" << std::endl;
-		} else {
-			ptrace(PTRACE_DETACH, 0, 1, 0);
-		}
-	}
-	return underDebugger == 1;
+	//	static bool isCheckedAlready = false;
+	static bool underDebugger = false;
+	//	if (!isCheckedAlready) {
+	//		isCheckedAlready = true;
+	//		if (ptrace(PTRACE_TRACEME, 0, 0, 0) < 0) {
+	//			underDebugger = true;
+	//			std::cout << "crab running under debugger" << std::endl;
+	//		} else {
+	//			ptrace(PTRACE_DETACH, 0, 0, 0);
+	//		}
+	//	}
+	return underDebugger;
 }
 
 #if CRAB_SOCKET_KEVENT
@@ -153,17 +153,21 @@ CRAB_INLINE void RunLoop::step(int timeout_ms) {
 }
 
 CRAB_INLINE SignalStop::SignalStop(Handler &&cb) : a_handler(std::move(cb)) {
-	details::check(details::stop_signals_enable(false) >= 0, "crab::Signal sigprocmask failed");
+	signal(SIGINT, SIG_IGN);
+	signal(SIGTERM, SIG_IGN);
+	//	details::check(details::stop_signals_enable(false) >= 0, "crab::Signal sigprocmask failed");
 
 	struct kevent changeLst[] = {
 	    {SIGINT, EVFILT_SIGNAL, EV_ADD, 0, 0, &a_handler}, {SIGTERM, EVFILT_SIGNAL, EV_ADD, 0, 0, &a_handler}};
-	RunLoop::current()->impl_kevent(&changeLst, 2);
+	RunLoop::current()->impl_kevent(changeLst, 2);
 }
 
 CRAB_INLINE SignalStop::~SignalStop() {
 	// We do not remember if signals were enabled
-	if (details::stop_signals_enable(true) < 0)
-		std::cout << "crab::Signal sigprocmask failed" << std::endl;
+	signal(SIGINT, SIG_DFL);
+	signal(SIGTERM, SIG_DFL);
+	//	if (details::stop_signals_enable(true) < 0)
+	//		std::cout << "crab::Signal sigprocmask failed" << std::endl;
 }
 
 #elif CRAB_SOCKET_EPOLL
