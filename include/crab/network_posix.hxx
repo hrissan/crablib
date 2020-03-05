@@ -68,22 +68,6 @@ CRAB_INLINE void set_nonblocking(int fd) {
 
 }  // namespace details
 
-CRAB_INLINE bool SignalStop::running_under_debugger() {
-	// Solution from https://forum.juce.com/t/detecting-if-a-process-is-being-run-under-a-debugger/2098
-	//	static bool isCheckedAlready = false;
-	static bool underDebugger = false;
-	//	if (!isCheckedAlready) {
-	//		isCheckedAlready = true;
-	//		if (ptrace(PTRACE_TRACEME, 0, 0, 0) < 0) {
-	//			underDebugger = true;
-	//			std::cout << "crab running under debugger" << std::endl;
-	//		} else {
-	//			ptrace(PTRACE_DETACH, 0, 0, 0);
-	//		}
-	//	}
-	return underDebugger;
-}
-
 #if CRAB_SOCKET_KEVENT
 
 namespace details {
@@ -128,9 +112,9 @@ CRAB_INLINE void RunLoop::step(int timeout_ms) {
 	struct kevent events[details::MAX_EVENTS];
 	struct timespec tmout = {timeout_ms / 1000, (timeout_ms % 1000) * 1000 * 1000};
 	int n                 = kevent(efd.get_value(), 0, 0, events, details::MAX_EVENTS, &tmout);
-	if (n < 0) {  // SIGNAL or error
-		if (errno != EINTR)
-			std::cout << "RunLoop::step kevent errno=" << errno << std::endl;
+	if (n < 0) {
+		// We expect only EINTR here
+		details::check(errno == EINTR, "RunLoop::step kevent unexpected error");
 		return;
 	}
 	if (n)
@@ -158,6 +142,8 @@ CRAB_INLINE SignalStop::~SignalStop() {
 	signal(SIGINT, SIG_DFL);
 	signal(SIGTERM, SIG_DFL);
 }
+
+CRAB_INLINE bool SignalStop::running_under_debugger() { return false; }
 
 #elif CRAB_SOCKET_EPOLL
 namespace details {
@@ -193,8 +179,8 @@ CRAB_INLINE void RunLoop::step(int timeout_ms) {
 	epoll_event events[details::MAX_EVENTS];
 	int n = epoll_wait(efd.get_value(), events, details::MAX_EVENTS, timeout_ms);
 	if (n < 0) {
-		if (errno != EINTR)
-			std::cout << "RunLoop::step epoll_wait errno=" << errno << std::endl;
+		// We expect only EINTR here
+		details::check(errno == EINTR, "RunLoop::step epoll_wait unexpected error");
 		return;
 	}
 	if (n)
@@ -246,6 +232,20 @@ CRAB_INLINE SignalStop::~SignalStop() {
 	sigaddset(&mask, SIGTERM);
 	if (sigprocmask(SIG_UNBLOCK, &mask, nullptr) < 0)
 		std::cout << "crab::~Signal restoring sigprocmask failed" << std::endl;
+}
+
+CRAB_INLINE bool SignalStop::running_under_debugger() {
+	// https://forum.juce.com/t/detecting-if-a-process-is-being-run-under-a-debugger/2098
+	static int underDebugger = 2;
+	if (underDebugger == 2) {
+		if (ptrace(PTRACE_TRACEME, 0, 0, 0) >= 0) {
+			underDebugger = 0;
+			ptrace(PTRACE_DETACH, 0, 0, 0);
+		} else {
+			underDebugger = 1;
+		}
+	}
+	return underDebugger != 0;
 }
 
 #endif
@@ -394,6 +394,8 @@ CRAB_INLINE TCPAcceptor::~TCPAcceptor() = default;
 CRAB_INLINE bool TCPAcceptor::can_accept() {
 	if (accepted_fd.is_valid())
 		return true;
+	if (!a_handler.can_read)
+		return false;
 	Address in_addr;
 	while (true) {
 		try {
@@ -406,14 +408,30 @@ CRAB_INLINE bool TCPAcceptor::can_accept() {
 			    ::accept4(fd.get_value(), in_addr.impl_get_sockaddr(), &in_len, SOCK_NONBLOCK));
 #endif
 			if (!sd.is_valid()) {
-				// All errors are divided into 2 classes - those that remove entry from backlog
+				if (errno == EAGAIN || errno == EWOULDBLOCK) {
+					a_handler.can_read = false;
+					return false;
+				}
+				// All real errors are divided into 2 classes - those that remove entry from backlog
 				// and those that do not. If we hit any system limit, entry remains in backlog
-				if (errno == EMFILE || errno == ENFILE || errno == ENOBUFS || errno == ENOMEM) {
-					// This message is not a security risk, will not be printed more than once/sec
+				// and we must attempt accepting later, when hopefully resources will be freed
+				// First we check errors that remove entry from backlog plus EINTR
+				if (errno == ECONNABORTED || errno == EPERM || errno == EINTR) {
+					continue;  // repeat accept()
+				}
+				// Then we check errors that definitely leave entry in backlog
+				// Printing message is not a security risk, will not be printed more than once/sec
+				if (errno == EMFILE || errno == ENFILE || errno == ENOBUFS || errno == ENOMEM || errno == ENOSR) {
 					std::cout << "TCPAcceptor accept() call hit system limits, errno=" << errno
 					          << ", please increase system limits or set lower limits in user code" << std::endl;
-					fd_limit_timer.once(1);
+				} else {
+					// Kernels can return multitude of different errors during network adapter reconfiguration
+					// And for other reasons. Those errors tend to disappear, we wish to resume normal work after
+					// that, so we log them and retry
+					std::cout << "TCPAcceptor accept() call returns unexpected error, errno=" << errno
+					          << ", will retry accept() in 1 one second" << std::endl;
 				}
+				fd_limit_timer.once(1);
 				return false;
 			}
 #if CRAB_SOCKET_KEVENT

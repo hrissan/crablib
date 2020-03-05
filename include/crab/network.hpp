@@ -163,7 +163,7 @@ public:
 	// either returns false or returns true and will call rwd_handler in future
 
 	void accept(TCPAcceptor &acceptor, Address *accepted_addr = nullptr);
-	// throws if acceptor.can_accept() is false
+	// throws if acceptor.can_accept() is false, so check can_accept() before
 
 	size_t read_some(uint8_t *val, size_t count) override;
 	// reads 0..count-1, if returns 0 (incoming buffer empty) would
@@ -204,7 +204,7 @@ public:
 	explicit TCPAcceptor(const Address &address, Handler &&a_handler);
 	~TCPAcceptor();
 
-	bool can_accept();
+	bool can_accept();  // Very fast if nothing to accept
 
 private:
 	friend class TCPSocket;  // accept needs access
