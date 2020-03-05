@@ -10,6 +10,7 @@
 
 #include <arpa/inet.h>
 #include <fcntl.h>
+#include <net/if.h>
 #include <netdb.h>
 #include <netinet/tcp.h>
 #include <signal.h>
@@ -64,6 +65,25 @@ CRAB_INLINE void set_nonblocking(int fd) {
 	check(flags >= 0, "crab::set_nonblocking get flags failed");
 	flags |= O_NONBLOCK;
 	check(fcntl(fd, F_SETFL, flags) >= 0, "crab::set_nonblocking set flags failed");
+}
+
+CRAB_INLINE ip_mreqn fill_ip_mreqn(const std::string &adapter) {
+	ip_mreqn mreq{};
+	mreq.imr_address.s_addr = htonl(INADDR_ANY);
+	if (adapter.empty())
+		return mreq;  // Default adapter
+	mreq.imr_ifindex = static_cast<int>(if_nametoindex(adapter.c_str()));
+	if (mreq.imr_ifindex != 0)
+		return mreq;  // By network adapter name
+	Address adapter_address;
+	if (!Address::parse(adapter_address, adapter, 0))
+		throw std::runtime_error(
+		    "Multicast Adapter must be specified either by interface name or by interface ip-address");
+	if (adapter_address.impl_get_sockaddr()->sa_family != AF_INET)
+		throw std::runtime_error("IPv6 multicast not supported yet");
+	auto adapter_sa  = reinterpret_cast<const sockaddr_in *>(adapter_address.impl_get_sockaddr());
+	mreq.imr_address = adapter_sa->sin_addr;
+	return mreq;
 }
 
 }  // namespace details
@@ -448,15 +468,17 @@ CRAB_INLINE bool TCPAcceptor::can_accept() {
 	}
 }
 
-CRAB_INLINE UDPTransmitter::UDPTransmitter(const Address &address, Handler &&cb) : w_handler(std::move(cb)) {
+CRAB_INLINE UDPTransmitter::UDPTransmitter(const Address &address, Handler &&cb, const std::string &adapter)
+    : w_handler(std::move(cb)) {
 	details::FileDescriptor tmp(::socket(address.impl_get_sockaddr()->sa_family, SOCK_DGRAM, IPPROTO_UDP),
 	    "crab::UDPTransmitter socket() failed");
 	details::set_nonblocking(tmp.get_value());
 
 	if (address.is_multicast_group()) {
 		details::setsockopt_1(tmp.get_value(), SOL_SOCKET, SO_BROADCAST);
-		// details::setsockopt_1(tmp.get_value(), IPPROTO_IP, IP_MULTICAST_LOOP);
-
+		auto mreq = details::fill_ip_mreqn(adapter);
+		details::check(setsockopt(fd.get_value(), IPPROTO_IP, IP_MULTICAST_IF, &mreq, sizeof(mreq)) >= 0,
+		    "crab::UDPTransmitter: Failed to select multicast adapter");
 		// On multiadapter system, we should select adapter to send multicast to,
 		// unlike unicast, where adapter is selected based on routing table.
 		// If performance is not important (service discovery, etc), we could loop all adapters in send_datagram
@@ -497,7 +519,8 @@ CRAB_INLINE size_t UDPTransmitter::write_datagram(const uint8_t *data, size_t co
 	return result;
 }
 
-CRAB_INLINE UDPReceiver::UDPReceiver(const Address &address, Handler &&cb) : r_handler(std::move(cb)) {
+CRAB_INLINE UDPReceiver::UDPReceiver(const Address &address, Handler &&cb, const std::string &adapter)
+    : r_handler(std::move(cb)) {
 	// On Linux & Mac OSX we can bind either to 0.0.0.0, adapter address or multicast group
 	details::FileDescriptor tmp(::socket(address.impl_get_sockaddr()->sa_family, SOCK_DGRAM, IPPROTO_UDP),
 	    "crab::UDPReceiver socket() failed");
@@ -510,18 +533,15 @@ CRAB_INLINE UDPReceiver::UDPReceiver(const Address &address, Handler &&cb) : r_h
 	if (address.is_multicast_group()) {
 		if (address.impl_get_sockaddr()->sa_family != AF_INET)
 			throw std::runtime_error("IPv6 multicast not supported yet");
-		const sockaddr_in *sa = reinterpret_cast<const sockaddr_in *>(address.impl_get_sockaddr());
+		auto sa = reinterpret_cast<const sockaddr_in *>(address.impl_get_sockaddr());
 		// TODO - handle IPv6 multicast
-		// On Linux, multicast is broken. INADDR_ANY does not mean "any adapter", but "default one"
+		// On Linux, multicast is a bit broken. INADDR_ANY does not mean "any adapter", but "default one"
 		// So, to listen to all adapters, we must call setsockopt per adapter.
 		// And then listen to changes of adapters list (how?), and call setsockopt on each new adapter.
 		// Compare to TCP or UDP unicast, where INADDR_ANY correctly means listening on all adapter.
 		// Sadly, same on Mac OSX
-
-		// TODO - handle multiple adapters, check adapter configuration changes with simple crab::Timer
-		ip_mreq mreq{};
-		mreq.imr_multiaddr        = sa->sin_addr;
-		mreq.imr_interface.s_addr = htonl(INADDR_ANY);
+		auto mreq          = details::fill_ip_mreqn(adapter);
+		mreq.imr_multiaddr = sa->sin_addr;
 		details::check(setsockopt(tmp.get_value(), IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) >= 0,
 		    "crab::UDPReceiver: Failed to join multicast group");
 	}

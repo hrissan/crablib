@@ -10,19 +10,17 @@
 
 namespace crab {
 
-CRAB_INLINE Address::Address() { addr.ss_family = AF_INET; }
-
-CRAB_INLINE bool Address::parse(Address &address, const std::string &numeric_host, uint16_t port) {
+CRAB_INLINE bool Address::parse(Address &address, const std::string &ip, uint16_t port) {
 	Address tmp;
 	auto ap6 = reinterpret_cast<sockaddr_in6 *>(tmp.impl_get_sockaddr());
-	if (inet_pton(AF_INET6, numeric_host.c_str(), &ap6->sin6_addr) == 1) {
+	if (inet_pton(AF_INET6, ip.c_str(), &ap6->sin6_addr) == 1) {
 		tmp.addr.ss_family = AF_INET6;
 		ap6->sin6_port     = htons(port);
 		address            = tmp;
 		return true;
 	}
 	auto ap = reinterpret_cast<sockaddr_in *>(tmp.impl_get_sockaddr());
-	if (inet_pton(AF_INET, numeric_host.c_str(), &ap->sin_addr) == 1) {
+	if (inet_pton(AF_INET, ip.c_str(), &ap->sin_addr) == 1) {
 		tmp.addr.ss_family = AF_INET;
 		ap->sin_port       = htons(port);
 		address            = tmp;

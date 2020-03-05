@@ -7,6 +7,7 @@
 #include <chrono>
 #include <condition_variable>
 #include <functional>
+#include <iosfwd>
 #include <list>
 #include <memory>
 #include <mutex>
@@ -128,13 +129,16 @@ private:
 
 class Address {
 public:
-	Address();
-	Address(const std::string &numeric_host, uint16_t port);
+	Address() = default;  // unspecified family
+	Address(const std::string &ip, uint16_t port);
+	explicit Address(const std::string &ip_port);
 
-	static bool parse(Address &address, const std::string &numeric_host, uint16_t port);
+	static bool parse(Address &address, const std::string &ip, uint16_t port);
+	static bool parse(Address &address, const std::string &ip_port);
 
 	std::string get_address() const;
 	uint16_t get_port() const;
+	std::string to_string() const { return get_address() + ":" + std::to_string(get_port()); }
 	bool is_multicast_group() const;
 
 #if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL || CRAB_SOCKET_WINDOWS
@@ -147,6 +151,8 @@ private:
 #else
 #endif
 };
+
+std::ostream &operator<<(std::ostream &os, const Address &msg);
 
 // socket is not RAII because it can go to disconnected state by external interaction
 class TCPSocket : public IStream, public OStream {
@@ -236,7 +242,8 @@ private:
 // Abstracts UDP outgoing buffer with event on buffer space available
 class UDPTransmitter {
 public:
-	explicit UDPTransmitter(const Address &address, Handler &&w_handler);
+	explicit UDPTransmitter(const Address &address, Handler &&w_handler, const std::string &adapter = std::string{});
+	// If multicast group address is used, receiver will transmit on specified or default adapter
 
 	size_t write_datagram(const uint8_t *data, size_t count);
 	// either returns count (if written into buffer) or 0 (if buffer is full or a error occurs)
@@ -255,8 +262,9 @@ private:
 
 class UDPReceiver {
 public:
-	explicit UDPReceiver(const Address &address, Handler &&r_handler);
+	explicit UDPReceiver(const Address &address, Handler &&r_handler, const std::string &adapter = std::string{});
 	// address must be either local adapter address (127.0.0.1, 0.0.0.0) or multicast group address
+	// If multicast group address is used, receiver will join group on specified or default adapter
 
 	static constexpr size_t MAX_DATAGRAM_SIZE = 65536;
 	bool read_datagram(uint8_t *data, size_t *size, Address *peer_addr = nullptr);
@@ -370,7 +378,7 @@ public:
 	static std::vector<Address> sync_resolve(const std::string &host_name, uint16_t port, bool ipv4, bool ipv6);
 
 	static Address sync_resolve_single(const std::string &host_name, uint16_t port);
-	// Convenience method - resolves synchronously, prefer IPv4, return first address
+	// Convenience method - resolve synchronously, prefer IPv4, return first address or throw
 
 private:
 	friend class details::DNSWorker;

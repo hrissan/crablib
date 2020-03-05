@@ -9,9 +9,27 @@
 
 namespace crab {
 
-CRAB_INLINE Address::Address(const std::string &numeric_host, uint16_t port) {
-	if (!parse(*this, numeric_host, port))
-		throw std::runtime_error("Address failed to parse, numeric_host='" + numeric_host + "'");
+CRAB_INLINE Address::Address(const std::string &ip, uint16_t port) {
+	if (!parse(*this, ip, port))
+		if (!parse(*this, ip, port))
+			throw std::runtime_error("Address failed to parse, numeric_host='" + ip + "'");
+}
+
+CRAB_INLINE Address::Address(const std::string &ip_port) {
+	if (!parse(*this, ip_port))
+		throw std::runtime_error("Address failed to parse, must be <ip>:<port> numeric_host_port='" + ip_port + "'");
+}
+
+CRAB_INLINE bool Address::parse(Address &address, const std::string &ip_port) {
+	size_t pos = ip_port.find(':');
+	if (pos == std::string::npos)
+		return false;
+	uint16_t port = static_cast<uint16_t>(std::stoi(ip_port.substr(pos + 1)));
+	return parse(address, ip_port.substr(0, pos), port);
+}
+
+CRAB_INLINE std::ostream &operator<<(std::ostream &os, const Address &msg) {
+	return os << msg.get_address() << ":" << msg.get_port();
 }
 
 CRAB_INLINE void TCPSocket::set_handler(Handler &&rwd_handler) { this->rwd_handler.handler = std::move(rwd_handler); }
