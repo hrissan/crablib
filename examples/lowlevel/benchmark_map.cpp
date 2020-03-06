@@ -323,6 +323,24 @@ struct BucketsGetter<std::unordered_map<std::string, size_t>> {
 
 constexpr size_t COUNT = 1000000;
 
+template<typename K, typename T, size_t max_key>
+class ArrayAdapter {  // Array large enough to index by K
+public:
+	void emplace(K k, T t) {
+		std::pair<T, bool> &pa = storage.at(k);
+		if (pa.second)
+			return;
+		storage_size += 1;
+		pa = std::make_pair(t, true);
+	}
+	size_t size() const { return 1000; }
+	size_t count(K k) const { return storage.at(k).second ? 1 : 0; }
+
+private:
+	size_t storage_size = 0;
+	std::array<std::pair<T, bool>, max_key + 1> storage;
+};
+
 template<typename T, typename S>
 void benchmark(std::function<T(size_t)> items_gen) {
 	S storage;
@@ -417,6 +435,14 @@ struct hash<OrderId> {
 
 int main() {
 	//	benchmark_sets();
+	std::cout << "Testing small std::map<int> count=" << COUNT << std::endl;
+	benchmark<int, std::map<int, size_t>>(small_int_gen);
+	std::cout << "Testing small std::unordered<int> count=" << COUNT << std::endl;
+	benchmark<int, std::unordered_map<int, size_t>>(small_int_gen);
+	std::cout << "Testing small ArrayAdapter count=" << COUNT << std::endl;
+	benchmark<int, ArrayAdapter<int, size_t, 2000>>(small_int_gen);
+	std::cout << "----" << std::endl;
+
 	std::cout << "Testing std::map<std::string> count=" << COUNT << std::endl;
 	benchmark<std::string, std::map<std::string, size_t>>(string_gen);
 	std::cout << "Testing std::unordered<std::string> count=" << COUNT << std::endl;
@@ -431,10 +457,5 @@ int main() {
 	benchmark<int, std::unordered_map<int, size_t>>(int_gen);
 	std::cout << "----" << std::endl;
 
-	std::cout << "Testing small std::map<int> count=" << COUNT << std::endl;
-	benchmark<int, std::map<int, size_t>>(small_int_gen);
-	std::cout << "Testing small std::unordered<int> count=" << COUNT << std::endl;
-	benchmark<int, std::unordered_map<int, size_t>>(small_int_gen);
-	std::cout << "----" << std::endl;
 	return 0;
 }

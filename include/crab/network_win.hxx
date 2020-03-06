@@ -82,7 +82,7 @@ static int tcp_id_counter = 0;  // TODO - global
 struct RunLoopImpl {
 	details::Overlapped wake_handler;
 	details::AutoHandle completion_queue;
-	std::atomic<size_t> pending_counter{0};
+	std::atomic<size_t> pending_counter{0};  // TODO - check that atomic is requried, probably remove
 	size_t impl_counter = 0;
 
 	explicit RunLoopImpl(Handler &&cb) : wake_handler([mcb = std::move(cb)](DWORD bytes, bool result) { mcb(); }) {
@@ -99,6 +99,7 @@ struct RunLoopImpl {
 CRAB_INLINE RunLoop::RunLoop() : impl(new RunLoopImpl([this]() { links.trigger_called_watchers(); })) {
 	if (CurrentLoop::instance)
 		throw std::runtime_error("RunLoop::RunLoop Only single RunLoop per thread is allowed");
+	performance.reserve(MAX_PERFORMANCE_RECORDS);
 	CurrentLoop::instance = this;
 }
 
@@ -143,13 +144,13 @@ CRAB_INLINE void RunLoop::step(int timeout_ms) {
 			throw std::runtime_error("GetQueuedCompletionStatusEx error");
 		return;  // n is garbage in this case
 	}
-	if (n)
-		push_record("GetQueuedCompletionStatusEx", n);
-	details::StaticHolder<PerformanceStats>::instance.EPOLL_count += 1;
-	details::StaticHolder<PerformanceStats>::instance.EPOLL_size += n;
+	push_record("GetQueuedCompletionStatusEx", 0, n);
+	stats.EPOLL_count += 1;
+	stats.EPOLL_size += n;
 	for (int i = 0; i != n; ++i) {
 		if (events[i].lpCompletionKey != details::OverlappedKey)
 			continue;
+		// TODO - push_record each overlapped
 		details::Overlapped *our_ovl = static_cast<details::Overlapped *>(events[i].lpOverlapped);
 		our_ovl->handler(events[i].dwNumberOfBytesTransferred, true);
 	}

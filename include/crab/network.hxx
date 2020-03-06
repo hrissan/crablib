@@ -9,6 +9,21 @@
 
 namespace crab {
 
+CRAB_INLINE PerformanceStats::PerformanceStats() { performance.reserve(MAX_PERFORMANCE_RECORDS); }
+CRAB_INLINE void PerformanceStats::push_record(const char *event_type_literal, int fd, int count) {
+	if (performance.size() < MAX_PERFORMANCE_RECORDS)
+		performance.emplace_back(std::chrono::steady_clock::now(), event_type_literal, fd, count);
+}
+
+CRAB_INLINE void PerformanceStats::print_records(std::ostream &out) {
+	for (const auto &p : get_records()) {
+		auto mksec = std::chrono::duration_cast<std::chrono::microseconds>(p.tm.time_since_epoch()).count();
+		auto sec   = mksec / 1000000;
+		std::cout << "* " << sec << "." << mksec % 1000000 << " " << p.event_type << " " << p.count << std::endl;
+	}
+	clear_records();
+}
+
 CRAB_INLINE Address::Address(const std::string &ip, uint16_t port) {
 	if (!parse(*this, ip, port))
 		if (!parse(*this, ip, port))
@@ -33,24 +48,6 @@ CRAB_INLINE std::ostream &operator<<(std::ostream &os, const Address &msg) {
 }
 
 CRAB_INLINE void TCPSocket::set_handler(Handler &&rwd_handler) { this->rwd_handler.handler = std::move(rwd_handler); }
-
-CRAB_INLINE void RunLoop::push_record(const char *event_type, size_t count) {
-	performance.emplace_back(std::chrono::steady_clock::now(), event_type, count);
-}
-
-CRAB_INLINE std::vector<PerformanceRecord> RunLoop::pop_records() {
-	std::vector<PerformanceRecord> result;
-	result.swap(performance);
-	return result;
-}
-
-CRAB_INLINE void RunLoop::print_records() {
-	for (const auto &p : pop_records()) {
-		auto mksec = std::chrono::duration_cast<std::chrono::microseconds>(p.tm.time_since_epoch()).count();
-		auto sec   = mksec / 1000000;
-		std::cout << "* " << sec << "." << mksec % 1000000 << " " << p.event_type << " " << p.count << std::endl;
-	}
-}
 
 #if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL || CRAB_SOCKET_WINDOWS
 

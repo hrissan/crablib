@@ -43,11 +43,11 @@ int test_http(size_t num, uint16_t port) {
 
 	std::unique_ptr<Timer> stat_timer;
 	stat_timer.reset(new Timer([&]() {
-		const auto &st = RunLoop::get_stats();
+		const auto &st = RunLoop::current()->stats;
 		std::cout << num << " ---- EPOLL_count=" << st.EPOLL_count << " EPOLL_size=" << st.EPOLL_size << std::endl;
 		std::cout << "RECV_count=" << st.RECV_count << " RECV_size=" << st.RECV_size << std::endl;
 		std::cout << "SEND_count=" << st.SEND_count << " SEND_size=" << st.SEND_size << std::endl;
-		runloop.print_records();
+		runloop.stats.print_records(std::cout);
 		stat_timer->once(1);
 	}));
 	stat_timer->once(1);

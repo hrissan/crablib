@@ -62,7 +62,7 @@ int test_proxy(int num, uint16_t port, uint16_t upstream_port) {
 		//        std::cout << lm.save(&it->second) << std::endl;
 		rws->write(http::WebMessage(lm.save(&it->second)));
 
-		runloop.print_records();
+		runloop.stats.print_records(std::cout);
 	};
 
 	// size_t message_counter = 0;
@@ -87,7 +87,7 @@ int test_proxy(int num, uint16_t port, uint16_t upstream_port) {
 			    reply.opcode = http::WebMessage::OPCODE_TEXT;
 			    reply.body   = lm.save();
 			    it->second->write(std::move(reply));
-			    runloop.print_records();
+			    runloop.stats.print_records(std::cout);
 		    }
 	    },
 	    [&]() { std::cout << std::endl
@@ -98,7 +98,7 @@ int test_proxy(int num, uint16_t port, uint16_t upstream_port) {
 	req.path = "/ws";
 	rws->connect(crab::Address("127.0.0.1", upstream_port), req);
 
-	stat_timer.reset(new Timer([&]() { runloop.print_records(); }));
+	stat_timer.reset(new Timer([&]() { runloop.stats.print_records(std::cout); }));
 	stat_timer->once(1);
 
 	runloop.run();

@@ -17,6 +17,7 @@ namespace crab {
 RunLoop::RunLoop() {
 	if (current_loop != 0)
 		throw std::runtime_error("RunLoop::RunLoop Only single RunLoop per thread is allowed");
+	performance.reserve(MAX_PERFORMANCE_RECORDS);
 	current_loop = this;
 }
 

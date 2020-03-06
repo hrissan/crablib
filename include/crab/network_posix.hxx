@@ -105,6 +105,7 @@ CRAB_INLINE RunLoop::RunLoop()
 		details::EVFILT_USER_WAKEUP, EVFILT_USER, EV_ADD | EV_CLEAR, 0, 0, nullptr
 	};
 	details::check(kevent(efd.get_value(), &changeLst, 1, 0, 0, NULL) >= 0, "crab::RunLoopBase kevent_modify failed");
+	performance.reserve(MAX_PERFORMANCE_RECORDS);
 	CurrentLoop::instance = this;
 }
 
@@ -137,13 +138,13 @@ CRAB_INLINE void RunLoop::step(int timeout_ms) {
 		details::check(errno == EINTR, "RunLoop::step kevent unexpected error");
 		return;
 	}
-	if (n)
-		push_record("kevent", n);
-	details::StaticHolder<PerformanceStats>::instance.EPOLL_count += 1;
-	details::StaticHolder<PerformanceStats>::instance.EPOLL_size += n;
+	push_record("kevent", efd.get_value(), n);
+	stats.EPOLL_count += 1;
+	stats.EPOLL_size += n;
 	for (int i = 0; i != n; ++i) {
 		auto &ev       = events[i];
 		Callable *impl = static_cast<Callable *>(ev.udata);
+		push_record("  event", ev.fd, ev.filter);
 		impl->add_pending_callable(ev.filter == EVFILT_READ, ev.filter == EVFILT_WRITE);
 	}
 }
@@ -203,14 +204,14 @@ CRAB_INLINE void RunLoop::step(int timeout_ms) {
 		details::check(errno == EINTR, "RunLoop::step epoll_wait unexpected error");
 		return;
 	}
-	if (n)
-		push_record("epoll_wait", n);
-	details::StaticHolder<PerformanceStats>::instance.EPOLL_count += 1;
-	details::StaticHolder<PerformanceStats>::instance.EPOLL_size += n;
+	stats.push_record("epoll_wait", efd.get_value(), n);
+	stats.EPOLL_count += 1;
+	stats.EPOLL_size += n;
 	for (int i = 0; i != n; ++i) {
 		auto &ev               = events[i];
 		auto impl              = static_cast<Callable *>(ev.data.ptr);
 		const auto read_events = EPOLLIN | EPOLLERR | EPOLLHUP | EPOLLRDHUP;
+		stats.push_record("  event", ev.data.fd, ev.events);
 		// Those events will trigger socket close after recv() returns -1 or 0
 		impl->add_pending_callable(ev.events & read_events, ev.events & EPOLLOUT);
 	}
@@ -346,10 +347,10 @@ CRAB_INLINE void TCPSocket::accept(TCPAcceptor &acceptor, Address *accepted_addr
 CRAB_INLINE size_t TCPSocket::read_some(uint8_t *data, size_t count) {
 	if (!fd.is_valid() || !rwd_handler.can_read)
 		return 0;
-	details::StaticHolder<PerformanceStats>::instance.RECV_count += 1;
-	RunLoop::current()->push_record("recv", int(count));
+	RunLoop::current()->stats.RECV_count += 1;
+	RunLoop::current()->stats.push_record("recv", fd.get_value(), int(count));
 	ssize_t result = ::recv(fd.get_value(), data, count, details::CRAB_MSG_NOSIGNAL);
-	RunLoop::current()->push_record("R(recv)", int(result));
+	RunLoop::current()->stats.push_record("R(recv)", fd.get_value(), int(result));
 	if (result == 0) {  // remote closed
 		close();
 		rwd_handler.add_pending_callable(true, false);
@@ -364,17 +365,17 @@ CRAB_INLINE size_t TCPSocket::read_some(uint8_t *data, size_t count) {
 		rwd_handler.can_read = false;
 		return 0;  // Will fire on_epoll_call in future automatically
 	}
-	details::StaticHolder<PerformanceStats>::instance.RECV_size += result;
+	RunLoop::current()->stats.RECV_size += result;
 	return result;
 }
 
 CRAB_INLINE size_t TCPSocket::write_some(const uint8_t *data, size_t count) {
 	if (!fd.is_valid() || !rwd_handler.can_write)
 		return 0;
-	details::StaticHolder<PerformanceStats>::instance.SEND_count += 1;
-	RunLoop::current()->push_record("send", int(count));
+	RunLoop::current()->stats.SEND_count += 1;
+	RunLoop::current()->stats.push_record("send", fd.get_value(), int(count));
 	ssize_t result = ::send(fd.get_value(), data, count, details::CRAB_MSG_NOSIGNAL);
-	RunLoop::current()->push_record("R(send)", int(result));
+	RunLoop::current()->stats.push_record("R(send)", fd.get_value(), int(result));
 	if (result < 0) {
 		if (errno != EAGAIN && errno != EWOULDBLOCK) {  // some REAL error
 			close();
@@ -384,7 +385,7 @@ CRAB_INLINE size_t TCPSocket::write_some(const uint8_t *data, size_t count) {
 		rwd_handler.can_write = false;
 		return 0;  // Will fire on_epoll_call in future automatically
 	}
-	details::StaticHolder<PerformanceStats>::instance.SEND_size += result;
+	RunLoop::current()->stats.SEND_size += result;
 	return result;
 }
 
@@ -502,10 +503,10 @@ CRAB_INLINE UDPTransmitter::UDPTransmitter(const Address &address, Handler &&cb,
 CRAB_INLINE size_t UDPTransmitter::write_datagram(const uint8_t *data, size_t count) {
 	if (!fd.is_valid() || !w_handler.can_write)
 		return 0;
-	details::StaticHolder<PerformanceStats>::instance.UDP_SEND_count += 1;
-	RunLoop::current()->push_record("sendto", int(count));
+	RunLoop::current()->stats.UDP_SEND_count += 1;
+	RunLoop::current()->stats.push_record("sendto", fd.get_value(), int(count));
 	ssize_t result = ::sendto(fd.get_value(), data, count, details::CRAB_MSG_NOSIGNAL, nullptr, 0);
-	RunLoop::current()->push_record("R(sendto)", int(result));
+	RunLoop::current()->stats.push_record("R(sendto)", fd.get_value(), int(result));
 	if (result < 0) {
 		if (errno != EAGAIN && errno != EWOULDBLOCK) {  // some REAL error
 			// If no one is listening on the other side, after receiving ICMP report, error 111 is returned on Linux
@@ -515,7 +516,7 @@ CRAB_INLINE size_t UDPTransmitter::write_datagram(const uint8_t *data, size_t co
 		w_handler.can_write = false;
 		return 0;  // Will fire on_epoll_call in future automatically
 	}
-	details::StaticHolder<PerformanceStats>::instance.UDP_SEND_size += result;
+	RunLoop::current()->stats.UDP_SEND_size += result;
 	return result;
 }
 
@@ -558,11 +559,11 @@ CRAB_INLINE bool UDPReceiver::read_datagram(uint8_t *data, size_t *size, Address
 		return false;
 	Address in_addr;
 	socklen_t in_len = sizeof(sockaddr_storage);
-	details::StaticHolder<PerformanceStats>::instance.UDP_RECV_count += 1;
-	RunLoop::current()->push_record("recvfrom", int(MAX_DATAGRAM_SIZE));
+	RunLoop::current()->stats.UDP_RECV_count += 1;
+	RunLoop::current()->stats.push_record("recvfrom", fd.get_value(), int(MAX_DATAGRAM_SIZE));
 	ssize_t result = recvfrom(
 	    fd.get_value(), data, MAX_DATAGRAM_SIZE, details::CRAB_MSG_NOSIGNAL, in_addr.impl_get_sockaddr(), &in_len);
-	RunLoop::current()->push_record("R(recvfrom)", int(result));
+	RunLoop::current()->stats.push_record("R(recvfrom)", fd.get_value(), int(result));
 	if (result < 0) {
 		// Sometimes (for example during adding/removing network adapters), errors could be returned on Linux
 		// We will ignore all errors here, in hope they will disappear soon
@@ -571,7 +572,7 @@ CRAB_INLINE bool UDPReceiver::read_datagram(uint8_t *data, size_t *size, Address
 	if (peer_addr) {
 		*peer_addr = in_addr;
 	}
-	details::StaticHolder<PerformanceStats>::instance.UDP_RECV_size += result;
+	RunLoop::current()->stats.UDP_RECV_size += result;
 	*size = result;
 	return true;
 }

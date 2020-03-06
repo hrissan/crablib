@@ -121,12 +121,12 @@ int test_http(size_t num, uint16_t port) {
 			reply.body   = "Echo from Crab: " + message.body;
 			who->write(std::move(reply));
 		}
-		runloop.print_records();
+		runloop.stats.print_records(std::cout);
 	};
 
 	std::unique_ptr<Timer> stat_timer;
 	stat_timer.reset(new Timer([&]() {
-		const auto &st = RunLoop::get_stats();
+		const auto &st = RunLoop::current()->stats;
 		std::cout << num << " ---- req_counter=" << req_counter << " EPOLL_count=" << st.EPOLL_count
 		          << " EPOLL_size=" << st.EPOLL_size << std::endl;
 		std::cout << "RECV_count=" << st.RECV_count << " RECV_size=" << st.RECV_size << std::endl;
@@ -157,10 +157,10 @@ int test_client(int num, uint16_t port) {
 	    [&]() {
 		    http::WebMessage wm;
 		    while (rws->read_next(wm)) {
-			    runloop.push_record("OnWebMessage", message_counter);
+			    runloop.stats.push_record("OnWebMessage", 0, message_counter);
 			    const auto idea_ms = std::chrono::duration_cast<std::chrono::microseconds>(
 			        std::chrono::high_resolution_clock::now() - message_start);
-			    runloop.print_records();
+			    runloop.stats.print_records(std::cout);
 			    if (wm.is_binary()) {
 				    std::cout << "Client Got Message: <Binary message> time=" << idea_ms.count() << " mks"
 				              << std::endl;
@@ -185,7 +185,7 @@ int test_client(int num, uint16_t port) {
 		wm.opcode     = http::WebMessage::OPCODE_TEXT;
 		wm.body       = "Message " + std::to_string(message_counter);
 		message_start = std::chrono::high_resolution_clock::now();
-		runloop.push_record("SendWebMessage", message_counter);
+		runloop.stats.push_record("SendWebMessage", 0, message_counter);
 		//		crab::add_performance('C', message_counter);
 		//		crab::add_performance('D', message_counter);
 		//		std::cout << "Send time" << tofd_cstr() << std::endl;

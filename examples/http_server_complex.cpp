@@ -72,7 +72,7 @@ public:
 			} else {
 				who->write(http::WebMessage("Echo from Crab: " + message.body));
 			}
-			crab::RunLoop::current()->print_records();
+			crab::RunLoop::current()->stats.print_records(std::cout);
 		};
 		stat_timer.once(1);
 	}
@@ -81,7 +81,7 @@ private:
 	void on_stat_timer() {
 		stat_timer.once(1);
 
-		const auto &st = crab::RunLoop::get_stats();
+		const auto &st = crab::RunLoop::current()->stats;
 		std::cout << " ---- req_counter=" << req_counter << " EPOLL_count=" << st.EPOLL_count
 		          << " EPOLL_size=" << st.EPOLL_size << std::endl;
 		std::cout << "RECV_count=" << st.RECV_count << " RECV_size=" << st.RECV_size << std::endl;

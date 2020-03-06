@@ -21,24 +21,40 @@ namespace crab {
 
 struct PerformanceRecord {
 	std::chrono::steady_clock::time_point tm;
-	const char *event_type = nullptr;  // (Only literals, please)
-	size_t count           = 0;        // bytes, bytes, events
+	const char *event_type = nullptr;  // Only literals, so recording is very fast
+	int fd                 = 0;        // fd or user object identifier
+	int count              = 0;        // bytes, events or mask
 	PerformanceRecord()    = default;  // brace-initializer does not work with C++11, hence constructors
-	PerformanceRecord(std::chrono::steady_clock::time_point tm, const char *event_type, size_t count)
-	    : tm(tm), event_type(event_type), count(count) {}
+	PerformanceRecord(std::chrono::steady_clock::time_point tm, const char *event_type, int fd, int count)
+	    : tm(tm), event_type(event_type), fd(fd), count(count) {}
 };
 
-struct PerformanceStats {
-	std::atomic<size_t> RECV_count{};
-	std::atomic<size_t> RECV_size{};
-	std::atomic<size_t> SEND_count{};
-	std::atomic<size_t> SEND_size{};
-	std::atomic<size_t> EPOLL_count{};
-	std::atomic<size_t> EPOLL_size{};
-	std::atomic<size_t> UDP_RECV_count{};
-	std::atomic<size_t> UDP_RECV_size{};
-	std::atomic<size_t> UDP_SEND_count{};
-	std::atomic<size_t> UDP_SEND_size{};
+class PerformanceStats {
+public:
+	PerformanceStats();
+
+	// If you do not clear records periodically, push_record() becomes very fast NOP
+	// after MAX_PERFORMANCE_RECORDS events recorded.
+	enum { MAX_PERFORMANCE_RECORDS = 100000 };  // Arbitrary constant
+
+	void push_record(const char *event_type_literal, int fd, int count);  // Pass only literals here
+	const std::vector<PerformanceRecord> &get_records() const { return performance; }
+	void clear_records() { performance.clear(); }
+	void print_records(std::ostream &out);  // Also clears
+
+	size_t RECV_count     = 0;
+	size_t RECV_size      = 0;
+	size_t SEND_count     = 0;
+	size_t SEND_size      = 0;
+	size_t EPOLL_count    = 0;
+	size_t EPOLL_size     = 0;
+	size_t UDP_RECV_count = 0;
+	size_t UDP_RECV_size  = 0;
+	size_t UDP_SEND_count = 0;
+	size_t UDP_SEND_size  = 0;
+
+private:
+	std::vector<PerformanceRecord> performance;
 };
 
 class Timer {
@@ -319,12 +335,7 @@ public:
 	void cancel();
 	// do not call from other threads, use active object in that case
 
-	// Performance monitoring
-	void push_record(const char *event_type, size_t count);
-	std::vector<PerformanceRecord> pop_records();
-	void print_records();
-
-	static const PerformanceStats &get_stats() { return details::StaticHolder<PerformanceStats>::instance; }
+	PerformanceStats stats;  // User stats can also be recorded here
 
 	enum { MAX_SLEEP_MS = 30 * 60 * 1000 };  // 30 minutes
 	// On some systems, epoll_wait() timeouts greater than 35.79 minutes are treated as infinity.
@@ -361,8 +372,6 @@ private:
 #else
 	std::unique_ptr<RunLoopImpl> impl;
 #endif
-
-	std::vector<PerformanceRecord> performance;
 };
 
 class DNSResolver {

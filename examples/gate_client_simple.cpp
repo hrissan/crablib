@@ -29,7 +29,7 @@ int test_client(int num, const std::string &host, uint16_t port) {
 	    [&]() {
 		    http::WebMessage wm;
 		    while (rws->read_next(wm)) {
-			    runloop.push_record("OnWebMessage", message_counter);
+			    runloop.stats.push_record("OnWebMessage", 0, message_counter);
 			    //			    const auto idea_ms = std::chrono::duration_cast<std::chrono::microseconds>(
 			    //			        std::chrono::high_resolution_clock::now() - message_start);
 			    //			    runloop.print_records();
@@ -49,7 +49,7 @@ int test_client(int num, const std::string &host, uint16_t port) {
 			    }
 		    }
 		    stat_timer->once(1.0);
-		    runloop.print_records();
+		    runloop.stats.print_records(std::cout);
 	    },
 	    [&]() { std::cout << std::endl
 		                  << "test_disconnect" << std::endl; }));
@@ -70,7 +70,7 @@ int test_client(int num, const std::string &host, uint16_t port) {
 		wm.opcode     = http::WebMessage::OPCODE_TEXT;
 		wm.body       = lm.save();
 		message_start = std::chrono::high_resolution_clock::now();
-		runloop.push_record("SendWebMessage", message_counter);
+		runloop.stats.push_record("SendWebMessage", 0, message_counter);
 		rws->write(std::move(wm));
 	}));
 	stat_timer->once(1);

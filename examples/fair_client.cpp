@@ -35,7 +35,8 @@ private:
 			for (size_t i = 0; i != count; ++i) {
 				auto mksec = std::chrono::duration_cast<std::chrono::microseconds>(now - send_time.front()).count();
 				send_time.pop_front();
-				requests_time_mksec += mksec;
+				latency_sum_mksec += mksec;
+				latency_max_mksec = std::max<size_t>(latency_max_mksec, mksec);
 			}
 			requests_received += count;
 			crab::VectorStream vs;
@@ -44,7 +45,7 @@ private:
 		send_more_requests();
 	}
 	void send_more_requests() {
-		if (send_time.size() >= max_requests / 2)
+		if (send_time.size() > max_requests / 2)
 			return;
 		size_t count = max_requests - send_time.size();
 		socket.write(std::string(count, '1'));
@@ -63,18 +64,24 @@ private:
 		} else {
 			std::cout << "Upstream socket connection attempt started..." << std::endl;
 			send_time.clear();
-			requests_received   = 0;
-			requests_time_mksec = 0;
+			requests_received = 0;
+			latency_sum_mksec = 0;
+			latency_max_mksec = 0;
 			send_more_requests();
 		}
 	}
 	void print_stats() {
 		stat_timer.once(1);
-		double average_lat = requests_received == 0 ? 0 : double(requests_time_mksec) / requests_received;
 		std::cout << "responses received (during last second)=" << requests_received
-		          << ", requests in transit=" << send_time.size() << " lat=" << average_lat << std::endl;
-		requests_received   = 0;
-		requests_time_mksec = 0;
+		          << ", requests in transit=" << send_time.size();
+		if (requests_received != 0) {
+			double average_lat = double(latency_sum_mksec) / requests_received;
+			std::cout << " lat(av)=" << average_lat << " lat(max)=" << latency_max_mksec << std::endl;
+		} else
+			std::cout << std::endl;
+		requests_received = 0;
+		latency_sum_mksec = 0;
+		latency_max_mksec = 0;
 		if (max_requests == 0 && send_time.empty() && socket.is_open()) {
 			send_time.push_back(std::chrono::steady_clock::now());
 			socket.write(std::string(1, '1'));
@@ -88,8 +95,9 @@ private:
 
 	crab::Timer reconnect_timer;
 
-	size_t requests_received   = 0;
-	size_t requests_time_mksec = 0;
+	size_t requests_received = 0;
+	size_t latency_sum_mksec = 0;
+	size_t latency_max_mksec = 0;
 	std::deque<std::chrono::steady_clock::time_point> send_time;  // Also # of requests in transit
 	crab::Timer stat_timer;
 };
