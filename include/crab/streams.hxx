@@ -81,6 +81,18 @@ CRAB_INLINE size_t Buffer::write_to(OStream &out, size_t max_count) {
 	return total_count;
 }
 
+CRAB_INLINE bool Buffer::peek(uint8_t *val, size_t count) const {
+	if (size() < count)
+		return false;
+	if (read_count() >= count) {
+		memcpy(val, read_ptr(), count);
+		return true;
+	}
+	memcpy(val, read_ptr(), read_count());
+	memcpy(val + read_count(), read_ptr2(), count - read_count());
+	return true;
+}
+
 /*
 // Invariant - at least 1 chunk in rope container to avoid ifs
 Rope::Rope(size_t chunk_size) : chunk_size(chunk_size) {

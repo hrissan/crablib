@@ -36,6 +36,8 @@ CRAB_INLINE size_t BufferedTCPSocket::read_some(uint8_t *val, size_t count) {
 
 // TODO - do not allow to write when not connected (underlying socket has it as a NOP)
 CRAB_INLINE void BufferedTCPSocket::write(const uint8_t *val, size_t count, bool buffer_only) {
+	if (write_shutdown_asked)
+		return;
 	if (buffer_only) {
 		if (count == 0)
 			return;
@@ -51,13 +53,13 @@ CRAB_INLINE void BufferedTCPSocket::write(const uint8_t *val, size_t count, bool
 		val += wr;
 		count -= wr;
 	}
-	if (count == 0)
-		return;
-	total_buffer_size += count;
-	if (!data_to_write.empty() && data_to_write.size() < 1024)
-		data_to_write.back().write(val, count);
-	else
-		data_to_write.emplace_back(std::string(reinterpret_cast<const char *>(val), count));
+	if (count != 0) {
+		total_buffer_size += count;
+		if (!data_to_write.empty() && data_to_write.size() < 1024)
+			data_to_write.back().write(val, count);
+		else
+			data_to_write.emplace_back(std::string(reinterpret_cast<const char *>(val), count));
+	}
 	write();
 }
 

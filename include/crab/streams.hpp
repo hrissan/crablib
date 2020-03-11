@@ -62,7 +62,7 @@ public:
 	bool full() const { return read_pos + impl.size() == write_pos; }
 
 	size_t read_count() const { return write_pos < impl.size() ? write_pos - read_pos : impl.size() - read_pos; }
-	const uint8_t *read_ptr() { return impl.data() + read_pos; }
+	const uint8_t *read_ptr() const { return impl.data() + read_pos; }
 	size_t write_count() const {
 		return write_pos < impl.size() ? impl.size() - write_pos : read_pos - (write_pos - impl.size());
 	}
@@ -85,7 +85,7 @@ public:
 
 	// circular buffer has maximum 2 parts. this gives second part
 	size_t read_count2() const { return write_pos < impl.size() ? 0 : write_pos - impl.size(); }
-	const uint8_t *read_ptr2() { return impl.data(); }
+	const uint8_t *read_ptr2() const { return impl.data(); }
 	size_t write_count2() const { return write_pos < impl.size() ? read_pos : 0; }
 	uint8_t *write_ptr2() { return impl.data(); }
 
@@ -93,8 +93,7 @@ public:
 	size_t write_to(OStream &out, size_t max_count) override;  // returns # written
 	using IFiniteStream::write_to;
 
-	//	void write(const uint8_t *val, size_t count);
-	//	void write(const char *val, size_t count);
+	bool peek(uint8_t *val, size_t count) const;
 };
 
 /*class Rope : public IFiniteStream, public OStream {
