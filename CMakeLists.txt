@@ -101,6 +101,7 @@ add_executable(benchmark_getifaddrs ${SOURCE_FILES} examples/lowlevel/benchmark_
 add_executable(benchmark_atoi ${SOURCE_FILES} examples/lowlevel/benchmark_atoi.cpp)
 
 # tests
+add_executable(test_atoi ${SOURCE_FILES} test/test_atoi.cpp)
 add_executable(test_http_parsers ${SOURCE_FILES} test/test_http_parsers.cpp test/test_http_data.c)
 
 if(CRAB_FUZZ)

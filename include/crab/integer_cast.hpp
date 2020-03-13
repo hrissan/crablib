@@ -108,11 +108,11 @@ std::pair<T, const char *> integer_parse_impl(const char *begin, const char *end
 		while (begin != end) {
 			if (!isdigit(*begin))
 				break;
-			int digit      = *begin - '0';
-			constexpr T mi = std::numeric_limits<T>::min();
-			// remainder of negative num is implementation defined
-			constexpr int cutlim = static_cast<int>(mi / 10 * 10 - mi);
-			if (value < mi / 10 || (value == mi / 10 && digit > cutlim))
+			int digit              = *begin - '0';
+			constexpr T last_value = std::numeric_limits<T>::min() / 10;
+			// Note: rounding of negative / and % is implementation defined prior to C++11
+			constexpr int last_digit = -static_cast<int>(std::numeric_limits<T>::min() % 10);
+			if (value < last_value || (value == last_value && digit > last_digit))
 				return {value, "Number underflow "};
 			value = value * 10 - digit;
 			begin += 1;
@@ -139,10 +139,10 @@ std::pair<T, const char *> integer_parse_impl(const char *begin, const char *end
 		while (begin != end) {
 			if (!isdigit(*begin))
 				break;
-			int digit            = *begin - '0';
-			const T ma           = std::numeric_limits<T>::max();
-			constexpr int cutlim = static_cast<int>(ma % 10);
-			if (value > ma / 10 || (value == ma / 10 && digit > cutlim))
+			int digit                = *begin - '0';
+			const T last_value       = std::numeric_limits<T>::max() / 10;
+			constexpr int last_digit = static_cast<int>(std::numeric_limits<T>::max() % 10);
+			if (value > last_value || (value == last_value && digit > last_digit))
 				return {value, "Number overflow "};
 			value = value * 10 + digit;
 			begin += 1;
