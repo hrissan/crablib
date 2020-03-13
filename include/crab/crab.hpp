@@ -6,6 +6,7 @@
 #include "crab_version.hpp"
 #include "http/server.hpp"
 #include "http/web_socket.hpp"
+#include "integer_cast.hpp"
 #include "network.hpp"
 
 namespace crab {

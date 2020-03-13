@@ -34,6 +34,7 @@ set(SOURCE_FILES
 		include/crab/crab.cpp
 		include/crab/crab_version.hpp
 		include/crab/crab.hpp
+		include/crab/integer_cast.hpp
 		include/crab/intrusive_list.hpp
 		include/crab/intrusive_heap.hpp
 		include/crab/network.hpp

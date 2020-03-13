@@ -105,7 +105,6 @@ CRAB_INLINE RunLoop::RunLoop()
 		details::EVFILT_USER_WAKEUP, EVFILT_USER, EV_ADD | EV_CLEAR, 0, 0, nullptr
 	};
 	details::check(kevent(efd.get_value(), &changeLst, 1, 0, 0, NULL) >= 0, "crab::RunLoopBase kevent_modify failed");
-	performance.reserve(MAX_PERFORMANCE_RECORDS);
 	CurrentLoop::instance = this;
 }
 
@@ -138,13 +137,13 @@ CRAB_INLINE void RunLoop::step(int timeout_ms) {
 		details::check(errno == EINTR, "RunLoop::step kevent unexpected error");
 		return;
 	}
-	push_record("kevent", efd.get_value(), n);
+	stats.push_record("kevent", efd.get_value(), n);
 	stats.EPOLL_count += 1;
 	stats.EPOLL_size += n;
 	for (int i = 0; i != n; ++i) {
 		auto &ev       = events[i];
 		Callable *impl = static_cast<Callable *>(ev.udata);
-		push_record("  event", ev.fd, ev.filter);
+		stats.push_record("  event", ev.data, ev.filter);
 		impl->add_pending_callable(ev.filter == EVFILT_READ, ev.filter == EVFILT_WRITE);
 	}
 }

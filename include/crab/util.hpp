@@ -14,20 +14,16 @@
 
 namespace crab {
 
-class Nocopy {
-public:
-	Nocopy()               = default;
-	Nocopy(const Nocopy &) = delete;
-	Nocopy &operator=(const Nocopy &) = delete;
-};
-
 // uint8_t is our character of choice for all binary reading and writing
 typedef std::vector<uint8_t> bdata;
 inline void append(bdata &result, const bdata &other) {  // We do this op too often
 	result.insert(result.end(), other.begin(), other.end());
 }
+
 std::string to_hex(const uint8_t *data, size_t count);
 inline std::string to_hex(const bdata &data) { return to_hex(data.data(), data.size()); }
+
+int from_digit(char sym);
 int from_hex_digit(char sym);
 bool from_hex(bdata &data, const std::string &str);
 
@@ -50,7 +46,15 @@ template<typename T>
 thread_local T StaticHolderTL<T>::instance{};
 
 std::string invariant_violated(const char *expr, const char *file, int line, const std::string &msg);
+
 }  // namespace details
+
+class Nocopy {
+public:
+	Nocopy()               = default;
+	Nocopy(const Nocopy &) = delete;
+	Nocopy &operator=(const Nocopy &) = delete;
+};
 
 #define invariant(expr, msg)                                                                           \
 	do {                                                                                               \

@@ -23,13 +23,18 @@ CRAB_INLINE std::string to_hex(const uint8_t *data, size_t count) {
 	return result;
 }
 
-CRAB_INLINE int from_hex_digit(char digit) {
-	if (digit >= '0' && digit <= '9')
-		return digit - '0';
-	if (digit >= 'a' && digit <= 'f')
-		return digit - 'a' + 10;
-	if (digit >= 'A' && digit <= 'F')
-		return digit - 'A' + 10;
+CRAB_INLINE int from_digit(char sym) {
+	auto ud = static_cast<unsigned>(sym - '0');
+	return ud > 9 ? -1 : static_cast<int>(ud);
+}
+
+CRAB_INLINE int from_hex_digit(char sym) {
+	if (sym >= '0' && sym <= '9')
+		return sym - '0';
+	if (sym >= 'a' && sym <= 'f')
+		return sym - 'a' + 10;
+	if (sym >= 'A' && sym <= 'F')
+		return sym - 'A' + 10;
 	return -1;
 }
 
