@@ -82,14 +82,18 @@ CRAB_INLINE size_t Buffer::write_to(OStream &out, size_t max_count) {
 }
 
 CRAB_INLINE bool Buffer::peek(uint8_t *val, size_t count) const {
-	if (size() < count)
+	// Compiler thinks memcpy can affect "this", local vars greatly help
+	auto rc  = read_count();
+	auto rc2 = read_count();
+	if (rc + rc2 < count)
 		return false;
-	if (read_count() >= count) {
-		memcpy(val, read_ptr(), count);
+	auto rp = read_ptr();
+	if (rc >= count) {
+		memcpy(val, rp, count);
 		return true;
 	}
-	memcpy(val, read_ptr(), read_count());
-	memcpy(val + read_count(), read_ptr2(), count - read_count());
+	memcpy(val, rp, rc);
+	memcpy(val + rc, read_ptr2(), count - rc);
 	return true;
 }
 

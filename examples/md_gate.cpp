@@ -66,7 +66,7 @@ private:
 				break;
 			crab::VectorStream vs;
 			upstream_socket_buffer.write_to(vs, count * Msg::size);
-			if (udp_a.write_datagram(vs.get_buffer().data(), vs.get_buffer().size()) != vs.get_buffer().size()) {
+			if (!udp_a.write_datagram(vs.get_buffer().data(), vs.get_buffer().size())) {
 				std::cout << "UDP retransmission buffer full, dropping message" << std::endl;
 			}
 			while (vs.size() >= Msg::size) {

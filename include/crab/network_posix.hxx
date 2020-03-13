@@ -500,29 +500,36 @@ CRAB_INLINE UDPTransmitter::UDPTransmitter(const Address &address, Handler &&cb,
 	fd.swap(tmp);
 }
 
-CRAB_INLINE size_t UDPTransmitter::write_datagram(const uint8_t *data, size_t count) {
+CRAB_INLINE bool UDPTransmitter::write_datagram(const uint8_t *data, size_t count) {
 	if (!fd.is_valid() || !w_handler.can_write)
-		return 0;
+		return false;
 	RunLoop::current()->stats.UDP_SEND_count += 1;
 	RunLoop::current()->stats.push_record("sendto", fd.get_value(), int(count));
 	ssize_t result = ::sendto(fd.get_value(), data, count, details::CRAB_MSG_NOSIGNAL, nullptr, 0);
 	RunLoop::current()->stats.push_record("R(sendto)", fd.get_value(), int(result));
 	if (result < 0) {
-		if (errno != EAGAIN && errno != EWOULDBLOCK) {  // some REAL error
-			// If no one is listening on the other side, after receiving ICMP report, error 111 is returned on Linux
-			// We will ignore all errors here, in hope they will disappear soon
-			return 0;
+		if (errno == EAGAIN || errno == EWOULDBLOCK) {
+			w_handler.can_write = false;
+			return false;  // Will fire on_epoll_call in future automatically
 		}
-		w_handler.can_write = false;
-		return 0;  // Will fire on_epoll_call in future automatically
+		// If no one is listening on the other side, after receiving ICMP report, error 111 is returned on Linux
+		// Error may also indicate MTU size of path too small, that will also change
+		// We will ignore all errors here, in hope they will disappear soon
+		return true;
 	}
 	RunLoop::current()->stats.UDP_SEND_size += result;
-	return result;
+	return true;
 }
 
 CRAB_INLINE UDPReceiver::UDPReceiver(const Address &address, Handler &&cb, const std::string &adapter)
     : r_handler(std::move(cb)) {
 	// On Linux & Mac OSX we can bind either to 0.0.0.0, adapter address or multicast group
+	// TODO - on some other systems, when using multicast, we must bind exactly to 0.0.0.0,
+	// On Linux, at least, when multicast socket is bound to 0.0.0.0 and other process joins another group
+	// both will receive packets from wrong groups if ports are the same, which is wrong
+	// Discussion:
+	// https://stackoverflow.com/questions/10692956/what-does-it-mean-to-bind-a-multicast-udp-socket
+	// https://www.reddit.com/r/networking/comments/7nketv/proper_use_of_bind_for_multicast_receive_on_linux/
 	details::FileDescriptor tmp(::socket(address.impl_get_sockaddr()->sa_family, SOCK_DGRAM, IPPROTO_UDP),
 	    "crab::UDPReceiver socket() failed");
 	if (address.is_multicast_group())
@@ -541,6 +548,7 @@ CRAB_INLINE UDPReceiver::UDPReceiver(const Address &address, Handler &&cb, const
 		// And then listen to changes of adapters list (how?), and call setsockopt on each new adapter.
 		// Compare to TCP or UDP unicast, where INADDR_ANY correctly means listening on all adapter.
 		// Sadly, same on Mac OSX
+		// So, for DDNS-like discovery apps we need UDPReceiverMultiAdapter, which automatically does that
 		auto mreq          = details::fill_ip_mreqn(adapter);
 		mreq.imr_multiaddr = sa->sin_addr;
 		details::check(setsockopt(tmp.get_value(), IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) >= 0,
@@ -554,27 +562,46 @@ CRAB_INLINE UDPReceiver::UDPReceiver(const Address &address, Handler &&cb, const
 	fd.swap(tmp);
 }
 
-CRAB_INLINE bool UDPReceiver::read_datagram(uint8_t *data, size_t *size, Address *peer_addr) {
+CRAB_INLINE std::pair<bool, size_t> UDPReceiver::read_datagram(uint8_t *data, size_t count, Address *peer_addr) {
 	if (!fd.is_valid() || !r_handler.can_read)
-		return false;
+		return {false, 0};
 	Address in_addr;
 	socklen_t in_len = sizeof(sockaddr_storage);
 	RunLoop::current()->stats.UDP_RECV_count += 1;
-	RunLoop::current()->stats.push_record("recvfrom", fd.get_value(), int(MAX_DATAGRAM_SIZE));
-	ssize_t result = recvfrom(
-	    fd.get_value(), data, MAX_DATAGRAM_SIZE, details::CRAB_MSG_NOSIGNAL, in_addr.impl_get_sockaddr(), &in_len);
+	RunLoop::current()->stats.push_record("recvfrom", fd.get_value(), int(count));
+	// On some Linux system, passing 0 to recvfrom results in EINVAL without reading datagram
+	// (while correct behaviour is reading, truncating to 0, returning EMSGSIZE).
+	// We protect clients semantic by reading into our own small buffer
+	uint8_t workaround_buffer[1];  // Uninitialized
+	ssize_t result = recvfrom(fd.get_value(),
+	    count ? data : workaround_buffer,
+	    count ? count : sizeof(workaround_buffer),
+	    details::CRAB_MSG_NOSIGNAL,
+	    in_addr.impl_get_sockaddr(),
+	    &in_len);
+	if (result > static_cast<ssize_t>(count))  // Can only happen when reading into workaround_buffer
+		result = count;
 	RunLoop::current()->stats.push_record("R(recvfrom)", fd.get_value(), int(result));
 	if (result < 0) {
-		// Sometimes (for example during adding/removing network adapters), errors could be returned on Linux
-		// We will ignore all errors here, in hope they will disappear soon
-		return false;  // Will fire on_epoll_call in future automatically
+		if (errno == EAGAIN || errno == EWOULDBLOCK) {
+			r_handler.can_read = false;
+			return {false, 0};  // Will fire on_epoll_call in future automatically
+		}
+		if (errno != EMSGSIZE) {
+			// Sometimes (for example during adding/removing network adapters), errors could be returned on Linux
+			// We will ignore all errors here, in hope they will disappear soon
+			// TODO - if we get here, we will not be woke up by epoll any more, so
+			// we need to classify all errors here, like in TCPAcceptor
+			return {false, 0};
+		}
+		// Truncation is not an error, return true so clients continue reading
+		result = count;
 	}
 	if (peer_addr) {
 		*peer_addr = in_addr;
 	}
 	RunLoop::current()->stats.UDP_RECV_size += result;
-	*size = result;
-	return true;
+	return {true, result};
 }
 
 }  // namespace crab

@@ -48,7 +48,7 @@ class Buffer : public IFiniteStream, public OStream {
 public:
 	explicit Buffer(size_t si) : impl(si), read_pos(0), write_pos(0) {}
 	size_t read_some(uint8_t *val, size_t count) override;
-	size_t size() const override {
+	size_t size() const override final {
 		return write_pos - read_pos;  // Same as read_count() + read_count2();
 	}
 	size_t write_some(const uint8_t *val, size_t count) override;

@@ -553,13 +553,15 @@ CRAB_INLINE UDPTransmitter::UDPTransmitter(const Address &address, Handler &&cb)
 	throw std::runtime_error("UDPTransmitter not yet implemented on Windows");
 }
 
-CRAB_INLINE size_t UDPTransmitter::write_datagram(const uint8_t *data, size_t count) { return 0; }
+CRAB_INLINE bool UDPTransmitter::write_datagram(const uint8_t *data, size_t count) { return 0; }
 
 CRAB_INLINE UDPReceiver::UDPReceiver(const Address &address, Handler &&cb) : r_handler(std::move(cb)) {
 	throw std::runtime_error("UDPReceiver not yet implemented on Windows");
 }
 
-CRAB_INLINE bool UDPReceiver::read_datagram(uint8_t *data, size_t *size, Address *peer_addr) { return false; }
+CRAB_INLINE std::pair<bool, size_t> UDPReceiver::read_datagram(uint8_t *data, size_t count, Address *peer_addr) {
+	return false;
+}
 
 }  // namespace crab
 

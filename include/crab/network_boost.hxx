@@ -52,7 +52,7 @@ public:
 		if (e != boost::asio::error::operation_aborted) {
 		}
 	}
-	void start_timer(float after_seconds) {
+	void start_timer(double after_seconds) {
 		// assert(pending_wait == false);
 		pending_wait = true;
 		timer.expires_from_now(boost::posix_time::milliseconds(
@@ -70,7 +70,7 @@ void Timer::cancel() {
 
 bool Timer::is_set() const { return impl && impl->pending_wait; }
 
-void Timer::once(float after_seconds) {
+void Timer::once(double after_seconds) {
 	cancel();
 	if (!impl)
 		impl = std::make_unique<TimerImpl>(this);

@@ -62,7 +62,7 @@ public:
 	explicit Timer(Handler &&a_handler) : a_handler(std::move(a_handler)) {}
 	~Timer() { cancel(); }
 
-	void once(float after_seconds);  // cancels previous once first
+	void once(double after_seconds);  // cancels previous once first
 	bool is_set() const;
 	void cancel();
 
@@ -261,8 +261,9 @@ public:
 	explicit UDPTransmitter(const Address &address, Handler &&w_handler, const std::string &adapter = std::string{});
 	// If multicast group address is used, receiver will transmit on specified or default adapter
 
-	size_t write_datagram(const uint8_t *data, size_t count);
-	// either returns count (if written into buffer) or 0 (if buffer is full or a error occurs)
+	bool write_datagram(const uint8_t *data, size_t count);
+	// returns false if buffer is full or a error occurs
+	// cannot return size_t, because datagrams of zero size are valid
 
 private:
 	Callable w_handler;
@@ -283,10 +284,11 @@ public:
 	// If multicast group address is used, receiver will join group on specified or default adapter
 
 	static constexpr size_t MAX_DATAGRAM_SIZE = 65536;
-	bool read_datagram(uint8_t *data, size_t *size, Address *peer_addr = nullptr);
-	// data must point to buffer of at least MAX_DATAGRAM_SIZE size
-	// either returns false (if buffer is empty), or returns true, fills buffer and sets *size
-	// cannot return size_t, because datagrams of zero size are valid
+	std::pair<bool, size_t> read_datagram(uint8_t *data, size_t count, Address *peer_addr = nullptr);
+	// returns (false, 0) if buffer is empty
+	// returns (true, datagram_size) if datagram was read, even if it was truncated
+	// We do not consider truncation as an error here. Any sane protocol will detect truncated
+	// message in its own higher-level logic. We return true so clients state machine will be simpler
 
 private:
 	Callable r_handler;
@@ -313,7 +315,7 @@ struct RunLoopLinks : private Nocopy {  // Common structure when implementing ov
 
 	bool process_timer(const std::chrono::steady_clock::time_point &now, int &timeout_ms);
 
-	// protected queueu, below can be accessed from other threads
+	// protected queue below can be accessed in call_watcher from other threads
 	std::mutex mutex;
 	IntrusiveList<Watcher, &Watcher::fired_objects_node> fired_objects;
 

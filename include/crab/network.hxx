@@ -139,21 +139,28 @@ CRAB_INLINE void RunLoop::run() {
 	}
 }
 
-CRAB_INLINE void Timer::once(float after_seconds) {
+CRAB_INLINE void Timer::once(double after_seconds) {
 	cancel();
 	const auto now = std::chrono::steady_clock::now();
-	const auto ma  = std::chrono::steady_clock::time_point::max();
-	// We do not wish to overflow time point. Observation - chrono is a disaster :(
-	const auto max_after_seconds = std::chrono::duration_cast<std::chrono::seconds>(ma - now).count();
+#if CRAB_NO_CHECK_TIMER_OVERFLOW
+	fire_time = now + std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+	                      std::chrono::duration<double>(after_seconds));
+#else
 	if (after_seconds < 0) {
 		fire_time = now;
 	} else {
-		if (after_seconds >= max_after_seconds)
+		// We do not wish to overflow time point. Observation - chrono is a disaster, will do manually
+		double fsc = after_seconds * std::chrono::steady_clock::time_point::period::den /
+		             std::chrono::steady_clock::time_point::period::num;
+		const auto ma                = std::chrono::steady_clock::time_point::max();
+		const auto max_after_seconds = (ma - now).count();
+
+		if (fsc >= max_after_seconds)  // double >= double
 			fire_time = std::chrono::steady_clock::time_point::max();
 		else
-			fire_time = now + std::chrono::duration_cast<std::chrono::steady_clock::duration>(
-			                      std::chrono::duration<float>(after_seconds));
+			fire_time = now + std::chrono::steady_clock::duration(std::chrono::steady_clock::duration::rep(fsc));
 	}
+#endif
 	RunLoop::current()->links.active_timers.insert(*this);
 }
 
