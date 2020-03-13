@@ -150,7 +150,7 @@ int test_client(int num, uint16_t port) {
 	std::unique_ptr<Timer> stat_timer;
 	std::unique_ptr<http::WebSocket> rws;
 
-	size_t message_counter = 0;
+	int message_counter = 0;
 	auto message_start     = std::chrono::high_resolution_clock::now();
 
 	rws.reset(new http::WebSocket(

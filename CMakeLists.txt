@@ -4,6 +4,7 @@ project(crablib)
 if(NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
    set(CMAKE_BUILD_TYPE Release)
 endif()
+message("CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}")
 
 message("-DCRAB_FUZZ=1 builds binaries for fuzzing. Disabled by default because builds only on Linux and Mac OSX (with additional dependencies)")
 option(CRAB_FUZZ "builds binaries for fuzzing" OFF)
@@ -69,7 +70,7 @@ set(SOURCE_FILES
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/bin")
 
 if(WIN32)
-# 	link_libraries(ws2_32 wsock32)
+	# set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /INCREMENTAL:NO")
 else()
 	link_libraries(pthread)
 endif(WIN32)

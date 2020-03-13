@@ -35,7 +35,7 @@ private:
 			for (size_t i = 0; i != count; ++i) {
 				auto mksec = std::chrono::duration_cast<std::chrono::microseconds>(now - send_time.front()).count();
 				send_time.pop_front();
-				latency_sum_mksec += mksec;
+				latency_sum_mksec += static_cast<size_t>(mksec);
 				latency_max_mksec = std::max<size_t>(latency_max_mksec, mksec);
 			}
 			requests_received += count;

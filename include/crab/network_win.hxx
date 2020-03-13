@@ -99,7 +99,6 @@ struct RunLoopImpl {
 CRAB_INLINE RunLoop::RunLoop() : impl(new RunLoopImpl([this]() { links.trigger_called_watchers(); })) {
 	if (CurrentLoop::instance)
 		throw std::runtime_error("RunLoop::RunLoop Only single RunLoop per thread is allowed");
-	performance.reserve(MAX_PERFORMANCE_RECORDS);
 	CurrentLoop::instance = this;
 }
 
@@ -144,7 +143,7 @@ CRAB_INLINE void RunLoop::step(int timeout_ms) {
 			throw std::runtime_error("GetQueuedCompletionStatusEx error");
 		return;  // n is garbage in this case
 	}
-	push_record("GetQueuedCompletionStatusEx", 0, n);
+	stats.push_record("GetQueuedCompletionStatusEx", 0, n);
 	stats.EPOLL_count += 1;
 	stats.EPOLL_size += n;
 	for (int i = 0; i != n; ++i) {
@@ -549,18 +548,20 @@ CRAB_INLINE TCPAcceptor::~TCPAcceptor() {
 
 CRAB_INLINE bool TCPAcceptor::can_accept() { return !impl->pending_accept; }
 
-CRAB_INLINE UDPTransmitter::UDPTransmitter(const Address &address, Handler &&cb) : w_handler(std::move(cb)) {
+CRAB_INLINE UDPTransmitter::UDPTransmitter(const Address &address, Handler &&cb, const std::string &adapter)
+    : w_handler(std::move(cb)) {
 	throw std::runtime_error("UDPTransmitter not yet implemented on Windows");
 }
 
 CRAB_INLINE bool UDPTransmitter::write_datagram(const uint8_t *data, size_t count) { return 0; }
 
-CRAB_INLINE UDPReceiver::UDPReceiver(const Address &address, Handler &&cb) : r_handler(std::move(cb)) {
+CRAB_INLINE UDPReceiver::UDPReceiver(const Address &address, Handler &&cb, const std::string &adapter)
+    : r_handler(std::move(cb)) {
 	throw std::runtime_error("UDPReceiver not yet implemented on Windows");
 }
 
 CRAB_INLINE std::pair<bool, size_t> UDPReceiver::read_datagram(uint8_t *data, size_t count, Address *peer_addr) {
-	return false;
+	return {false, 0};
 }
 
 }  // namespace crab

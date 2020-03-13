@@ -82,7 +82,7 @@ inline void encode(char *out, size_t out_len, const uint8_t *in, size_t in_len) 
 	default:
 		break;
 	}
-	if (out - out_start != static_cast<ssize_t>(out_len))
+	if (out - out_start != static_cast<ptrdiff_t>(out_len))
 		throw std::logic_error("base64 encode size mismatch");
 }
 

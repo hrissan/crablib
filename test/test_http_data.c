@@ -309,7 +309,7 @@ const struct Message responses[] = {
         .should_keep_alive = 1,
         .status_code       = 404,
         .num_headers       = 0,
-        .headers           = {},
+        .headers           = {{"", ""}},
         .body              = ""}
 
     ,
@@ -319,7 +319,7 @@ const struct Message responses[] = {
         .should_keep_alive = 1,
         .status_code       = 301,
         .num_headers       = 0,
-        .headers           = {},
+        .headers           = {{"", ""}},
         .body              = ""}
 
     ,
