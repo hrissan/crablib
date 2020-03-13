@@ -9,6 +9,7 @@ message("CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}")
 message("-DCRAB_FUZZ=1 builds binaries for fuzzing. Disabled by default because builds only on Linux and Mac OSX (with additional dependencies)")
 option(CRAB_FUZZ "builds binaries for fuzzing" OFF)
 
+# add_definitions(-DCRAB_COMPILE=1)
 
 if(WIN32)
 #	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Ot")
@@ -97,6 +98,7 @@ add_executable(benchmark_atomic ${SOURCE_FILES} examples/lowlevel/benchmark_atom
 add_executable(benchmark_chrono ${SOURCE_FILES} examples/lowlevel/benchmark_chrono.cpp)
 add_executable(benchmark_map ${SOURCE_FILES} examples/lowlevel/benchmark_map.cpp)
 add_executable(benchmark_getifaddrs ${SOURCE_FILES} examples/lowlevel/benchmark_getifaddrs.cpp)
+add_executable(benchmark_atoi ${SOURCE_FILES} examples/lowlevel/benchmark_atoi.cpp)
 
 # tests
 add_executable(test_http_parsers ${SOURCE_FILES} test/test_http_parsers.cpp test/test_http_data.c)

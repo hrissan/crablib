@@ -37,7 +37,7 @@
 namespace crab {
 
 typedef std::function<void()> Handler;
-CRAB_INLINE void empty_handler() {}
+inline void empty_handler() {}
 
 class RunLoop;
 class Timer;

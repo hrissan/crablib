@@ -173,7 +173,7 @@ int main(int argc, char *argv[]) {
 	}
 	crab::RunLoop runloop;
 
-	FairServerApp app(crab::Address("0.0.0.0", std::stoi(argv[1])));
+	FairServerApp app(crab::Address("0.0.0.0", crab::integer_cast<uint16_t>(argv[1])));
 
 	runloop.run();
 	return 0;

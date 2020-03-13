@@ -23,7 +23,7 @@ int test_client(int num, const std::string &host, uint16_t port) {
 	std::unique_ptr<http::WebSocket> rws;
 
 	int message_counter = 0;
-	auto message_start     = std::chrono::high_resolution_clock::now();
+	auto message_start  = std::chrono::high_resolution_clock::now();
 
 	rws.reset(new http::WebSocket(
 	    [&]() {
@@ -139,5 +139,5 @@ int main(int argc, char *argv[]) {
 		std::cout << "Usage: client <IP4address> <port>" << std::endl;
 		return 0;
 	}
-	return test_client(0, argv[1], std::stoi(argv[2]));
+	return test_client(0, argv[1], crab::integer_cast<uint16_t>(argv[2]));
 }

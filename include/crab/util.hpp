@@ -23,7 +23,6 @@ inline void append(bdata &result, const bdata &other) {  // We do this op too of
 std::string to_hex(const uint8_t *data, size_t count);
 inline std::string to_hex(const bdata &data) { return to_hex(data.data(), data.size()); }
 
-int from_digit(char sym);
 int from_hex_digit(char sym);
 bool from_hex(bdata &data, const std::string &str);
 

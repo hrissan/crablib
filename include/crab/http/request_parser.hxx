@@ -8,6 +8,7 @@
 
 #include <cctype>
 #include <stdexcept>
+#include "../integer_cast.hpp"
 #include "request_parser.hpp"
 
 namespace crab { namespace http {
@@ -137,21 +138,21 @@ CRAB_INLINE RequestParser::State RequestParser::consume(char input) {
 			throw std::runtime_error("Invalid http version, '/' is expected");
 		return HTTP_VERSION_MAJOR_START;
 	case HTTP_VERSION_MAJOR_START:
-		if (!is_digit(input))
+		if (!isdigit(input))
 			throw std::runtime_error("Invalid http version major start, must be digit");
 		req.http_version_major = input - '0';
 		return HTTP_VERSION_MAJOR;
 	case HTTP_VERSION_MAJOR:
 		if (input == '.')
 			return HTTP_VERSION_MINOR_START;
-		if (!is_digit(input))
+		if (!isdigit(input))
 			throw std::runtime_error("Invalid http version major, must be digit");
 		req.http_version_major = req.http_version_major * 10 + input - '0';
 		if (req.http_version_major > 1)
 			throw std::runtime_error("Unsupported http version");
 		return HTTP_VERSION_MAJOR;
 	case HTTP_VERSION_MINOR_START:
-		if (!is_digit(input))
+		if (!isdigit(input))
 			throw std::runtime_error("Invalid http version minor start, must be digit");
 		req.http_version_minor = input - '0';
 		return HTTP_VERSION_MINOR;
@@ -162,7 +163,7 @@ CRAB_INLINE RequestParser::State RequestParser::consume(char input) {
 			return FIRST_HEADER_LINE_START;
 		if (is_sp(input))
 			return STATUS_LINE_CR;
-		if (!is_digit(input))
+		if (!isdigit(input))
 			throw std::runtime_error("Invalid http version minor, must be digit");
 		req.http_version_minor = req.http_version_minor * 10 + input - '0';
 		if (req.http_version_minor > 99)
@@ -280,7 +281,7 @@ CRAB_INLINE void RequestParser::process_ready_header() {
 		if (req.has_content_length())
 			throw std::runtime_error("content length specified more than once");
 		try {
-			req.content_length = std::stoull(header.value);
+			req.content_length = crab::integer_cast<uint64_t>(header.value);
 		} catch (const std::exception &) {
 			std::throw_with_nested(std::runtime_error("Content length is not a number"));
 		}

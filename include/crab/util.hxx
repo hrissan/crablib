@@ -23,11 +23,6 @@ CRAB_INLINE std::string to_hex(const uint8_t *data, size_t count) {
 	return result;
 }
 
-CRAB_INLINE int from_digit(char sym) {
-	auto ud = static_cast<unsigned>(sym - '0');
-	return ud > 9 ? -1 : static_cast<int>(ud);
-}
-
 CRAB_INLINE int from_hex_digit(char sym) {
 	if (sym >= '0' && sym <= '9')
 		return sym - '0';

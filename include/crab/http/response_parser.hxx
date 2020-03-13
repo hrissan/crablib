@@ -7,6 +7,7 @@
 // Licensed under the MIT License. See LICENSE for details.
 
 #include <sstream>
+#include "../integer_cast.hpp"
 #include "response_parser.hpp"
 
 namespace crab { namespace http {
@@ -47,21 +48,21 @@ CRAB_INLINE ResponseParser::State ResponseParser::consume(char input) {
 			throw std::runtime_error("Invalid http version, '/' is expected");
 		return HTTP_VERSION_MAJOR_START;
 	case HTTP_VERSION_MAJOR_START:
-		if (!is_digit(input))
+		if (!isdigit(input))
 			throw std::runtime_error("Invalid http version major start, must be digit");
 		req.http_version_major = input - '0';
 		return HTTP_VERSION_MAJOR;
 	case HTTP_VERSION_MAJOR:
 		if (input == '.')
 			return HTTP_VERSION_MINOR_START;
-		if (!is_digit(input))
+		if (!isdigit(input))
 			throw std::runtime_error("Invalid http version major, must be digit");
 		req.http_version_major = req.http_version_major * 10 + input - '0';
 		if (req.http_version_major > 1)
 			throw std::runtime_error("Unsupported http version");
 		return HTTP_VERSION_MAJOR;
 	case HTTP_VERSION_MINOR_START:
-		if (!is_digit(input))
+		if (!isdigit(input))
 			throw std::runtime_error("Invalid http version minor start, must be digit");
 		req.http_version_minor = input - '0';
 		return HTTP_VERSION_MINOR;
@@ -70,7 +71,7 @@ CRAB_INLINE ResponseParser::State ResponseParser::consume(char input) {
 			req.keep_alive = req.http_version_major == 1 && req.http_version_minor >= 1;
 			return STATUS_CODE_1;
 		}
-		if (!is_digit(input))
+		if (!isdigit(input))
 			throw std::runtime_error("Invalid http version minor, must be digit");
 		req.http_version_minor = req.http_version_minor * 10 + input - '0';
 		if (req.http_version_minor > 99)
@@ -79,17 +80,17 @@ CRAB_INLINE ResponseParser::State ResponseParser::consume(char input) {
 	case STATUS_CODE_1:
 		if (is_sp(input))
 			return STATUS_CODE_1;
-		if (!is_digit(input))
+		if (!isdigit(input))
 			throw std::runtime_error("Invalid http status code symbol 1, must be digit");
 		req.status = req.status * 10 + input - '0';
 		return STATUS_CODE_2;
 	case STATUS_CODE_2:
-		if (!is_digit(input))
+		if (!isdigit(input))
 			throw std::runtime_error("Invalid http status code symbol 2, must be digit");
 		req.status = req.status * 10 + input - '0';
 		return STATUS_CODE_3;
 	case STATUS_CODE_3:
-		if (!is_digit(input))
+		if (!isdigit(input))
 			throw std::runtime_error("Invalid http status code symbol 3, must be digit");
 		req.status = req.status * 10 + input - '0';
 		return STATUS_CODE_SPACE;
@@ -219,7 +220,7 @@ CRAB_INLINE void ResponseParser::process_ready_header() {
 		if (req.has_content_length())
 			throw std::runtime_error("content length specified more than once");
 		try {
-			req.content_length = std::stoull(header.value);
+			req.content_length = crab::integer_cast<uint64_t>(header.value);
 		} catch (const std::exception &) {
 			std::throw_with_nested(std::runtime_error("Content length is not a number"));
 		}

@@ -71,12 +71,12 @@ inline T integer_cast_is_integral(const S &arg, std::true_type) {
 	return integer_cast_impl<T, S>(arg, std::is_unsigned<T>{}, std::is_unsigned<S>{});
 }
 
-inline bool is_integer_space(char c) { return c == ' ' || c == '\t'; }
+inline bool is_integer_space(char c) { return isspace(c); }  //  c == ' ' || c == '\t';
 
 // C++ committee cannot do anything of quality...
 // std::stoull will parse -5 to binary representation without exception, uh-oh
 // there is not way to convert to (u)short, (u)char with overflow checks
-// We allow may leading 0, so 000000 is valid
+// Focus is on correctness, not raw speed. We allow may leading 0, so 000000 is valid
 
 template<typename T>
 std::pair<T, const char *> integer_parse_impl(const char *begin, const char *end) {
@@ -91,29 +91,27 @@ std::pair<T, const char *> integer_parse_impl(const char *begin, const char *end
 		begin += 1;
 		if (begin == end)
 			return {value, "Number must start from sign or digit "};
-		int digit = from_digit(*begin);
-		if (digit < 0)
+		if (!isdigit(*begin))
 			return {value, "Number must start from sign or digit "};
-		value = -static_cast<T>(digit);
-		begin += 1;
+		value                            = -static_cast<T>(*begin - '0');
 		constexpr size_t max_safe_digits = sizeof(T) * 2;  // Approximate
 		auto safe_end                    = std::min(end, begin + max_safe_digits);
+		begin += 1;
 		// Convert as much as possible without overflow checks
 		while (begin != safe_end) {
-			int digit = from_digit(*begin);
-			if (digit < 0)
+			if (!isdigit(*begin))
 				break;
-			value = value * 10 - digit;
+			value = value * 10 - (*begin - '0');
 			begin += 1;
 		}
 		// Convert the rest with strict overflow checks
 		while (begin != end) {
-			int digit      = from_digit(*begin);
+			if (!isdigit(*begin))
+				break;
+			int digit      = *begin - '0';
 			constexpr T mi = std::numeric_limits<T>::min();
 			// remainder of negative num is implementation defined
 			constexpr int cutlim = static_cast<int>(mi / 10 * 10 - mi);
-			if (digit < 0)
-				break;
 			if (value < mi / 10 || (value == mi / 10 && digit > cutlim))
 				return {value, "Number underflow "};
 			value = value * 10 - digit;
@@ -124,28 +122,26 @@ std::pair<T, const char *> integer_parse_impl(const char *begin, const char *end
 			begin += 1;
 		if (begin == end)
 			return {value, "Number must start from sign or digit "};
-		int digit = from_digit(*begin);
-		if (digit < 0)
+		if (!isdigit(*begin))
 			return {value, "Number must start from sign or digit "};
-		value = static_cast<T>(digit);
-		begin += 1;
+		value                            = static_cast<T>(*begin - '0');
 		constexpr size_t max_safe_digits = sizeof(T) * 2;  // Approximate
 		auto safe_end                    = std::min(end, begin + max_safe_digits);
+		begin += 1;
 		// Convert as much as possible without overflow checks
 		while (begin != safe_end) {
-			int digit = from_digit(*begin);
-			if (digit < 0)
+			if (!isdigit(*begin))
 				break;
-			value = value * 10 + digit;
+			value = value * 10 + *begin - '0';
 			begin += 1;
 		}
 		// Convert the rest with strict overflow checks
 		while (begin != end) {
-			int digit            = from_digit(*begin);
+			if (!isdigit(*begin))
+				break;
+			int digit            = *begin - '0';
 			const T ma           = std::numeric_limits<T>::max();
 			constexpr int cutlim = static_cast<int>(ma % 10);
-			if (digit < 0)
-				break;
 			if (value > ma / 10 || (value == ma / 10 && digit > cutlim))
 				return {value, "Number overflow "};
 			value = value * 10 + digit;
@@ -166,98 +162,6 @@ T integer_parse(const char *begin, const char *end) {
 		throw_out_of_range<T>(std::string(begin, end), res.second);
 	return res.first;
 }
-
-template<typename T>
-struct IntegerParser {
-public:
-	void parse(const char *begin, const char *end) {
-		while (begin != end)
-			state = consume(*begin++);
-		if (state < DIGITS)
-			throw std::out_of_range("Number must start from sign or digit");
-	}
-	T get_value() const { return value; }
-
-private:
-	enum State {
-		LEADING_WS,
-		FIRST_DIGIT,
-		FIRST_NEGATIVE_DIGIT,
-		DIGITS,
-		NEGATIVE_DIGITS,
-		TRAILING_WS
-	} state = LEADING_WS;
-
-	T value = 0;
-	State consume(char input) {
-		switch (state) {
-		case LEADING_WS: {
-			if (std::isspace(input))
-				return LEADING_WS;
-			if (input == '-' && !std::is_unsigned<T>::value) {
-				return FIRST_NEGATIVE_DIGIT;
-			}
-			if (input == '+')
-				return FIRST_DIGIT;
-			int digit = from_digit(input);
-			if (digit < 0)
-				throw std::out_of_range("Number must start from sign or digit");
-			value = digit;
-			return DIGITS;
-		}
-		case FIRST_DIGIT: {
-			int digit = from_digit(input);
-			if (digit < 0)
-				throw std::out_of_range("Number must start from sign or digit");
-			value = digit;
-			return DIGITS;
-		}
-		case FIRST_NEGATIVE_DIGIT: {
-			int digit = from_digit(input);
-			if (digit < 0)
-				throw std::out_of_range("Number must start from sign or digit");
-			value = -digit;
-			return NEGATIVE_DIGITS;
-		}
-		case DIGITS: {
-			if (std::isspace(input))
-				return TRAILING_WS;
-			int digit  = from_digit(input);
-			const T ma = std::numeric_limits<T>::max();
-			if (digit < 0)
-				throw std::out_of_range("Number must continue with digits");
-			if (value > ma / 10)
-				throw std::runtime_error("Number overflow");
-			value *= 10;
-			if (value > ma - digit)
-				throw std::runtime_error("Number overflow");
-			value += digit;
-			return DIGITS;
-		}
-		case NEGATIVE_DIGITS: {
-			if (std::isspace(input))
-				return TRAILING_WS;
-			int digit  = from_digit(input);
-			const T mi = std::numeric_limits<T>::min();
-			if (digit < 0)
-				throw std::out_of_range("Number must continue with digits");
-			if (value < mi / 10)
-				throw std::runtime_error("Number underflow");
-			value *= 10;
-			if (value < mi + digit)
-				throw std::runtime_error("Number underflow");
-			value -= digit;
-			return NEGATIVE_DIGITS;
-		}
-		case TRAILING_WS:
-			if (std::isspace(input))
-				return TRAILING_WS;
-			throw std::out_of_range("Number must contain only whitespaces after digits");
-		default:
-			throw std::logic_error("Invalid numbers parser state");
-		}
-	}
-};
 
 template<typename T>
 inline T integer_cast_is_integral(const std::string &arg, std::false_type) {

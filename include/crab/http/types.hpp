@@ -143,7 +143,6 @@ bool is_sp(int c);
 bool is_char(int c);
 bool is_ctl(int c);
 bool is_tspecial(int c);
-bool is_digit(int c);
 void trim_right(std::string &str);
 void tolower(std::string &str);
 

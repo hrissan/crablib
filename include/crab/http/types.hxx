@@ -64,8 +64,6 @@ CRAB_INLINE bool is_tspecial(int c) {
 	}
 }
 
-CRAB_INLINE bool is_digit(int c) { return from_digit(c) >= 0; }
-
 CRAB_INLINE void trim_right(std::string &str) {
 	// We have no backtracking, so cheat here
 	while (!str.empty() && is_sp(str.back()))

@@ -125,7 +125,7 @@ private:
 
 // Does not prevent SIGTRIP (sudden loss of power :) though, beware
 
-// Common approach is call RunLoop::current()->cancel() in handler, and make 
+// Common approach is call RunLoop::current()->cancel() in handler, and make
 // application components destructors to close/flush/commit all held resources.
 class SignalStop {
 public:

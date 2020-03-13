@@ -61,5 +61,5 @@ int main(int argc, char *argv[]) {
 		std::cout << "Usage: server <port>" << std::endl;
 		return 0;
 	}
-	return test_http(0, std::stoi(argv[1]));
+	return test_http(0, crab::integer_cast<uint16_t>(argv[1]));
 }

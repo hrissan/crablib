@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <iostream>
+#include "integer_cast.hpp"
 #include "network.hpp"
 
 // TODO - play with SO_PRIORITY
@@ -40,7 +41,7 @@ CRAB_INLINE bool Address::parse(Address &address, const std::string &ip_port) {
 	size_t pos = ip_port.find(':');
 	if (pos == std::string::npos)
 		return false;
-	uint16_t port = static_cast<uint16_t>(std::stoi(ip_port.substr(pos + 1)));
+	uint16_t port = integer_cast<uint16_t>(ip_port.substr(pos + 1));
 	return parse(address, ip_port.substr(0, pos), port);
 }
 

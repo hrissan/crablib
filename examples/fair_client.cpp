@@ -106,8 +106,8 @@ int main(int argc, char *argv[]) {
 	std::cout
 	    << "This client send requests (1 byte) via TCP to fair_server and measures latency of responses (16 bytes)"
 	    << std::endl;
-	if (argc < 3) {
-		std::cout << "Usage: fair_client <ip> <port> <requests> <instances> [Default: 20000 1]" << std::endl;
+	if (argc < 2) {
+		std::cout << "Usage: fair_client <ip>:<port> <requests> <instances> [Default: 20000 1]" << std::endl;
 		std::cout << "    fair_client will keep that number of requests in transit to server" << std::endl;
 		std::cout << "    if <requests> is 0, will send request per second and measure latency" << std::endl;
 		return 0;
@@ -115,11 +115,11 @@ int main(int argc, char *argv[]) {
 	crab::RunLoop runloop;
 
 	std::list<FairClientApp> apps;
-	const size_t requests = argc < 4 ? 20000 : std::stoull(argv[3]);
-	const size_t count    = argc < 5 ? 1 : std::stoull(argv[4]);
+	const size_t requests = argc < 3 ? 20000 : crab::integer_cast<size_t>(argv[2]);
+	const size_t count    = argc < 4 ? 1 : crab::integer_cast<size_t>(argv[3]);
 
 	for (size_t i = 0; i != count; ++i)
-		apps.emplace_back(crab::Address(argv[1], std::stoi(argv[2])), requests);
+		apps.emplace_back(crab::Address(argv[1]), requests);
 
 	runloop.run();
 	return 0;
