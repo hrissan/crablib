@@ -81,7 +81,7 @@ struct RunLoopImpl {
 	details::Overlapped wake_handler;
 	details::AutoHandle completion_queue;
 	size_t pending_counter = 0;
-	size_t impl_counter = 0;
+	size_t impl_counter    = 0;
 
 	explicit RunLoopImpl(Handler &&cb) : wake_handler([mcb = std::move(cb)](DWORD bytes, bool result) { mcb(); }) {
 		completion_queue.value = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
@@ -178,7 +178,6 @@ struct TCPSocketImpl {
 		loop->get_impl()->impl_counter += 1;
 	}
 	~TCPSocketImpl() { loop->get_impl()->impl_counter -= 1; }
-
 
 	static size_t tcp_id_counter;
 
@@ -332,7 +331,6 @@ struct TCPSocketImpl {
 };
 
 size_t TCPSocketImpl::tcp_id_counter = 0;
-
 
 CRAB_INLINE void TCPSocket::close() {
 	rwd_handler.cancel_callable();

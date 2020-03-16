@@ -39,7 +39,7 @@ private:
 	using ClientList = std::list<crab::TCPSocket>;
 
 	void on_idle() {
-		auto now     = std::chrono::steady_clock::now();
+		auto now      = std::chrono::steady_clock::now();
 		int64_t ticks = std::chrono::duration_cast<std::chrono::microseconds>(now - last_tick).count();
 		if (ticks == 0)
 			return;
@@ -97,7 +97,7 @@ private:
 	crab::Idle idle;
 
 	std::chrono::steady_clock::time_point last_tick = std::chrono::steady_clock::now();
-	int64_t total_ticks                            = 0;
+	int64_t total_ticks                             = 0;
 
 	std::mt19937 mt;
 	uint64_t seqnum = 0;

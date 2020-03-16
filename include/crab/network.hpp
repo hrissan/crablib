@@ -84,7 +84,7 @@ private:
 		bool operator()(const Timer &a, const Timer &b) { return a.fire_time > b.fire_time; }
 	};
 	IntrusiveHeapIndex heap_index;
-	steady_clock::time_point fire_time; // Part of heap invariant, must not change, while timer is set
+	steady_clock::time_point fire_time;  // Part of heap invariant, must not change, while timer is set
 	steady_clock::time_point moved_fire_time;
 	friend struct details::RunLoopLinks;
 #else
