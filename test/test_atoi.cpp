@@ -81,6 +81,9 @@ void test_type(size_t range, std::string lead, std::string trail) {
 }
 
 int main() {
+	invariant(crab::integer_cast<int>("-123456789") == -123456789, "");
+	invariant(crab::integer_cast<unsigned>("987654321") == 987654321, "");
+
 	test_type<char>(128, "", "");
 	test_type<uint8_t>(256, "", "");
 	test_type<short>(32768, "", "");

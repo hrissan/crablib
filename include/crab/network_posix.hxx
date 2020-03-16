@@ -477,7 +477,7 @@ CRAB_INLINE UDPTransmitter::UDPTransmitter(const Address &address, Handler &&cb,
 	if (address.is_multicast_group()) {
 		details::setsockopt_1(tmp.get_value(), SOL_SOCKET, SO_BROADCAST);
 		auto mreq = details::fill_ip_mreqn(adapter);
-		details::check(setsockopt(fd.get_value(), IPPROTO_IP, IP_MULTICAST_IF, &mreq, sizeof(mreq)) >= 0,
+		details::check(setsockopt(tmp.get_value(), IPPROTO_IP, IP_MULTICAST_IF, &mreq, sizeof(mreq)) >= 0,
 		    "crab::UDPTransmitter: Failed to select multicast adapter");
 		// On multiadapter system, we should select adapter to send multicast to,
 		// unlike unicast, where adapter is selected based on routing table.

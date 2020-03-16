@@ -93,8 +93,8 @@ std::pair<T, const char *> integer_parse_impl(const char *begin, const char *end
 			return {value, "Number must start from sign or digit "};
 		if (!isdigit(*begin))
 			return {value, "Number must start from sign or digit "};
-		value                            = -static_cast<T>(*begin - '0');
-		constexpr size_t max_safe_digits = sizeof(T) * 2;  // Approximate
+		value                            = static_cast<T>('0' - *begin);  // Inverse to supress warning
+		constexpr size_t max_safe_digits = sizeof(T) * 2;                 // Approximate
 		auto safe_end                    = std::min(end, begin + max_safe_digits);
 		begin += 1;
 		// Convert as much as possible without overflow checks
