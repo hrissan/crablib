@@ -59,7 +59,8 @@ private:
 
 class Timer {
 public:
-	explicit Timer(Handler &&a_handler) : a_handler(std::move(a_handler)) {}
+	explicit Timer(Handler &&cb) : a_handler(std::move(cb)) {}
+	void set_handler(Handler &&cb) { a_handler = std::move(cb); }
 	~Timer() { cancel(); }
 
 	void once(double after_seconds);  // cancels previous once first
@@ -75,6 +76,7 @@ private:
 	};
 	IntrusiveHeapIndex heap_index;
 	std::chrono::steady_clock::time_point fire_time;
+	std::chrono::steady_clock::time_point moved_fire_time;
 	friend struct details::RunLoopLinks;
 #else
 	std::unique_ptr<TimerImpl> impl;
@@ -84,7 +86,8 @@ private:
 
 class Watcher {
 public:
-	explicit Watcher(Handler &&a_handler);
+	explicit Watcher(Handler &&cb);
+	void set_handler(Handler &&cb) { a_handler.handler = std::move(cb); }
 	~Watcher() { cancel(); }
 
 	void cancel();
@@ -106,7 +109,8 @@ private:
 
 class Idle {
 public:
-	explicit Idle(Handler &&a_handler);
+	explicit Idle(Handler &&cb);
+	void set_handler(Handler &&cb) { a_handler.handler = std::move(cb); }
 	// Active after construction, only handlers of active Idles will run
 
 	void set_active(bool a);
@@ -129,7 +133,8 @@ private:
 // application components destructors to close/flush/commit all held resources.
 class SignalStop {
 public:
-	explicit SignalStop(Handler &&a_handler);
+	explicit SignalStop(Handler &&cb);
+	void set_handler(Handler &&cb) { a_handler.handler = std::move(cb); }
 	~SignalStop();
 
 	static bool running_under_debugger();
@@ -173,8 +178,10 @@ std::ostream &operator<<(std::ostream &os, const Address &msg);
 // socket is not RAII because it can go to disconnected state by external interaction
 class TCPSocket : public IStream, public OStream {
 public:
-	explicit TCPSocket(Handler &&rwd_handler) : rwd_handler(std::move(rwd_handler)) {}
-	void set_handler(Handler &&rwd_handler);
+	explicit TCPSocket(Handler &&cb) : rwd_handler(std::move(cb)) {}
+	// cb is called when read or write is possible or socket closed from other side
+	// in your handler, first check for is_open(), if false, socket was closed
+	void set_handler(Handler &&cb) { rwd_handler.handler = std::move(cb); }
 
 	~TCPSocket() override { close(); }
 	void close();
@@ -223,7 +230,8 @@ private:
 
 class TCPAcceptor {
 public:
-	explicit TCPAcceptor(const Address &address, Handler &&a_handler);
+	explicit TCPAcceptor(const Address &address, Handler &&cb);
+	void set_handler(Handler &&cb) { a_handler.handler = std::move(cb); }
 	~TCPAcceptor();
 
 	bool can_accept();  // Very fast if nothing to accept
@@ -258,8 +266,9 @@ private:
 // Abstracts UDP outgoing buffer with event on buffer space available
 class UDPTransmitter {
 public:
-	explicit UDPTransmitter(const Address &address, Handler &&w_handler, const std::string &adapter = std::string{});
+	explicit UDPTransmitter(const Address &address, Handler &&cb, const std::string &adapter = std::string{});
 	// If multicast group address is used, receiver will transmit on specified or default adapter
+	void set_handler(Handler &&cb) { w_handler.handler = std::move(cb); }
 
 	bool write_datagram(const uint8_t *data, size_t count);
 	// returns false if buffer is full or a error occurs
@@ -279,9 +288,10 @@ private:
 
 class UDPReceiver {
 public:
-	explicit UDPReceiver(const Address &address, Handler &&r_handler, const std::string &adapter = std::string{});
+	explicit UDPReceiver(const Address &address, Handler &&cb, const std::string &adapter = std::string{});
 	// address must be either local adapter address (127.0.0.1, 0.0.0.0) or multicast group address
 	// If multicast group address is used, receiver will join group on specified or default adapter
+	void set_handler(Handler &&cb) { r_handler.handler = std::move(cb); }
 
 	static constexpr size_t MAX_DATAGRAM_SIZE = 65536;
 	std::pair<bool, size_t> read_datagram(uint8_t *data, size_t count, Address *peer_addr = nullptr);
@@ -310,10 +320,11 @@ struct RunLoopLinks : private Nocopy {  // Common structure when implementing ov
 
 	IntrusiveList<Callable, &Callable::triggered_callables_node> triggered_callables;
 	IntrusiveList<Idle, &Idle::idle_node> idle_handlers;
+	std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
 	void trigger_idle_handlers();
 	bool quit = true;
 
-	bool process_timer(const std::chrono::steady_clock::time_point &now, int &timeout_ms);
+	bool process_timer(int &timeout_ms);
 
 	// protected queue below can be accessed in call_watcher from other threads
 	std::mutex mutex;
@@ -333,9 +344,12 @@ public:
 
 	static RunLoop *current() { return CurrentLoop::instance; }
 
-	void run();  // run until cancel
-	void cancel();
-	// do not call from other threads, use active object in that case
+	void run();     // run until cancel
+	void cancel();  // do not call from other threads, use Watcher.
+
+	std::chrono::steady_clock::time_point now();
+	// will update max 1 per loop iteration. This saves a lot on syscalls, when moving 500
+	// timers of tcp socket per iteration under heavy load
 
 	PerformanceStats stats;  // User stats can also be recorded here
 

@@ -24,6 +24,8 @@ RunLoop::~RunLoop() { current_loop = 0; }
 
 void RunLoop::run() { io_service.run(); }
 
+CRAB_INLINE std::chrono::steady_clock::time_point RunLoop::now() { return std::chrono::steady_clock::now(); }
+
 class Timermpl {
 public:
 	explicit TimerImpl(Timer *owner) : owner(owner), pending_wait(false), timer(EventLoop::current()->io()) {}

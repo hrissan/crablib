@@ -49,8 +49,6 @@ CRAB_INLINE std::ostream &operator<<(std::ostream &os, const Address &msg) {
 	return os << msg.get_address() << ":" << msg.get_port();
 }
 
-CRAB_INLINE void TCPSocket::set_handler(Handler &&rwd_handler) { this->rwd_handler.handler = std::move(rwd_handler); }
-
 #if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL || CRAB_SOCKET_WINDOWS
 
 CRAB_INLINE void Callable::add_pending_callable(bool can_read, bool can_write) {
@@ -70,29 +68,39 @@ CRAB_INLINE void RunLoopLinks::trigger_idle_handlers() {
 	}
 }
 
-CRAB_INLINE bool RunLoopLinks::process_timer(const std::chrono::steady_clock::time_point &now, int &timeout_ms) {
+CRAB_INLINE bool RunLoopLinks::process_timer(int &timeout_ms) {
 	if (active_timers.empty())
 		return false;
-	Timer &timer = active_timers.front();
-	if (timer.fire_time <= now) {
-		active_timers.pop_front();
-		// Timer is not Callable, timers must not be put into triggered_callables en masse
-		// then executed, because then the timer.is_set() will be false for all timers except
-		// the first one, while handler for that particular timer did not run yet.
-		// This would break app logic if timers are used as a logic state holders (which is
-		// useful and common), what is worse the probability of bug will be very low, so those
-		// problems would be very hard to debug.
-		timer.a_handler();
-		return true;
+	while (true) {
+		Timer &timer = active_timers.front();
+		if (timer.fire_time <= now) {
+			active_timers.pop_front();
+			if (timer.moved_fire_time > now) {  // Timer was moved far enough without rescheduling
+				std::cout << "crab::Timer fired with moving_fire_time set, rescheduling without calling handler "
+				          << std::endl;
+				timer.fire_time = timer.moved_fire_time;
+				active_timers.insert(timer);
+				continue;
+			}
+			// Timer is not Callable, timers must not be put into triggered_callables en masse
+			// then executed, because then the timer.is_set() will be false for all timers except
+			// the first one, while handler for that particular timer did not run yet.
+			// This would break app logic if timers are used as a logic state holders (which is
+			// useful and common), what is worse the probability of bug will be very low, so those
+			// problems would be very hard to debug.
+			timer.a_handler();
+			return true;
+		}
+		// We do not want to overlap duration_cast
+		const auto now_plus_max_sleep = now + std::chrono::milliseconds(RunLoop::MAX_SLEEP_MS);
+		if (timer.fire_time >= now_plus_max_sleep)
+			return false;
+		timeout_ms = 1 + static_cast<int>(
+		                     std::chrono::duration_cast<std::chrono::milliseconds>(timer.fire_time - now).count());
+		// crude way of rounding up, we do not want to wake loop up BEFORE fire_time.
+		// Moreover, 0 means "poll" and we do not want to poll for 0.9 msec waiting for timer
+		break;
 	}
-	// We do not want to overlap duration_cast
-	const auto now_plus_max_sleep = now + std::chrono::milliseconds(RunLoop::MAX_SLEEP_MS);
-	if (timer.fire_time >= now_plus_max_sleep)
-		return false;
-	timeout_ms =
-	    1 + static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(timer.fire_time - now).count());
-	// crude way of rounding up, we do not want to wake loop up BEFORE fire_time.
-	// Moreover, 0 means "poll" and we do not want to poll for 1 msec waiting for timer
 	return false;
 }
 
@@ -118,7 +126,7 @@ CRAB_INLINE void RunLoopLinks::trigger_called_watchers() {
 
 CRAB_INLINE void RunLoop::run() {
 	links.quit = false;
-	auto now   = std::chrono::steady_clock::now();
+	links.now  = std::chrono::steady_clock::now();
 	while (!links.quit) {
 		if (!links.triggered_callables.empty()) {
 			Callable &callable = *links.triggered_callables.begin();
@@ -127,7 +135,7 @@ CRAB_INLINE void RunLoop::run() {
 			continue;
 		}
 		int timeout_ms = MAX_SLEEP_MS;
-		if (links.process_timer(now, timeout_ms))
+		if (links.process_timer(timeout_ms))
 			continue;
 		// Nothing triggered and no timers here
 		if (links.idle_handlers.empty()) {
@@ -136,20 +144,22 @@ CRAB_INLINE void RunLoop::run() {
 			step(0);  // Poll
 			links.trigger_idle_handlers();
 		}
-		now = std::chrono::steady_clock::now();
+		links.now = std::chrono::steady_clock::now();
 		// Runloop optimizes # of calls to now() because those can be slow
 	}
 }
 
+CRAB_INLINE std::chrono::steady_clock::time_point RunLoop::now() { return links.now; }
+
 CRAB_INLINE void Timer::once(double after_seconds) {
-	cancel();
-	const auto now = std::chrono::steady_clock::now();
+	const auto now = RunLoop::current()->links.now;
+	std::chrono::steady_clock::time_point ft{};
 #if CRAB_NO_CHECK_TIMER_OVERFLOW
-	fire_time = now + std::chrono::duration_cast<std::chrono::steady_clock::duration>(
-	                      std::chrono::duration<double>(after_seconds));
+	ft = now + std::chrono::duration_cast<std::chrono::steady_clock::duration>(
+	               std::chrono::duration<double>(after_seconds));
 #else
 	if (after_seconds < 0) {
-		fire_time = now;
+		ft = now;
 	} else {
 		// We do not wish to overflow time point. Observation - chrono is a disaster, will do manually
 		double fsc = after_seconds * std::chrono::steady_clock::time_point::period::den /
@@ -158,12 +168,23 @@ CRAB_INLINE void Timer::once(double after_seconds) {
 		const auto max_after_seconds = (ma - now).count();
 
 		if (fsc >= max_after_seconds)  // double >= double
-			fire_time = std::chrono::steady_clock::time_point::max();
+			ft = std::chrono::steady_clock::time_point::max();
 		else
-			fire_time = now + std::chrono::steady_clock::duration(std::chrono::steady_clock::duration::rep(fsc));
+			ft = now + std::chrono::steady_clock::duration(std::chrono::steady_clock::duration::rep(fsc));
 	}
 #endif
-	RunLoop::current()->links.active_timers.insert(*this);
+	// if you call once() again without calling cancel and fire_time will increase, crab will
+	// not cancel timer, but will only set moved_fire_time instead. When timer fires, crab will
+	// reschedule it. So, if you set TCP timeout to 1 second on each TCP packet and you get 1000
+	// packets per second, crab will reschedule timer only 1 per second
+	if (is_set() && ft >= fire_time) {
+		std::cout << "crab::Timer moving fire_time " << std::endl;
+		moved_fire_time = ft;
+	} else {
+		RunLoop::current()->links.active_timers.erase(*this);
+		moved_fire_time = fire_time = ft;
+		RunLoop::current()->links.active_timers.insert(*this);
+	}
 }
 
 CRAB_INLINE bool Timer::is_set() const { return heap_index.in_heap(); }
