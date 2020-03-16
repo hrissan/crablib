@@ -8,6 +8,7 @@
 #include <cstring>
 #include <limits>
 #include <memory>
+#include <random>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -80,5 +81,28 @@ inline bool operator==(const Literal &a, const std::string &b) { return a.compar
 inline bool operator!=(const Literal &a, const std::string &b) { return !(a == b); }
 
 #define CRAB_LITERAL(name, value) static const Literal name{value, Literal::length(value)};
+
+class Random {
+public:
+	Random();
+
+	void bytes(uint8_t *buffer, size_t size);
+	void bytes(char *buffer, size_t size) { bytes(reinterpret_cast<uint8_t *>(buffer), size); }
+
+	std::string printable_string(size_t size);
+
+	template<typename T>
+	T pod() {
+		static_assert(std::is_standard_layout<T>::value, "T must be Standard Layout");
+		T result{};
+		bytes(reinterpret_cast<uint8_t *>(&result), sizeof(result));
+		return result;
+	}
+
+private:
+	using MT = std::mt19937;
+	using VT = uint32_t;  // Too hard to get right type from MT so that memcpy is optimized
+	MT mt;
+};
 
 }  // namespace crab

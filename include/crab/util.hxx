@@ -57,4 +57,49 @@ CRAB_INLINE std::string invariant_violated(const char *expr, const char *file, i
 }
 }  // namespace details
 
+CRAB_INLINE Random::Random() {
+	std::random_device rd;
+	std::seed_seq seq{rd(), rd(), rd(), rd(), rd(), rd(), rd(), rd()};
+	// 256+ bit of entropy if rd() returns 32+ bit, which is common
+	// See also https://stackoverflow.com/questions/35935895/how-can-i-know-the-correct-size-of-a-stdseed-seq
+	// Generally, C++ random is crap, should be replaced with good impl in future.
+	// why engine cannot be seeded by passing std::random_device directly is beyond my comprehension
+	mt.seed(seq);
+}
+
+CRAB_INLINE void Random::bytes(uint8_t *buffer, size_t size) {
+	size_t i = 0;
+	for (; i + sizeof(VT) <= size; i += sizeof(VT)) {
+		VT value = static_cast<VT>(mt());
+		memcpy(buffer + i, &value, sizeof(VT));
+	}
+	if (i == size)
+		return;
+	auto value = mt();
+	for (; i < size; i += 1) {
+		buffer[i] = value;
+		value >>= 8U;
+	}
+}
+
+CRAB_INLINE std::string Random::printable_string(size_t size) {
+	constexpr size_t BITS        = 6;
+	constexpr size_t MASK        = (1U << BITS) - 1;
+	static const char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+	std::string result(size, '\0');
+	size_t i = 0;
+	for (; i != size;) {
+		VT value = static_cast<VT>(mt());
+		for (size_t j = 0; j != sizeof(VT) * 8 / BITS; ++j) {
+			if ((value & MASK) >= sizeof(alphabet) - 1)
+				continue;
+			result[i++] = alphabet[(value & MASK)];
+			if (i == size)
+				return result;
+			value >>= BITS;
+		}
+	}
+	return result;
+};
+
 }  // namespace crab

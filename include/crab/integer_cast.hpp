@@ -76,7 +76,8 @@ inline bool is_integer_space(char c) { return isspace(c); }  //  c == ' ' || c =
 // C++ committee cannot do anything of quality...
 // std::stoull will parse -5 to binary representation without exception, uh-oh
 // there is not way to convert to (u)short, (u)char with overflow checks
-// Focus is on correctness, not raw speed. We allow may leading 0, so 000000 is valid
+
+// Parser focus here is on correctness, not raw speed. We allow many leading 0, so 000012 is valid
 
 template<typename T>
 std::pair<T, const char *> integer_parse_impl(const char *begin, const char *end) {
@@ -86,14 +87,14 @@ std::pair<T, const char *> integer_parse_impl(const char *begin, const char *end
 	if (begin == end)
 		return {value, "Number must start from sign or digit "};
 	if (*begin == '-') {
-		if (std::is_unsigned<T>::value)
+		if (std::is_unsigned<T>::value)  // No template magic, optimizer will remove excess code for unsigned
 			return {value, "Unsigned Number cannot be negative "};
 		begin += 1;
 		if (begin == end)
 			return {value, "Number must start from sign or digit "};
 		if (!isdigit(*begin))
 			return {value, "Number must start from sign or digit "};
-		value                            = static_cast<T>('0' - *begin);  // Inverse to supress warning
+		value                            = static_cast<T>('0' - *begin);  // reverse for no warning for unsigned
 		constexpr size_t max_safe_digits = sizeof(T) * 2;                 // Approximate
 		auto safe_end                    = std::min(end, begin + max_safe_digits);
 		begin += 1;

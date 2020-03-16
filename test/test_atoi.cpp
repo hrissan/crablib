@@ -30,6 +30,12 @@ template<class T>
 void test_type(size_t range, std::string lead, std::string trail) {
 	T value  = 0;
 	T value2 = 0;
+	crab::Random rnd;
+	for (size_t i = 0; i != range; ++i) {
+		value  = rnd.pod<T>();
+		value2 = crab::integer_cast<T>(std::to_string(value));
+		invariant(value == value2, "");
+	}
 	for (size_t i = 0; i != range; ++i) {
 		value  = std::numeric_limits<T>::min() + T(i);
 		value2 = crab::integer_cast<T>(std::to_string(value));
@@ -69,14 +75,6 @@ void test_type(size_t range, std::string lead, std::string trail) {
 			ma.back() = char('0' + i);
 			must_fail([&] { value2 = crab::integer_cast<T>(ma); });
 		}
-	}
-	std::random_device rand_dev;
-	std::mt19937 generator(rand_dev());
-	std::uniform_int_distribution<T> distr;
-	for (size_t i = 0; i != range; ++i) {
-		value  = distr(generator);
-		value2 = crab::integer_cast<T>(std::to_string(value));
-		invariant(value == value2, "");
 	}
 }
 
