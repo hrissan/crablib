@@ -200,6 +200,10 @@ public:
 	size_t write_some(const uint8_t *val, size_t count) override;
 	// writes 0..count-1, if returns 0 (outgoing buffer full) will
 	// fire rwd_handler in future
+	bool can_write() const { return rwd_handler.can_write; }
+	// write_some will return 0 if cannot write, but this is too late for clients
+	// who wish to work without buffer and need to prepare data,
+	// there is no can_read(), calling read_some is perfect
 
 	void write_shutdown();
 	// will disconnect only after all sent data is acknowledged and FIN is acknowledged
@@ -273,6 +277,9 @@ public:
 	bool write_datagram(const uint8_t *data, size_t count);
 	// returns false if buffer is full or a error occurs
 	// cannot return size_t, because datagrams of zero size are valid
+	bool can_write() const { return w_handler.can_write; }
+	// write_datagram will return false if cannot write, but this is too late for clients
+	// who wish to work without buffer and need to prepare data,
 
 private:
 	Callable w_handler;
