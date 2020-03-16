@@ -434,7 +434,7 @@ struct hash<OrderId> {
 }  // namespace std
 
 int main() {
-	//	benchmark_sets();
+	benchmark_sets();
 	std::cout << "Testing small std::map<int> count=" << COUNT << std::endl;
 	benchmark<int, std::map<int, size_t>>(small_int_gen);
 	std::cout << "Testing small std::unordered<int> count=" << COUNT << std::endl;

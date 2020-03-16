@@ -20,12 +20,12 @@
 namespace crab {
 
 struct PerformanceRecord {
-	std::chrono::steady_clock::time_point tm;
+	steady_clock::time_point tm;
 	const char *event_type = nullptr;  // Only literals, so recording is very fast
 	int fd                 = 0;        // fd or user object identifier
 	int count              = 0;        // bytes, events or mask
 	PerformanceRecord()    = default;  // brace-initializer does not work with C++11, hence constructors
-	PerformanceRecord(std::chrono::steady_clock::time_point tm, const char *event_type, int fd, int count)
+	PerformanceRecord(steady_clock::time_point tm, const char *event_type, int fd, int count)
 	    : tm(tm), event_type(event_type), fd(fd), count(count) {}
 };
 
@@ -63,7 +63,16 @@ public:
 	void set_handler(Handler &&cb) { a_handler = std::move(cb); }
 	~Timer() { cancel(); }
 
-	void once(double after_seconds);  // cancels previous once first
+	// Timer is one-shot, semantic of calling once() on set timer is cancel+once, but it takes only
+	// 2 integer comparisons + 1 integer assignment to advance not yet fired timer further into
+	// future, so calling once(timeout) on each incoming TCP packet million times per second, while
+	// having 100000 timers set is absolutely OK.
+	// once(double) is recommended for most uses
+	// once(steady_clock::duration) is for performance-critical code paths
+	void once(double delay_seconds);
+	void once(steady_clock::duration delay);
+	void once_at(steady_clock::time_point time_point);
+
 	bool is_set() const;
 	void cancel();
 
@@ -75,8 +84,8 @@ private:
 		bool operator()(const Timer &a, const Timer &b) { return a.fire_time > b.fire_time; }
 	};
 	IntrusiveHeapIndex heap_index;
-	std::chrono::steady_clock::time_point fire_time;
-	std::chrono::steady_clock::time_point moved_fire_time;
+	steady_clock::time_point fire_time; // Part of heap invariant, must not change, while timer is set
+	steady_clock::time_point moved_fire_time;
 	friend struct details::RunLoopLinks;
 #else
 	std::unique_ptr<TimerImpl> impl;
@@ -327,7 +336,7 @@ struct RunLoopLinks : private Nocopy {  // Common structure when implementing ov
 
 	IntrusiveList<Callable, &Callable::triggered_callables_node> triggered_callables;
 	IntrusiveList<Idle, &Idle::idle_node> idle_handlers;
-	std::chrono::steady_clock::time_point now = std::chrono::steady_clock::now();
+	steady_clock::time_point now = steady_clock::now();
 	void trigger_idle_handlers();
 	bool quit = true;
 
@@ -354,7 +363,7 @@ public:
 	void run();     // run until cancel
 	void cancel();  // do not call from other threads, use Watcher.
 
-	std::chrono::steady_clock::time_point now();
+	steady_clock::time_point now();
 	// will update max 1 per loop iteration. This saves a lot on syscalls, when moving 500
 	// timers of tcp socket per iteration under heavy load
 

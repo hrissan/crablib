@@ -36,6 +36,8 @@
 
 namespace crab {
 
+using steady_clock = std::chrono::steady_clock;
+
 typedef std::function<void()> Handler;
 inline void empty_handler() {}
 

@@ -14,7 +14,7 @@ CRAB_INLINE PerformanceStats::PerformanceStats() { performance.reserve(MAX_PERFO
 
 CRAB_INLINE void PerformanceStats::push_record(const char *event_type_literal, int fd, int count) {
 	if (performance.size() < MAX_PERFORMANCE_RECORDS)
-		performance.emplace_back(std::chrono::steady_clock::now(), event_type_literal, fd, count);
+		performance.emplace_back(steady_clock::now(), event_type_literal, fd, count);
 }
 
 CRAB_INLINE void PerformanceStats::print_records(std::ostream &out) {
@@ -124,7 +124,7 @@ CRAB_INLINE void RunLoopLinks::trigger_called_watchers() {
 
 CRAB_INLINE void RunLoop::run() {
 	links.quit = false;
-	links.now  = std::chrono::steady_clock::now();
+	links.now  = steady_clock::now();
 	while (!links.quit) {
 		if (!links.triggered_callables.empty()) {
 			Callable &callable = *links.triggered_callables.begin();
@@ -142,44 +142,60 @@ CRAB_INLINE void RunLoop::run() {
 			step(0);  // Poll
 			links.trigger_idle_handlers();
 		}
-		links.now = std::chrono::steady_clock::now();
+		links.now = steady_clock::now();
 		// Runloop optimizes # of calls to now() because those can be slow
 	}
 }
 
-CRAB_INLINE std::chrono::steady_clock::time_point RunLoop::now() { return links.now; }
+CRAB_INLINE steady_clock::time_point RunLoop::now() { return links.now; }
 
-CRAB_INLINE void Timer::once(double after_seconds) {
+CRAB_INLINE void Timer::once(double delay_seconds) {
 	const auto now = RunLoop::current()->links.now;
-	std::chrono::steady_clock::time_point ft{};
-#if CRAB_NO_CHECK_TIMER_OVERFLOW
-	ft = now + std::chrono::duration_cast<std::chrono::steady_clock::duration>(
-	               std::chrono::duration<double>(after_seconds));
-#else
-	if (after_seconds < 0) {
-		ft = now;
-	} else {
-		// We do not wish to overflow time point. Observation - chrono is a disaster, will do manually
-		double fsc = after_seconds * std::chrono::steady_clock::time_point::period::den /
-		             std::chrono::steady_clock::time_point::period::num;
-		const auto ma                = std::chrono::steady_clock::time_point::max();
-		const auto max_after_seconds = (ma - now).count();
-
-		if (fsc >= max_after_seconds)  // double >= double
-			ft = std::chrono::steady_clock::time_point::max();
-		else
-			ft = now + std::chrono::steady_clock::duration(std::chrono::steady_clock::duration::rep(fsc));
+	// We do not wish to overflow time point. Observation - chrono is a disaster, will do manually
+	// once(double) is slower anyway, than once(duration), so couple extra checks
+	// Normally this code would be enough
+	// once_at(now + std::chrono::duration_cast<steady_clock::duration>(
+	//               std::chrono::duration<double>(after_seconds)));
+	if (delay_seconds <= 0) {
+		once_at(now);
+		return;
 	}
-#endif
+	double fsc    = delay_seconds * steady_clock::time_point::period::den / steady_clock::time_point::period::num;
+	const auto ma = steady_clock::time_point::max();
+	const auto max_delay_seconds = (ma - now).count();
+
+	if (fsc >= double(max_delay_seconds))
+		once_at(ma);
+	else
+		once_at(now + steady_clock::duration{steady_clock::duration::rep{fsc}});
+}
+
+CRAB_INLINE void Timer::once(steady_clock::duration delay) {
+	const auto now = RunLoop::current()->links.now;
+	// We wish to clamp time point instead of overflow. Observation - chrono is a disaster, will do manually
+	if (delay.count() <= 0) {
+		once_at(now);
+		return;
+	}
+	const auto ma                = steady_clock::time_point::max();
+	const auto max_delay_seconds = (ma - now).count();
+
+	if (delay.count() >= max_delay_seconds)
+		once_at(ma);
+	else
+		once_at(now + delay);
+}
+
+CRAB_INLINE void Timer::once_at(steady_clock::time_point time_point) {
 	// if you call once() again without calling cancel and fire_time will increase, crab will
 	// not cancel timer, but will only set moved_fire_time instead. When timer fires, crab will
 	// reschedule it. So, if you set TCP timeout to 1 second on each TCP packet and you get 1000
 	// packets per second, crab will reschedule timer only 1 per second
-	if (is_set() && ft >= fire_time) {
-		moved_fire_time = ft;
+	if (is_set() && time_point >= fire_time) {
+		moved_fire_time = time_point;
 	} else {
 		RunLoop::current()->links.active_timers.erase(*this);
-		moved_fire_time = fire_time = ft;
+		moved_fire_time = fire_time = time_point;
 		RunLoop::current()->links.active_timers.insert(*this);
 	}
 }
