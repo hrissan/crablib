@@ -75,14 +75,12 @@ constexpr int MAX_EVENTS = 512;
 
 constexpr bool DETAILED_DEBUG = false;
 
-static int tcp_id_counter = 0;  // TODO - global
-
 }  // namespace details
 
 struct RunLoopImpl {
 	details::Overlapped wake_handler;
 	details::AutoHandle completion_queue;
-	std::atomic<size_t> pending_counter{0};  // TODO - check that atomic is requried, probably remove
+	size_t pending_counter = 0;
 	size_t impl_counter = 0;
 
 	explicit RunLoopImpl(Handler &&cb) : wake_handler([mcb = std::move(cb)](DWORD bytes, bool result) { mcb(); }) {
@@ -181,11 +179,14 @@ struct TCPSocketImpl {
 	}
 	~TCPSocketImpl() { loop->get_impl()->impl_counter -= 1; }
 
+
+	static size_t tcp_id_counter = 0;
+
 	details::SocketDescriptor fd;
 	details::Overlapped read_overlapped;
 	details::Overlapped write_overlapped;
 	TCPSocket *owner;
-	int tcp_id;
+	const size_t tcp_id;
 	RunLoop *loop;
 	Buffer read_buf;
 	Buffer write_buf;
