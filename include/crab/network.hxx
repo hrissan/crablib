@@ -76,8 +76,6 @@ CRAB_INLINE bool RunLoopLinks::process_timer(int &timeout_ms) {
 		if (timer.fire_time <= now) {
 			active_timers.pop_front();
 			if (timer.moved_fire_time > now) {  // Timer was moved far enough without rescheduling
-				std::cout << "crab::Timer fired with moving_fire_time set, rescheduling without calling handler "
-				          << std::endl;
 				timer.fire_time = timer.moved_fire_time;
 				active_timers.insert(timer);
 				continue;
@@ -178,7 +176,6 @@ CRAB_INLINE void Timer::once(double after_seconds) {
 	// reschedule it. So, if you set TCP timeout to 1 second on each TCP packet and you get 1000
 	// packets per second, crab will reschedule timer only 1 per second
 	if (is_set() && ft >= fire_time) {
-		std::cout << "crab::Timer moving fire_time " << std::endl;
 		moved_fire_time = ft;
 	} else {
 		RunLoop::current()->links.active_timers.erase(*this);
