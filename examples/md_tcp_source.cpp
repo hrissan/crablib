@@ -40,7 +40,7 @@ private:
 
 	void on_idle() {
 		auto now     = std::chrono::steady_clock::now();
-		size_t ticks = std::chrono::duration_cast<std::chrono::microseconds>(now - last_tick).count();
+		int64_t ticks = std::chrono::duration_cast<std::chrono::microseconds>(now - last_tick).count();
 		if (ticks == 0)
 			return;
 		last_tick = now;
@@ -97,7 +97,7 @@ private:
 	crab::Idle idle;
 
 	std::chrono::steady_clock::time_point last_tick = std::chrono::steady_clock::now();
-	uint64_t total_ticks                            = 0;
+	int64_t total_ticks                            = 0;
 
 	std::mt19937 mt;
 	uint64_t seqnum = 0;
@@ -185,9 +185,9 @@ private:
 		const auto messages_start = messages.front().seqnum;
 
 		crab::StringStream body;
-		body.get_buffer().reserve((end - begin) * Msg::size);
+		body.get_buffer().reserve(static_cast<size_t>(end - begin) * Msg::size);
 		for (auto s = begin; s != end; ++s) {
-			messages.at(s - messages_start).write(&body);
+			messages.at(static_cast<size_t>(s - messages_start)).write(&body);
 		}
 		response.r.status = 200;
 		response.r.set_content_type("text/plain", "charset=utf-8");

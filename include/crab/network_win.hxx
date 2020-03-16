@@ -171,7 +171,7 @@ struct TCPSocketImpl {
 	    : read_overlapped([&](DWORD b, bool r) { on_overlapped_read(b, r); })
 	    , write_overlapped([&](DWORD b, bool r) { on_overlapped_write(b, r); })
 	    , owner(owner)
-	    , tcp_id(++details::tcp_id_counter)
+	    , tcp_id(++tcp_id_counter)
 	    , loop(RunLoop::current())
 	    , read_buf(details::OVERLAPPED_BUFFER_SIZE)
 	    , write_buf(details::OVERLAPPED_BUFFER_SIZE) {
@@ -180,7 +180,7 @@ struct TCPSocketImpl {
 	~TCPSocketImpl() { loop->get_impl()->impl_counter -= 1; }
 
 
-	static size_t tcp_id_counter = 0;
+	static size_t tcp_id_counter;
 
 	details::SocketDescriptor fd;
 	details::Overlapped read_overlapped;
@@ -330,6 +330,9 @@ struct TCPSocketImpl {
 		}
 	}
 };
+
+size_t TCPSocketImpl::tcp_id_counter = 0;
+
 
 CRAB_INLINE void TCPSocket::close() {
 	rwd_handler.cancel_callable();

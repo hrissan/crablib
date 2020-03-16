@@ -167,7 +167,7 @@ CRAB_INLINE void Timer::once(double delay_seconds) {
 	if (fsc >= double(max_delay_seconds))
 		once_at(ma);
 	else
-		once_at(now + steady_clock::duration{steady_clock::duration::rep{fsc}});
+		once_at(now + steady_clock::duration{static_cast<steady_clock::duration::rep>(fsc)});
 }
 
 CRAB_INLINE void Timer::once(steady_clock::duration delay) {

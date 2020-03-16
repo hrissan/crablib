@@ -131,7 +131,7 @@ CRAB_INLINE void MessageBodyParser::parse(Buffer &buf) {
 CRAB_INLINE void MessageBodyParser::add_chunk(const WebMessageChunk &chunk) {
 	remaining_bytes += chunk.payload_len;
 	if (chunk.fin && chunk.payload_len < 1024 * 1024)  // Good optimization for common single-fragment messages
-		body.get_buffer().reserve(body.get_buffer().size() + chunk.payload_len);
+		body.get_buffer().reserve(body.get_buffer().size() + static_cast<size_t>(chunk.payload_len));
 	masking_key   = chunk.masking_key;
 	masking_shift = 0;
 	state         = (remaining_bytes == 0) ? GOOD : BODY;
