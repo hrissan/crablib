@@ -224,15 +224,16 @@ void benchmark_timers() {
 	Random random(12345);
 
 	std::vector<std::chrono::steady_clock::duration> durs;
-	std::vector<crab::Timer> timers;
+	std::list<crab::Timer> timers;
 	for (size_t i = 0; i != COUNT; ++i) {
 		timers.emplace_back(crab::empty_handler);
 		std::chrono::duration<double> delay(random.rnd() % COUNT);
 		durs.push_back(std::chrono::duration_cast<std::chrono::steady_clock::duration>(delay));
 	}
-	auto idea_start = std::chrono::high_resolution_clock::now();
-	for (size_t i = 0; i != COUNT; ++i) {
-		timers[i].once(durs[i]);
+	auto idea_start                     = std::chrono::high_resolution_clock::now();
+	std::list<crab::Timer>::iterator it = timers.begin();
+	for (size_t i = 0; it != timers.end(); ++i, ++it) {
+		it->once(durs[i]);
 	}
 	auto idea_ms =
 	    std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - idea_start);
@@ -240,8 +241,10 @@ void benchmark_timers() {
 	          << " count=" << COUNT << ", seconds=" << double(idea_ms.count()) / 1000 << std::endl;
 	idea_start = std::chrono::high_resolution_clock::now();
 	for (size_t j = 0; j != COUNT_MOVE; ++j) {
-		for (size_t i = 0; i != COUNT; ++i)
-			timers[i].once(durs[i] + std::chrono::steady_clock::duration{1 + j});
+		it = timers.begin();
+		for (size_t i = 0; it != timers.end(); ++i, ++it) {
+			it->once(durs[i] + std::chrono::steady_clock::duration{1 + j});
+		}
 	}
 	idea_ms =
 	    std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - idea_start);
@@ -249,8 +252,9 @@ void benchmark_timers() {
 	          << " count=" << COUNT_MOVE << "*" << COUNT << ", seconds=" << double(idea_ms.count()) / 1000
 	          << std::endl;
 	idea_start = std::chrono::high_resolution_clock::now();
-	for (size_t i = 0; i != COUNT; ++i) {
-		timers[i].cancel();
+	it         = timers.begin();
+	for (size_t i = 0; it != timers.end(); ++i, ++it) {
+		it->cancel();
 	}
 	idea_ms =
 	    std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - idea_start);

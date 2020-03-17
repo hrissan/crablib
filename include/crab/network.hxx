@@ -233,7 +233,7 @@ CRAB_INLINE void Watcher::cancel() {
 
 CRAB_INLINE bool TCPSocket::can_write() const { return rwd_handler.can_write; }
 
-CRAB_INLINE bool UDPTransmitter::can_write() const { return rwd_handler.can_write; }
+CRAB_INLINE bool UDPTransmitter::can_write() const { return w_handler.can_write; }
 
 #endif
 
