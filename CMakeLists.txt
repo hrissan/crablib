@@ -10,6 +10,7 @@ message("-DCRAB_FUZZ=1 builds binaries for fuzzing. Disabled by default because 
 option(CRAB_FUZZ "builds binaries for fuzzing" OFF)
 
 # add_definitions(-DCRAB_COMPILE=1)
+# add_definitions(-DCRAB_SOCKET_BOOST=1)
 
 if(WIN32)
 #	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Ot")
@@ -70,6 +71,23 @@ set(SOURCE_FILES
 		)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/bin")
+
+set(Boost_USE_STATIC_LIBS ON)
+add_definitions(-DBOOST_BIND_NO_PLACEHOLDERS=1 -DBOOST_CONFIG_SUPPRESS_OUTDATED_MESSAGE=1) # boost::_1 conflicts with std::_1
+add_definitions(-DBOOST_ERROR_CODE_HEADER_ONLY=1 -DBOOST_SYSTEM_NO_DEPRECATED=1) # required for header-only compilation
+add_definitions(-DBOOST_DATE_TIME_NO_LIB=1 -DBOOST_SYSTEM_NO_LIB=1 -DBOOST_REGEX_NO_LIB=1) # required for header-only compilation
+set(Boost_USE_MULTITHREADED OFF) # all boost libraries are multithreaded since some version
+find_package(Boost 1.65)
+if(Boost_FOUND)
+	message( STATUS "Boost found by find_boost, Boost_INCLUDE_DIRS: " ${Boost_INCLUDE_DIRS})
+else()
+	if(NOT EXISTS "${PARENT_DIR}/boost/boost/version.hpp")
+		message(FATAL_ERROR "Boost not found, please download and unpack boost into ${PARENT_DIR}/boost")
+	endif()
+	set(Boost_INCLUDE_DIRS ${PARENT_DIR}/boost)
+	message( STATUS "Using boost from local folder, Boost_INCLUDE_DIRS: " ${Boost_INCLUDE_DIRS})
+endif()
+include_directories(${Boost_INCLUDE_DIRS})
 
 if(WIN32)
 	# set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /INCREMENTAL:NO")

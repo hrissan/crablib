@@ -200,6 +200,8 @@ CRAB_INLINE void Timer::once_at(steady_clock::time_point time_point) {
 	}
 }
 
+// CRAB_INLINE Timer::~Timer() { cancel(); }
+
 CRAB_INLINE bool Timer::is_set() const { return heap_index.in_heap(); }
 
 CRAB_INLINE void Timer::cancel() { RunLoop::current()->links.active_timers.erase(*this); }
@@ -228,6 +230,12 @@ CRAB_INLINE void Watcher::cancel() {
 	a_handler.cancel_callable();
 	loop->links.cancel_called_watcher(this);
 }
+
+CRAB_INLINE bool TCPSocket::can_write() const { return rwd_handler.can_write; }
+
+CRAB_INLINE bool UDPTransmitter::can_write() const { return rwd_handler.can_write; }
+
+#endif
 
 namespace details {
 
@@ -262,6 +270,9 @@ private:
 
 	std::thread dns_thread{&DNSWorker::worker_fun, this};
 	void worker_fun() {
+#if CRAB_SOCKET_BOOST
+		RunLoop runloop;  // boost sync resolve requires io_service
+#endif
 		while (true) {
 			std::string host_name;
 			uint16_t port = 0;
@@ -338,7 +349,5 @@ CRAB_INLINE Address DNSResolver::sync_resolve_single(const std::string &host_nam
 		return arr.front();
 	throw std::runtime_error("Failed to resolve host '" + host_name + "'");
 }
-
-#endif
 
 }  // namespace crab

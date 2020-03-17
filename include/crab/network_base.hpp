@@ -79,7 +79,10 @@ struct RunLoopLinks;
 
 #else
 
-using Callable = Handler;
+struct Callable : private Nocopy {
+	explicit Callable(Handler &&handler) : handler(handler) {}
+	Handler handler;
+};
 
 #endif
 
@@ -100,10 +103,11 @@ private:
 	int value;
 };
 }  // namespace details
-#elif CRAB_SOCKET_WINDOWS
+#else  // if CRAB_SOCKET_WINDOWS
 
 struct RunLoopImpl;
 struct TimerImpl;
+struct WatcherImpl;
 struct ActiveObjectImpl;
 struct TCPSocketImpl;
 struct TCPAcceptorImpl;

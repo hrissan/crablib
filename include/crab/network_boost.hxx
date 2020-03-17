@@ -14,23 +14,47 @@
 
 namespace crab {
 
-RunLoop::RunLoop() {
-	if (current_loop != 0)
-		throw std::runtime_error("RunLoop::RunLoop Only single RunLoop per thread is allowed");
-	current_loop = this;
+CRAB_INLINE bool Address::parse(Address &address, const std::string &ip, uint16_t port) {
+	//    boost::asio::ip::tcp::endpoint endpoint( boost::asio::ip::address::from_string(addr), port);
+
+	boost::system::error_code ec;
+	address.addr = boost::asio::ip::address::from_string(ip, ec);
+	address.port = port;
+	return !ec;
 }
 
-RunLoop::~RunLoop() { current_loop = 0; }
+CRAB_INLINE std::string Address::get_address() const {
+	boost::system::error_code ec;
+	return addr.to_string(ec) + ":" + std::to_string(get_port());
+}
 
-void RunLoop::run() { io_service.run(); }
+CRAB_INLINE uint16_t Address::get_port() const { return port; }
+
+CRAB_INLINE bool Address::is_multicast_group() const { return addr.is_multicast(); }
+
+struct RunLoopImpl {
+	boost::asio::io_service io;
+	size_t pending_counter = 0;
+	size_t impl_counter    = 0;
+};
+
+CRAB_INLINE RunLoop::RunLoop() : impl(new RunLoopImpl()) {
+	if (CurrentLoop::instance)
+		throw std::runtime_error("RunLoop::RunLoop Only single RunLoop per thread is allowed");
+	CurrentLoop::instance = this;
+}
+
+CRAB_INLINE RunLoop::~RunLoop() { CurrentLoop::instance = this; }
+
+CRAB_INLINE void RunLoop::run() { impl->io.run(); }
 
 CRAB_INLINE steady_clock::time_point RunLoop::now() { return steady_clock::now(); }
 
-class Timermpl {
+class TimerImpl {
 public:
-	explicit TimerImpl(Timer *owner) : owner(owner), pending_wait(false), timer(EventLoop::current()->io()) {}
+	explicit TimerImpl(Timer *owner) : owner(owner), timer(RunLoop::current()->get_impl()->io) {}
 	Timer *owner;
-	bool pending_wait;
+	bool pending_wait = false;
 	boost::asio::deadline_timer timer;
 
 	void close() {
@@ -58,57 +82,59 @@ public:
 		pending_wait = true;
 		timer.expires_from_now(boost::posix_time::milliseconds(
 		    static_cast<int>(after_seconds * 1000)));  // int because we do not know exact type
-		timer.async_wait(std::bind(&Impl::handle_timeout, owner->impl, _1));
+		timer.async_wait([&](boost::system::error_code e) { handle_timeout(e); });
 	}
 };
 
-Timer::~Timer() { cancel(); }
+// CRAB_INLINE Timer::~Timer() { cancel(); }
 
-void Timer::cancel() {
+CRAB_INLINE void Timer::cancel() {
 	if (impl)
 		impl->close();
 }
 
-bool Timer::is_set() const { return impl && impl->pending_wait; }
+CRAB_INLINE bool Timer::is_set() const { return impl && impl->pending_wait; }
 
-void Timer::once(double after_seconds) {
+CRAB_INLINE void Timer::once(double after_seconds) {
 	cancel();
 	if (!impl)
-		impl = std::make_unique<TimerImpl>(this);
-	impl->start_timer(after_seconds / get_time_multiplier_for_tests());
+		impl.reset(new TimerImpl(this));
+	impl->start_timer(after_seconds);
 }
+
+class WatcherImpl {};
 
 class TCPSocketImpl {
 public:
+	explicit TCPSocketImpl(TCPSocket *owner) : owner(owner), socket(RunLoop::current()->get_impl()->io) {}
 	TCPSocket *owner;
-	explicit TCPSocketImpl(TCPSocket *owner)
-	    : owner(owner), socket(RunLoop::current()->io()), incoming_buffer(8192), outgoing_buffer(8192) {}
-	bool connected = false;
+	bool connected = false;  // TODO - simplify state machine
 
 	boost::asio::ip::tcp::socket socket;
-	Buffer incoming_buffer;
-	Buffer outgoing_buffer;
+	Buffer incoming_buffer{8192};
+	Buffer outgoing_buffer{8192};
 	bool pending_connect = false;
 	bool pending_read    = false;
 	bool pending_write   = false;
 	bool asked_shutdown  = false;
 
 	void close(bool called_from_run_loop) {
-		socket.close();
+		boost::system::error_code ec;
+		socket.close(ec);  // Prevent exceptions
 		connected       = false;
 		asked_shutdown  = false;
 		pending_connect = false;
 		pending_read    = false;
 		pending_write   = false;
-		incoming_buffer.reset();
-		outgoing_buffer.reset();
+		incoming_buffer.clear();
+		outgoing_buffer.clear();
 		TCPSocket *was_owner = owner;
 		if (pending_write || pending_read || pending_connect) {
-			owner           = nullptr;
-			was_owner->impl = std::make_shared<Impl>(was_owner);
+			owner->impl.release();
+			owner = nullptr;
 		}
 		if (was_owner && called_from_run_loop)
-			was_owner->rwd_handler();
+			was_owner->rwd_handler.handler();
 	}
 	void write_shutdown() {
 		boost::system::error_code ignored_ec;
@@ -122,7 +148,7 @@ public:
 			start_read();
 			start_write();
 			if (owner)
-				owner->rwd_handler(true, true);
+				owner->rwd_handler.handler();
 			return;
 		}
 		if (e != boost::asio::error::operation_aborted) {
@@ -136,8 +162,7 @@ public:
 		boost::array<boost::asio::mutable_buffer, 2> bufs{
 		    boost::asio::buffer(incoming_buffer.write_ptr(), incoming_buffer.write_count()),
 		    boost::asio::buffer(incoming_buffer.write_ptr2(), incoming_buffer.write_count2())};
-		socket.async_read_some(bufs, boost::bind(&Impl::handle_read, owner->impl, boost::asio::placeholders::error,
-		                                 boost::asio::placeholders::bytes_transferred));
+		socket.async_read_some(bufs, [&](boost::system::error_code e, std::size_t b) { handle_read(e, b); });
 	}
 
 	void handle_read(const boost::system::error_code &e, std::size_t bytes_transferred) {
@@ -146,7 +171,7 @@ public:
 			incoming_buffer.did_write(bytes_transferred);
 			start_read();
 			if (owner)
-				owner->rwd_handler(true, true);
+				owner->rwd_handler.handler();
 			return;
 		}
 		if (e != boost::asio::error::operation_aborted) {
@@ -159,15 +184,14 @@ public:
 			return;
 		if (outgoing_buffer.empty()) {
 			if (asked_shutdown)
-				start_shutdown();
+				write_shutdown();
 			return;
 		}
 		pending_write = true;
 		boost::array<boost::asio::const_buffer, 2> bufs{
 		    boost::asio::buffer(outgoing_buffer.read_ptr(), outgoing_buffer.read_count()),
 		    boost::asio::buffer(outgoing_buffer.read_ptr2(), outgoing_buffer.read_count2())};
-		socket.async_write_some(bufs, boost::bind(&Impl::handle_write, owner->impl, boost::asio::placeholders::error,
-		                                  boost::asio::placeholders::bytes_transferred));
+		socket.async_write_some(bufs, [&](boost::system::error_code e, std::size_t b) { handle_write(e, b); });
 	}
 
 	void handle_write(const boost::system::error_code &e, std::size_t bytes_transferred) {
@@ -176,7 +200,7 @@ public:
 			outgoing_buffer.did_read(bytes_transferred);
 			start_write();
 			if (owner)
-				owner->rwd_handler(true, true);
+				owner->rwd_handler.handler();
 			return;
 		}
 		if (e != boost::asio::error::operation_aborted) {
@@ -185,83 +209,82 @@ public:
 	}
 };
 
-TCPSocket::TCPSocket(RW_handler &&rwd_handler) : rwd_handler(rwd_handler), impl(std::make_shared<Impl>(this)) {}
+CRAB_INLINE void TCPSocket::close() {
+	if (impl)
+		impl->close(false);
+}
 
-TCPSocket::~TCPSocket() { close(); }
+CRAB_INLINE bool TCPSocket::is_open() const { return impl && impl->connected; }
 
-void TCPSocket::close() { impl->close(false); }
-
-bool TCPSocket::connect(const std::string &addr, uint16_t port) {
+CRAB_INLINE bool TCPSocket::connect(const Address &address) {
 	close();
-
-	try {
-		impl->pending_connect = true;
-		boost::asio::ip::tcp::endpoint endpoint(boost::asio::ip::address::from_string(addr), port);
-		impl->socket.async_connect(
-		    endpoint, boost::bind(&TCPSocket::Impl::handle_connect, impl, boost::asio::placeholders::error));
-	} catch (...) {
-		return false;
-	}
+	if (!impl)
+		impl.reset(new TCPSocketImpl(this));
+	impl->pending_connect = true;
+	boost::asio::ip::tcp::endpoint endpoint(address.get_addr(), address.get_port());
+	auto i = impl.get();
+	impl->socket.async_connect(endpoint, [i](boost::system::error_code e) { i->handle_connect(e); });
 	return true;
 }
 
-size_t TCPSocket::read_some(uint8_t *data, size_t size) {
+CRAB_INLINE size_t TCPSocket::read_some(uint8_t *data, size_t size) {
+	if (!impl)
+		return 0;
 	size_t rc = impl->incoming_buffer.read_some(data, size);
 	impl->start_read();
 	return rc;
 }
 
-size_t TCPSocket::write_some(const uint8_t *data, size_t size) {
-	if (impl->asked_shutdown)
+CRAB_INLINE size_t TCPSocket::write_some(const uint8_t *data, size_t size) {
+	if (!impl || impl->asked_shutdown)
 		return 0;
 	size_t wc = impl->outgoing_buffer.write_some(data, size);
 	impl->start_write();
 	return wc;
 }
 
-void TCPSocket::write_shutdown() {
+CRAB_INLINE bool TCPSocket::can_write() const { return impl && !impl->outgoing_buffer.full(); }
+
+// CRAB_INLINE bool UDPTransmitter::can_write() const { return true; } // TODO
+
+CRAB_INLINE void TCPSocket::write_shutdown() {
 	if (impl->asked_shutdown)
 		return;
 	impl->asked_shutdown = true;
 	if (impl->connected && !impl->pending_write)
-		impl->start_shutdown();
+		impl->write_shutdown();
 }
 
-class TCPAcceptor::Impl {
+class TCPAcceptorImpl {
 public:
 	TCPAcceptor *owner;
-	explicit Impl(TCPAcceptor *owner)
+	explicit TCPAcceptorImpl(TCPAcceptor *owner)
 	    : owner(owner)
-	    , pending_accept(false)
-	    , acceptor(RunLoop::current()->io())
-	    , socket_being_accepted(RunLoop::current()->io())
-	    , socket_ready(false) {}
+	    , acceptor(RunLoop::current()->get_impl()->io)
+	    , socket_being_accepted(RunLoop::current()->get_impl()->io) {}
 	boost::asio::ip::tcp::acceptor acceptor;
 	boost::asio::ip::tcp::socket socket_being_accepted;
-	bool socket_ready;
-	bool pending_accept;
+	bool socket_ready   = false;
+	bool pending_accept = false;
 
 	void close() {
-		acceptor.close();
-		TCPAcceptor *was_owner = owner;
-		owner                  = nullptr;
+		boost::system::error_code ignored_ec;
+		acceptor.close(ignored_ec);
 		if (pending_accept) {
-			was_owner->impl.reset();  // We do not reuse LA Sockets
+			owner->impl.release();
+			owner = nullptr;
 		}
 	}
 	void start_accept() {
-		if (!owner)
-			return;
 		pending_accept = true;
-		acceptor.async_accept(
-		    socket_being_accepted, boost::bind(&Impl::handle_accept, owner->impl, boost::asio::placeholders::error));
+		acceptor.async_accept(socket_being_accepted, [&](boost::system::error_code ec) { handle_accept(ec); });
 	}
 	void handle_accept(const boost::system::error_code &e) {
 		pending_accept = false;
 		if (!e) {
 			socket_ready = true;
 			if (owner)
-				owner->a_handler();
+				owner->a_handler.handler();
 		}
 		if (e != boost::asio::error::operation_aborted) {
 			// some nasty problem with socket, say so to the client
@@ -269,11 +292,10 @@ public:
 	}
 };
 
-TCPAcceptor::TCPAcceptor(const std::string &addr, uint16_t port, A_handler a_handler)
-    : a_handler(a_handler), impl(std::make_shared<Impl>(this)) {
-	boost::asio::ip::tcp::resolver resolver(RunLoop::current()->io());
-	boost::asio::ip::tcp::resolver::query query(addr, port);
-	boost::asio::ip::tcp::endpoint endpoint = *resolver.resolve(query);
+CRAB_INLINE TCPAcceptor::TCPAcceptor(const Address &address, Handler &&cb)
+    : a_handler(std::move(cb)), impl(new TCPAcceptorImpl(this)) {
+	boost::asio::ip::tcp::resolver resolver(RunLoop::current()->get_impl()->io);
+	boost::asio::ip::tcp::endpoint endpoint(address.get_addr(), address.get_port());
 	impl->acceptor.open(endpoint.protocol());
 	impl->acceptor.set_option(boost::asio::ip::tcp::acceptor::reuse_address(true));
 	impl->acceptor.bind(endpoint);
@@ -282,95 +304,109 @@ TCPAcceptor::TCPAcceptor(const std::string &addr, uint16_t port, A_handler a_han
 	impl->start_accept();
 }
 
-TCPAcceptor::~TCPAcceptor() { impl->close(); }
+CRAB_INLINE bool TCPAcceptor::can_accept() { return impl->socket_ready; }
 
-bool TCPAcceptor::accept(TCPSocket &socket, std::string &accepted_addr) {
-	if (!impl->socket_ready)
-		return false;
-	impl->socket_ready = false;
-	socket.close();
-	std::swap(socket.impl->socket, impl->socket_being_accepted);
+CRAB_INLINE void TCPSocket::accept(TCPAcceptor &acceptor, Address *accepted_addr) {
+	if (!acceptor.impl->socket_ready)
+		throw std::logic_error("TCPAcceptor::accept error, forgot if(can_accept())?");
+	acceptor.impl->socket_ready = false;
+	close();
+	if (!impl)
+		impl.reset(new TCPSocketImpl(this));
+	std::swap(impl->socket, acceptor.impl->socket_being_accepted);
 
-	socket.impl->connected = true;
-	accepted_addr          = socket.impl->socket.remote_endpoint().address().to_string();
-	socket.impl->start_read();
-	impl->start_accept();
-	return true;
+	impl->connected = true;
+	if (accepted_addr) {
+		//        *accepted_addr = Address(impl->socket.remote_endpoint().address().to_string());
+	}
+	impl->start_read();
+	acceptor.impl->start_accept();
 }
 
-class DNSResolver::Impl {
+CRAB_INLINE TCPAcceptor::~TCPAcceptor() { impl->close(); }
+
+/*class DNSResolver::Impl {
 public:
-	DNSResolver *owner;
-	explicit Impl(DNSResolver *owner) : owner(owner), resolver(RunLoop::current()->io()) {}
-	boost::asio::ip::tcp::resolver resolver;
-	bool pending_resolve;
+    DNSResolver *owner;
+    explicit Impl(DNSResolver *owner) : owner(owner), resolver(RunLoop::current()->get_impl()->io) {}
+    boost::asio::ip::tcp::resolver resolver;
+    bool pending_resolve;
 
-	void close() {
-		resolver.cancel();
-		DNSResolver *was_owner = owner;
-		if (pending_resolve) {
-			owner           = nullptr;
-			was_owner->impl = std::make_shared<Impl>(was_owner);  // We do not reuse LA Sockets
-		}
-	}
-	void handle_resolve(const boost::system::error_code &err,
-	    boost::asio::ip::tcp::resolver::iterator endpoint_iterator) {
-		pending_resolve = false;
-		if (!err) {
-			if (owner) {
-				std::vector<std::string> names;
+    void close() {
+        resolver.cancel();
+        DNSResolver *was_owner = owner;
+        if (pending_resolve) {
+            owner           = nullptr;
+            was_owner->impl = std::make_shared<Impl>(was_owner);  // We do not reuse LA Sockets
+        }
+    }
+    void handle_resolve(const boost::system::error_code &err,
+        boost::asio::ip::tcp::resolver::iterator endpoint_iterator) {
+        pending_resolve = false;
+        if (!err) {
+            if (owner) {
+                std::vector<std::string> names;
 
-				for (; endpoint_iterator != boost::asio::ip::tcp::resolver::iterator(); ++endpoint_iterator) {
-					names.push_back(endpoint_iterator->endpoint().address().to_string());
-				}
-				owner->dns_handler(names);
-			}
-		} else {
-			std::cout << "Error: " << err.message() << "\n";
-		}
-	}
+                for (; endpoint_iterator != boost::asio::ip::tcp::resolver::iterator(); ++endpoint_iterator) {
+                    names.push_back(endpoint_iterator->endpoint().address().to_string());
+                }
+                owner->dns_handler(names);
+            }
+        } else {
+            std::cout << "Error: " << err.message() << "\n";
+        }
+    }
 };
+
 
 DNSResolver::DNSResolver(DNS_handler handler) : dns_handler(handler), impl(std::make_shared<Impl>(this)) {}
 
 DNSResolver::~DNSResolver() { impl->close(); }
 
 void DNSResolver::resolve(const std::string &host_name, bool ipv4, bool ipv6) {
-	impl->close();
-	boost::asio::ip::tcp::resolver::query query(host_name, "http");
-	impl->pending_resolve = true;
-	impl->resolver.async_resolve(query,
-	    boost::bind(
-	        &Impl::handle_resolve, impl, boost::asio::placeholders::error, boost::asio::placeholders::iterator));
+    impl->close();
+    boost::asio::ip::tcp::resolver::query query(host_name, "http");
+    impl->pending_resolve = true;
+    impl->resolver.async_resolve(query,
+        boost::bind(
+            &Impl::handle_resolve, impl, boost::asio::placeholders::error, boost::asio::placeholders::iterator));
 }
 
 void DNSResolver::cancel() { impl->close(); }
 
 bdata DNSResolver::parse_ipaddress(const std::string &str) {
-	if (str.empty())
-		return bdata();
-	try {
-		boost::asio::ip::address address = boost::asio::ip::address::from_string(str);
-		if (address.is_v4()) {
-			auto bytes = address.to_v4().to_bytes();
-			return bdata(bytes.begin(), bytes.end());
-		}
-		if (address.is_v6()) {
-			auto bytes = address.to_v6().to_bytes();
-			return bdata(bytes.begin(), bytes.end());
-		}
-	} catch (...) {
-	}
-	return bdata();
+    if (str.empty())
+        return bdata();
+    try {
+        boost::asio::ip::address address = boost::asio::ip::address::from_string(str);
+        if (address.is_v4()) {
+            auto bytes = address.to_v4().to_bytes();
+            return bdata(bytes.begin(), bytes.end());
+        }
+        if (address.is_v6()) {
+            auto bytes = address.to_v6().to_bytes();
+            return bdata(bytes.begin(), bytes.end());
+        }
+    } catch (...) {
+    }
+    return bdata();
 }
+*/
 
-std::vector<std::string> DNSResolver::sync_resolve(const std::string &host_name, bool ipv4, bool ipv6) {
-	boost::asio::ip::tcp::resolver resolver(RunLoop::current()->io());
-	boost::asio::ip::tcp::resolver::query query(host_name, "http");
-	boost::asio::ip::tcp::resolver::iterator endpoint_iterator = resolver.resolve(query);
-	std::vector<std::string> names;
+CRAB_INLINE std::vector<Address> DNSResolver::sync_resolve(
+    const std::string &host_name, uint16_t port, bool ipv4, bool ipv6) {
+	boost::system::error_code ec;
+
+	boost::asio::ip::tcp::resolver resolver(RunLoop::current()->get_impl()->io);
+	auto service = std::to_string(port);
+
+	boost::asio::ip::tcp::resolver::query query(host_name, service);
+	boost::asio::ip::tcp::resolver::iterator endpoint_iterator = resolver.resolve(query, ec);
+	std::vector<Address> names;
+	if (ec)
+		return names;
 	for (; endpoint_iterator != boost::asio::ip::tcp::resolver::iterator(); ++endpoint_iterator) {
-		names.push_back(endpoint_iterator->endpoint().address().to_string());
+		names.emplace_back(endpoint_iterator->endpoint().address(), endpoint_iterator->endpoint().port());
 	}
 	return names;
 }

@@ -57,11 +57,11 @@ private:
 	std::vector<PerformanceRecord> performance;
 };
 
-class Timer {
+class Timer : public Nocopy {
 public:
 	explicit Timer(Handler &&cb) : a_handler(std::move(cb)) {}
 	void set_handler(Handler &&cb) { a_handler = std::move(cb); }
-	~Timer() { cancel(); }
+	~Timer() { cancel(); };
 
 	// Timer is one-shot, semantic of calling once() on set timer is cancel+once, but it takes only
 	// 2 integer comparisons + 1 integer assignment to advance not yet fired timer further into
@@ -126,10 +126,12 @@ public:
 	bool is_active() { return idle_node.in_list(); }
 
 private:
-	IntrusiveNode<Idle> idle_node;
 	Callable a_handler;
-
+	IntrusiveNode<Idle> idle_node;
+#if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL || CRAB_SOCKET_WINDOWS
 	friend struct details::RunLoopLinks;
+#else
+#endif
 };
 
 // Handler of both SIGINT and SIGTERM, if you need to do something on Ctrl-C
@@ -178,7 +180,15 @@ public:
 
 private:
 	sockaddr_storage addr = {};
+#elif CRAB_SOCKET_BOOST
+	explicit Address(boost::asio::ip::address &&address, uint16_t port) : addr(std::move(address)), port(port) {}
+	const boost::asio::ip::address &get_addr() const { return addr; }
+
+private:
+	boost::asio::ip::address addr;
+	uint16_t port = 0;
 #else
+
 #endif
 };
 
@@ -209,7 +219,7 @@ public:
 	size_t write_some(const uint8_t *val, size_t count) override;
 	// writes 0..count-1, if returns 0 (outgoing buffer full) will
 	// fire rwd_handler in future
-	bool can_write() const { return rwd_handler.can_write; }
+	bool can_write() const;
 	// write_some will return 0 if cannot write, but this is too late for clients
 	// who wish to work without buffer and need to prepare data,
 	// there is no can_read(), calling read_some is perfect
@@ -286,7 +296,7 @@ public:
 	bool write_datagram(const uint8_t *data, size_t count);
 	// returns false if buffer is full or a error occurs
 	// cannot return size_t, because datagrams of zero size are valid
-	bool can_write() const { return w_handler.can_write; }
+	bool can_write() const;
 	// write_datagram will return false if cannot write, but this is too late for clients
 	// who wish to work without buffer and need to prepare data,
 
@@ -373,13 +383,13 @@ public:
 	// On some systems, epoll_wait() timeouts greater than 35.79 minutes are treated as infinity.
 	// Spurious wakeup once every 30 minutes is harmless, timeout can be reduced further if needed.
 
-#if CRAB_SOCKET_WINDOWS
-	RunLoopImpl *get_impl() const { return impl.get(); }
-#elif CRAB_SOCKET_KEVENT
+#if CRAB_SOCKET_KEVENT
 	void impl_kevent(struct kevent *changelist, int nchanges);
 	void impl_kevent(int fd, Callable *callable, uint16_t flags, int16_t filter1, int16_t filter2 = 0);
 #elif CRAB_SOCKET_EPOLL
 	void impl_epoll_ctl(int fd, Callable *callable, int op, uint32_t events);
+#else
+	RunLoopImpl *get_impl() const { return impl.get(); }
 #endif
 private:
 	void step(int timeout_ms = MAX_SLEEP_MS);
