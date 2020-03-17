@@ -531,8 +531,11 @@ CRAB_INLINE UDPReceiver::UDPReceiver(const Address &address, Handler &&cb, const
 	// https://www.reddit.com/r/networking/comments/7nketv/proper_use_of_bind_for_multicast_receive_on_linux/
 	details::FileDescriptor tmp(::socket(address.impl_get_sockaddr()->sa_family, SOCK_DGRAM, IPPROTO_UDP),
 	    "crab::UDPReceiver socket() failed");
-	if (address.is_multicast_group())
+	if (address.is_multicast_group()) {
+		// TODO - check flag combination on Mac
 		details::setsockopt_1(tmp.get_value(), SOL_SOCKET, SO_REUSEADDR);
+		details::setsockopt_1(tmp.get_value(), SOL_SOCKET, SO_REUSEPORT);
+	}
 	details::set_nonblocking(tmp.get_value());
 
 	details::check(::bind(tmp.get_value(), address.impl_get_sockaddr(), address.impl_get_sockaddr_length()) >= 0,

@@ -12,7 +12,7 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#include <crab/intrusive_heap.hpp>
+#include <crab/crab.hpp>
 
 static size_t count_zeroes(uint64_t val) {
 	for (size_t i = 0; i != sizeof(val) * 8; ++i)
@@ -214,6 +214,48 @@ std::vector<uint64_t> fill_random(uint64_t seed, size_t count) {
 	for (size_t i = 0; i != count; ++i)
 		result.push_back(random.rnd() % count);
 	return result;
+}
+
+void benchmark_timers() {
+	constexpr size_t COUNT      = 1000000;
+	constexpr size_t COUNT_MOVE = 100;
+	crab::RunLoop runloop;
+
+	Random random(12345);
+
+	std::vector<std::chrono::steady_clock::duration> durs;
+	std::vector<crab::Timer> timers;
+	for (size_t i = 0; i != COUNT; ++i) {
+		timers.emplace_back(crab::empty_handler);
+		std::chrono::duration<double> delay(random.rnd() % COUNT);
+		durs.push_back(std::chrono::duration_cast<std::chrono::steady_clock::duration>(delay));
+	}
+	auto idea_start = std::chrono::high_resolution_clock::now();
+	for (size_t i = 0; i != COUNT; ++i) {
+		timers[i].once(durs[i]);
+	}
+	auto idea_ms =
+	    std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - idea_start);
+	std::cout << "Set Timers (random delay)"
+	          << " count=" << COUNT << ", seconds=" << double(idea_ms.count()) / 1000 << std::endl;
+	idea_start = std::chrono::high_resolution_clock::now();
+	for (size_t j = 0; j != COUNT_MOVE; ++j) {
+		for (size_t i = 0; i != COUNT; ++i)
+			timers[i].once(durs[i] + std::chrono::steady_clock::duration{1 + j});
+	}
+	idea_ms =
+	    std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - idea_start);
+	std::cout << "Moving Timers to the future"
+	          << " count=" << COUNT_MOVE << "*" << COUNT << ", seconds=" << double(idea_ms.count()) / 1000
+	          << std::endl;
+	idea_start = std::chrono::high_resolution_clock::now();
+	for (size_t i = 0; i != COUNT; ++i) {
+		timers[i].cancel();
+	}
+	idea_ms =
+	    std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - idea_start);
+	std::cout << "Cancel Timers"
+	          << " count=" << COUNT << ", seconds=" << double(idea_ms.count()) / 1000 << std::endl;
 }
 
 template<class T, class Op>
@@ -434,6 +476,7 @@ struct hash<OrderId> {
 }  // namespace std
 
 int main() {
+	benchmark_timers();
 	benchmark_sets();
 	std::cout << "Testing small std::map<int> count=" << COUNT << std::endl;
 	benchmark<int, std::map<int, size_t>>(small_int_gen);

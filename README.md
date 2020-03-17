@@ -110,7 +110,7 @@ Crab does not have repeating timers, you just call once() in timer callback if y
 
 Arguably this design leads to less logic in application components, than more common approach with `repeat()`, then `cancel()` when timer is no more needed.
 
-This design (together with rounding up runloop sleep time) leads to timer creep (less than requested average ticks per second), This can be addressed by advancing timer clock relative to previous value, instead of `now()`, if `once()` called from callback. The problem with stable timers, though, that they tend to stress system, if set to low value. I prefer to use `Timer` as a signalling mechanism only. If I need to measure time, use clock.
+This design (together with rounding up runloop sleep time) leads to timer creep (less than requested average ticks per second), This can be addressed by advancing timer clock relative to previous value, instead of `now()`, if `once()` called from callback. The problem with stable timers, though, that they tend to stress system, if set to low value. I prefer to use `Timer` as a signalling mechanism only. If I need to measure time, I use clock.
 
 You can of course `cancel()` or destroy crab timer any time you wish, and use `is_set` in an application logic. 
 
@@ -120,7 +120,11 @@ Crab uses intrusive lists to track objects to minimize allocations.
 
 Timers must be sorted, so they use intrusive binary heap. 
 
-Crab stored timers in skip list for years, then in `std::set`. Benchmarks show that heap is 4x faster than `std::set` which is 2x faster than skiplist. There is rumors that 8-way heap is even faster, may be I should look into it.
+Crab stored timers in skip list for years, then in `std::set`. Benchmarks show that heap is 4x faster than `std::set` which is 5x faster than skiplist. There is rumors that 4-way or 8-way heap is even faster, may be I should look into it.
+
+Crab timers also have very useful optimization for the case when set timer is moved further into future (for example, some timeout is reset on every incoming packet).
+In this case new fire_time is remembered as a `moved_fire_time`, but heap is not touched. Instead, when timer naturally moves to the front of the heap and is ready to fire (`fire_time <= now`), 
+if `moved_fire_time > now` timer is rescheduled, otherwise fires normally. With this optimization timers reach speed of 100 million resets into future per second on modern PC. 
  
 
 # syscall efficiency

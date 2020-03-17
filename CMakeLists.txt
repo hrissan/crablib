@@ -93,6 +93,7 @@ add_executable(md_gate ${SOURCE_FILES} examples/md_gate.cpp)
 add_executable(md_client ${SOURCE_FILES} examples/md_client.cpp)
 
 # low-level benchmarks and tests
+add_executable(reuse_addr ${SOURCE_FILES} examples/lowlevel/reuse_addr.c)
 add_executable(udp_eagain ${SOURCE_FILES} examples/lowlevel/udp_eagain.cpp)
 add_executable(benchmark_atomic ${SOURCE_FILES} examples/lowlevel/benchmark_atomic.cpp)
 add_executable(benchmark_chrono ${SOURCE_FILES} examples/lowlevel/benchmark_chrono.cpp)
