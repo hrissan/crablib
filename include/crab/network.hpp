@@ -3,15 +3,9 @@
 
 #pragma once
 
-#include <atomic>
-#include <chrono>
-#include <condition_variable>
-#include <functional>
 #include <iosfwd>
-#include <list>
 #include <memory>
 #include <mutex>
-#include <thread>
 #include <vector>
 
 #include "network_base.hpp"
@@ -19,45 +13,7 @@
 
 namespace crab {
 
-struct PerformanceRecord {
-	steady_clock::time_point tm;
-	const char *event_type = nullptr;  // Only literals, so recording is very fast
-	int fd                 = 0;        // fd or user object identifier
-	int count              = 0;        // bytes, events or mask
-	PerformanceRecord()    = default;  // brace-initializer does not work with C++11, hence constructors
-	PerformanceRecord(steady_clock::time_point tm, const char *event_type, int fd, int count)
-	    : tm(tm), event_type(event_type), fd(fd), count(count) {}
-};
-
-class PerformanceStats {
-public:
-	PerformanceStats();
-
-	// If you do not clear records periodically, push_record() becomes very fast NOP
-	// after MAX_PERFORMANCE_RECORDS events recorded.
-	enum { MAX_PERFORMANCE_RECORDS = 100000 };  // Arbitrary constant
-
-	void push_record(const char *event_type_literal, int fd, int count);  // Pass only literals here
-	const std::vector<PerformanceRecord> &get_records() const { return performance; }
-	void clear_records() { performance.clear(); }
-	void print_records(std::ostream &out);  // Also clears
-
-	size_t RECV_count     = 0;
-	size_t RECV_size      = 0;
-	size_t SEND_count     = 0;
-	size_t SEND_size      = 0;
-	size_t EPOLL_count    = 0;
-	size_t EPOLL_size     = 0;
-	size_t UDP_RECV_count = 0;
-	size_t UDP_RECV_size  = 0;
-	size_t UDP_SEND_count = 0;
-	size_t UDP_SEND_size  = 0;
-
-private:
-	std::vector<PerformanceRecord> performance;
-};
-
-class Timer : public Nocopy {
+class Timer {
 public:
 	explicit Timer(Handler &&cb) : a_handler(std::move(cb)) {}
 	void set_handler(Handler &&cb) { a_handler = std::move(cb); }
@@ -149,7 +105,7 @@ public:
 	~SignalStop();
 
 	static bool running_under_debugger();
-	// Sometimes signals interfere with debugger. Check this before creating SignalStop
+	// Sometimes signals interfere with debugger. Use this fun to conditionally create SignalStop
 private:
 	Callable a_handler;
 #if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL
@@ -383,11 +339,8 @@ public:
 	// On some systems, epoll_wait() timeouts greater than 35.79 minutes are treated as infinity.
 	// Spurious wakeup once every 30 minutes is harmless, timeout can be reduced further if needed.
 
-#if CRAB_SOCKET_KEVENT
-	void impl_kevent(struct kevent *changelist, int nchanges);
-	void impl_kevent(int fd, Callable *callable, uint16_t flags, int16_t filter1, int16_t filter2 = 0);
-#elif CRAB_SOCKET_EPOLL
-	void impl_epoll_ctl(int fd, Callable *callable, int op, uint32_t events);
+#if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL
+	void impl_add_callable_fd(int fd, Callable *callable, bool read, bool write);
 #else
 	RunLoopImpl *get_impl() const { return impl.get(); }
 #endif
@@ -399,6 +352,7 @@ private:
 	friend class Idle;
 	friend struct Callable;
 	friend class Watcher;
+	friend class SignalStop;
 
 	using CurrentLoop = details::StaticHolderTL<RunLoop *>;
 

@@ -71,7 +71,7 @@ CRAB_INLINE void Random::bytes(uint8_t *buffer, size_t size) {
 	size_t i = 0;
 	for (; i + sizeof(VT) <= size; i += sizeof(VT)) {
 		VT value = static_cast<VT>(mt());
-		memcpy(buffer + i, &value, sizeof(VT));
+		std::memcpy(buffer + i, &value, sizeof(VT));
 	}
 	if (i == size)
 		return;
@@ -82,21 +82,31 @@ CRAB_INLINE void Random::bytes(uint8_t *buffer, size_t size) {
 	}
 }
 
+CRAB_INLINE bdata Random::data(size_t size) {
+	bdata result(size);
+	bytes(result.data(), result.size());
+	return result;
+}
+
 CRAB_INLINE std::string Random::printable_string(size_t size) {
 	constexpr size_t BITS        = 6;
-	constexpr size_t MASK        = (1U << BITS) - 1;
+	constexpr size_t OTHER_BITS  = (sizeof(VT) * 8 - BITS);
+	constexpr VT MASK            = (VT{1} << OTHER_BITS) - 1;
 	static const char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 	std::string result(size, '\0');
 	size_t i = 0;
 	for (; i != size;) {
+		// If we do not want 1) non-alphanum chars, 2) divide by 62, 3) different # of mt() calls per char
+		// 4) lose almost half of string entropy (alphabet of 32)
+		// then we need to treat VT() as fixed point value of 0.XXXXX in range of [0..1)
+		// We will keep the code simple and just divide
 		VT value = static_cast<VT>(mt());
+
 		for (size_t j = 0; j != sizeof(VT) * 8 / BITS; ++j) {
-			if ((value & MASK) >= sizeof(alphabet) - 1)
-				continue;
-			result[i++] = alphabet[(value & MASK)];
+			result[i++] = alphabet[value % (sizeof(alphabet) - 1)];
+			value /= (sizeof(alphabet) - 1);
 			if (i == size)
 				return result;
-			value >>= BITS;
 		}
 	}
 	return result;

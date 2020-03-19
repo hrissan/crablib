@@ -2,7 +2,9 @@
 // Licensed under the MIT License. See LICENSE for details.
 
 #include <algorithm>
+#include <condition_variable>
 #include <iostream>
+#include <thread>
 #include "integer_cast.hpp"
 #include "network.hpp"
 

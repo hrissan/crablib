@@ -108,15 +108,12 @@ CRAB_INLINE RunLoop::RunLoop()
 	CurrentLoop::instance = this;
 }
 
-CRAB_INLINE void RunLoop::impl_kevent(struct kevent *changelist, int nchangesnchanges) {
-	details::check(
-	    kevent(efd.get_value(), changelist, nchangesnchanges, 0, 0, NULL) >= 0, "crab::RunLoop impl_kevent failed");
-}
-
-CRAB_INLINE void RunLoop::impl_kevent(int fd, Callable *callable, uint16_t flags, int16_t filter1, int16_t filter2) {
-	struct kevent changelist[] = {
-	    {uintptr_t(fd), filter1, flags, 0, 0, callable}, {uintptr_t(fd), filter2, flags, 0, 0, callable}};
-	impl_kevent(changelist, filter2 == 0 ? 1 : 2);
+CRAB_INLINE void RunLoop::impl_add_callable_fd(int fd, Callable *callable, bool read, bool write) {
+	struct kevent changelist[] = {{uintptr_t(fd), EVFILT_READ, EV_ADD | EV_CLEAR, 0, 0, callable},
+	    {uintptr_t(fd), EVFILT_WRITE, EV_ADD | EV_CLEAR, 0, 0, callable}};
+	const int nchangesnchanges = (read ? 1 : 0) + (write ? 1 : 0);
+	details::check(kevent(efd.get_value(), changelist + (read ? 0 : 1), nchangesnchanges, 0, 0, NULL) >= 0,
+	    "crab::RunLoop impl_kevent failed");
 }
 
 CRAB_INLINE RunLoop::~RunLoop() { CurrentLoop::instance = nullptr; }
@@ -154,7 +151,8 @@ CRAB_INLINE SignalStop::SignalStop(Handler &&cb) : a_handler(std::move(cb)) {
 
 	struct kevent changeLst[] = {
 	    {SIGINT, EVFILT_SIGNAL, EV_ADD, 0, 0, &a_handler}, {SIGTERM, EVFILT_SIGNAL, EV_ADD, 0, 0, &a_handler}};
-	RunLoop::current()->impl_kevent(changeLst, 2);
+	details::check(kevent(RunLoop::current()->efd.get_value(), changelist, 2, 0, 0, NULL) >= 0,
+	    "crab::SignalStop impl_kevent failed");
 }
 
 CRAB_INLINE SignalStop::~SignalStop() {
@@ -184,15 +182,16 @@ CRAB_INLINE RunLoop::RunLoop()
 		throw std::runtime_error("RunLoop::RunLoop Only single RunLoop per thread is allowed");
 	details::check(efd.is_valid(), "crab::RunLoop epoll_create1 failed");
 	details::check(wake_fd.is_valid(), "crab::RunLoop eventfd failed");
-	impl_epoll_ctl(wake_fd.get_value(), &wake_callable, EPOLL_CTL_ADD, EPOLLIN | EPOLLET);
+	impl_add_callable_fd(wake_fd.get_value(), &wake_callable, true, false);
 	CurrentLoop::instance = this;
 }
 
 CRAB_INLINE RunLoop::~RunLoop() { CurrentLoop::instance = nullptr; }
 
-CRAB_INLINE void RunLoop::impl_epoll_ctl(int fd, Callable *callable, int op, uint32_t events) {
-	epoll_event event = {events, {.ptr = callable}};
-	details::check(epoll_ctl(efd.get_value(), op, fd, &event) >= 0, "crab::add_epoll_callable failed");
+CRAB_INLINE void RunLoop::impl_add_callable_fd(int fd, Callable *callable, bool read, bool write) {
+	const uint32_t events = (read ? EPOLLIN : EPOLLET) | (write ? EPOLLOUT : EPOLLET) | EPOLLET;
+	epoll_event event     = {events, {.ptr = callable}};
+	details::check(epoll_ctl(efd.get_value(), EPOLL_CTL_ADD, fd, &event) >= 0, "crab::add_epoll_callable failed");
 }
 
 CRAB_INLINE void RunLoop::step(int timeout_ms) {
@@ -241,7 +240,7 @@ CRAB_INLINE SignalStop::SignalStop(Handler &&cb)
 	fd.reset(signalfd(-1, &mask, 0));
 	details::check(fd.get_value() >= 0, "crab::Signal signalfd failed");
 	details::set_nonblocking(fd.get_value());
-	RunLoop::current()->impl_epoll_ctl(fd.get_value(), &this->a_handler, EPOLL_CTL_ADD, EPOLLIN | EPOLLET);
+	RunLoop::current()->impl_add_callable_fd(fd.get_value(), &this->a_handler, true, false);
 }
 
 CRAB_INLINE SignalStop::~SignalStop() {
@@ -299,12 +298,7 @@ CRAB_INLINE bool TCPSocket::connect(const Address &address) {
 		if (connect_result < 0 && errno != EINPROGRESS)
 			return false;
 		details::setsockopt_1(tmp.get_value(), IPPROTO_TCP, TCP_NODELAY);
-#if CRAB_SOCKET_KEVENT
-		RunLoop::current()->impl_kevent(tmp.get_value(), &rwd_handler, EV_ADD | EV_CLEAR, EVFILT_READ, EVFILT_WRITE);
-#else
-		RunLoop::current()->impl_epoll_ctl(
-		    tmp.get_value(), &rwd_handler, EPOLL_CTL_ADD, EPOLLRDHUP | EPOLLIN | EPOLLOUT | EPOLLET);
-#endif
+		RunLoop::current()->impl_add_callable_fd(tmp.get_value(), &rwd_handler, true, true);
 		if (connect_result >= 0) {
 			// On some systems if localhost socket is connected right away, no epoll happens
 			rwd_handler.add_pending_callable(true, true);
@@ -327,12 +321,7 @@ CRAB_INLINE void TCPSocket::accept(TCPAcceptor &acceptor, Address *accepted_addr
 	acceptor.accepted_addr = Address();
 	fd.swap(acceptor.accepted_fd);
 	try {
-#if CRAB_SOCKET_KEVENT
-		RunLoop::current()->impl_kevent(fd.get_value(), &rwd_handler, EV_ADD | EV_CLEAR, EVFILT_READ, EVFILT_WRITE);
-#else
-		RunLoop::current()->impl_epoll_ctl(
-		    fd.get_value(), &rwd_handler, EPOLL_CTL_ADD, EPOLLRDHUP | EPOLLIN | EPOLLOUT | EPOLLET);
-#endif
+		RunLoop::current()->impl_add_callable_fd(fd.get_value(), &rwd_handler, true, true);
 	} catch (const std::exception &) {
 		// We cannot add to epoll/kevent in TCPAcceptor because we do not have
 		// TCPSocket yet, so we design accept to always succeeds, but trigger event,
@@ -401,11 +390,7 @@ CRAB_INLINE TCPAcceptor::TCPAcceptor(const Address &address, Handler &&cb)
 	    "crab::TCPAcceptor bind failed");
 	details::set_nonblocking(tmp.get_value());
 	details::check(listen(tmp.get_value(), SOMAXCONN) >= 0, "crab::TCPAcceptor listen failed");
-#if CRAB_SOCKET_KEVENT
-	RunLoop::current()->impl_kevent(tmp.get_value(), &a_handler, EV_ADD | EV_CLEAR, EVFILT_READ);
-#else
-	RunLoop::current()->impl_epoll_ctl(tmp.get_value(), &a_handler, EPOLL_CTL_ADD, EPOLLIN | EPOLLET);
-#endif
+	RunLoop::current()->impl_add_callable_fd(tmp.get_value(), &a_handler, true, false);
 	fd.swap(tmp);
 }
 
@@ -487,11 +472,7 @@ CRAB_INLINE UDPTransmitter::UDPTransmitter(const Address &address, Handler &&cb,
 	}
 	int connect_result = ::connect(tmp.get_value(), address.impl_get_sockaddr(), address.impl_get_sockaddr_length());
 	details::check(connect_result >= 0 || errno == EINPROGRESS, "crab::UDPTransmitter connect() failed");
-#if CRAB_SOCKET_KEVENT
-	RunLoop::current()->impl_kevent(tmp.get_value(), &w_handler, EV_ADD | EV_CLEAR, EVFILT_WRITE);
-#else
-	RunLoop::current()->impl_epoll_ctl(tmp.get_value(), &w_handler, EPOLL_CTL_ADD, EPOLLOUT | EPOLLET);
-#endif
+	RunLoop::current()->impl_add_callable_fd(tmp.get_value(), &w_handler, false, true);
 	if (connect_result >= 0) {
 		// On some systems if socket is connected right away, no epoll happens
 		w_handler.add_pending_callable(false, true);
@@ -556,11 +537,7 @@ CRAB_INLINE UDPReceiver::UDPReceiver(const Address &address, Handler &&cb, const
 		details::check(setsockopt(tmp.get_value(), IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) >= 0,
 		    "crab::UDPReceiver: Failed to join multicast group");
 	}
-#if CRAB_SOCKET_KEVENT
-	RunLoop::current()->impl_kevent(tmp.get_value(), &r_handler, EV_ADD | EV_CLEAR, EVFILT_READ);
-#else
-	RunLoop::current()->impl_epoll_ctl(tmp.get_value(), &r_handler, EPOLL_CTL_ADD, EPOLLIN | EPOLLET);
-#endif
+	RunLoop::current()->impl_add_callable_fd(tmp.get_value(), &r_handler, true, false);
 	fd.swap(tmp);
 }
 

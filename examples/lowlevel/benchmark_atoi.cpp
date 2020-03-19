@@ -229,7 +229,55 @@ void benchmark_fun(const std::vector<std::string> &strs, int sum, const std::str
 		std::cout << msg << " wrong sum, error while parsing" << std::endl;
 }
 
+template<class T, class U>
+U test(char const *label, U count) {
+	using namespace std::chrono;
+	T gen(100);
+
+	U result = 0;
+
+	auto start = high_resolution_clock::now();
+	for (U i = 0; i < count; i++) {
+		auto val = ((gen() >> 8) * 62) >> 24;
+		result ^= val;  // % 62
+	}
+	auto stop = high_resolution_clock::now();
+	std::cout << "Time for " << std::left << std::setw(12) << label << " count=" << count
+	          << " mksec=" << duration_cast<microseconds>(stop - start).count() << std::endl;
+	return result;
+}
+
 int main() {
+	unsigned long long limit = 1000000000;
+
+	std::vector<size_t> indexes(62);
+	std::mt19937 mt;
+	for (size_t i = 0; i < limit; i++) {
+		auto rem = (mt() >> 6) * 62;
+		//        indexes.at(rem >> 26) += 1;
+		rem = (rem & ((1 << 26) - 1)) * 62;
+		//        indexes.at(rem >> 26) += 1;
+		rem = (rem & ((1 << 26) - 1)) * 62;
+		//        indexes.at(rem >> 26) += 1;
+		rem = (rem & ((1 << 26) - 1)) * 62;
+		//        indexes.at(rem >> 26) += 1;
+		rem = (rem & ((1 << 26) - 1)) * 62;
+		//        indexes.at(rem >> 26) += 1;
+		rem = (rem & ((1 << 26) - 1)) * 62;
+		//        indexes.at(rem >> 26) += 1;
+		rem = (rem & ((1 << 26) - 1)) * 62;
+		//        indexes.at(rem >> 26) += 1;
+		rem = (rem & ((1 << 26) - 1)) * 62;
+		indexes.at(rem >> 26) += 1;
+	}
+	for (const auto &v : indexes)
+		std::cout << " " << v << std::endl;
+
+	auto result1 = test<std::mt19937>("mt19937: ", limit);
+	auto result2 = test<std::mt19937_64>("mt19937_64: ", limit);
+
+	std::cout << "Ignore results: " << result1 << ", " << result2 << "\n";
+
 	std::vector<int> ints;
 	std::vector<std::string> strs;
 	int sum      = 0;

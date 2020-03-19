@@ -5,12 +5,9 @@
 
 #include <atomic>
 #include <chrono>
-#include <condition_variable>
 #include <functional>
-#include <list>
 #include <memory>
 #include <mutex>
-#include <set>
 #include <thread>
 #include <vector>
 
@@ -36,6 +33,10 @@
 
 namespace crab {
 
+// using steady_clock = std::conditional<std::chrono::high_resolution_clock::is_steady,
+//        std::chrono::high_resolution_clock,
+//        std::chrono::steady_clock>::type;
+
 using steady_clock = std::chrono::steady_clock;
 
 typedef std::function<void()> Handler;
@@ -45,12 +46,51 @@ class RunLoop;
 class Timer;
 class Idle;
 class Watcher;
+class SignalStop;
 class TCPSocket;
 class TCPAcceptor;
 
 namespace details {
 class DNSWorker;
 }
+
+struct PerformanceRecord {
+	steady_clock::time_point tm;
+	const char *event_type = nullptr;  // Only literals, so recording is very fast
+	int fd                 = 0;        // fd or user object identifier
+	int count              = 0;        // bytes, events or mask
+	PerformanceRecord()    = default;  // brace-initializer does not work with C++11, hence constructors
+	PerformanceRecord(steady_clock::time_point tm, const char *event_type, int fd, int count)
+	    : tm(tm), event_type(event_type), fd(fd), count(count) {}
+};
+
+class PerformanceStats {
+public:
+	PerformanceStats();
+
+	// If you do not clear records periodically, push_record() becomes very fast NOP
+	// after MAX_PERFORMANCE_RECORDS events recorded.
+	enum { MAX_PERFORMANCE_RECORDS = 100000 };  // Arbitrary constant
+
+	void push_record(const char *event_type_literal, int fd, int count);  // Pass only literals here
+	const std::vector<PerformanceRecord> &get_records() const { return performance; }
+	void clear_records() { performance.clear(); }
+	void print_records(std::ostream &out);  // Also clears
+
+	size_t RECV_count     = 0;
+	size_t RECV_size      = 0;
+	size_t SEND_count     = 0;
+	size_t SEND_size      = 0;
+	size_t EPOLL_count    = 0;
+	size_t EPOLL_size     = 0;
+	size_t UDP_RECV_count = 0;
+	size_t UDP_RECV_size  = 0;
+	size_t UDP_SEND_count = 0;
+	size_t UDP_SEND_size  = 0;
+
+private:
+	std::vector<PerformanceRecord> performance;
+};
 
 #if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL || CRAB_SOCKET_WINDOWS
 

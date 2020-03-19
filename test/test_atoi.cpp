@@ -31,6 +31,7 @@ void test_type(size_t range, std::string lead, std::string trail) {
 	T value  = 0;
 	T value2 = 0;
 	crab::Random rnd;
+	std::cout << rnd.printable_string(32) << std::endl;
 	for (size_t i = 0; i != range; ++i) {
 		value  = rnd.pod<T>();
 		value2 = crab::integer_cast<T>(std::to_string(value));

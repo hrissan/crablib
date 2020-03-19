@@ -89,11 +89,11 @@ CRAB_INLINE bool Buffer::peek(uint8_t *val, size_t count) const {
 		return false;
 	auto rp = read_ptr();
 	if (rc >= count) {
-		memcpy(val, rp, count);
+		std::memcpy(val, rp, count);
 		return true;
 	}
-	memcpy(val, rp, rc);
-	memcpy(val + rc, read_ptr2(), count - rc);
+	std::memcpy(val, rp, rc);
+	std::memcpy(val + rc, read_ptr2(), count - rc);
 	return true;
 }
 
@@ -292,13 +292,13 @@ class IStreamBuffer {
 public:
     void read(uint8_t *data, size_t size) {
         if (size <= buffer_size) {  // Often, also when zero size
-            memcpy(data, buffer, size);
+            std::memcpy(data, buffer, size);
             buffer += size;
             buffer_size -= size;
             return;
         }
         // size > 0 here
-        memcpy(data, buffer, buffer_size);
+        std::memcpy(data, buffer, buffer_size);
         buffer      = buffer_storage;
         buffer_size = 0;
         size -= buffer_size;
@@ -307,7 +307,7 @@ public:
             buffer_size = raw_stream->read_some(buffer, BUFFER_SIZE);
             if (buffer_size == 0)
                 throw std::runtime_error("IStreamRaw underflow");
-            memcpy(data, buffer, size);
+            std::memcpy(data, buffer, size);
             buffer += size;
             buffer_size -= size;
             return;

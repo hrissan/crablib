@@ -4,6 +4,7 @@
 #pragma once
 
 #include <cctype>
+#include <cstddef>
 #include <cstdint>
 #include <cstring>
 #include <limits>
@@ -67,27 +68,48 @@ struct Literal {
 	size_t size;
 
 	static constexpr size_t length(const char *str) { return *str ? 1U + length(str + 1) : 0U; }
-	int compare(const char *b, size_t bs) const {
-		if (size != bs)
-			return static_cast<int>(size) - static_cast<int>(bs);
-		return std::memcmp(value, b, size);
+	constexpr int compare(const char *b, size_t bs) const {
+		return (size == bs) ? std::memcmp(value, b, size) : size > bs ? 1 : -1;
 	}
-	int compare(const std::string &b) const { return compare(b.data(), b.size()); }
+	constexpr int compare(const std::string &b) const { return compare(b.data(), b.size()); }
 };
 
-inline bool operator==(const std::string &a, const Literal &b) { return b.compare(a) == 0; }
-inline bool operator!=(const std::string &a, const Literal &b) { return !(a == b); }
-inline bool operator==(const Literal &a, const std::string &b) { return a.compare(b) == 0; }
-inline bool operator!=(const Literal &a, const std::string &b) { return !(a == b); }
+inline constexpr bool operator==(const std::string &a, const Literal &b) { return b.compare(a) == 0; }
+inline constexpr bool operator!=(const std::string &a, const Literal &b) { return !(a == b); }
+inline constexpr bool operator==(const Literal &a, const std::string &b) { return a.compare(b) == 0; }
+inline constexpr bool operator!=(const Literal &a, const std::string &b) { return !(a == b); }
 
-#define CRAB_LITERAL(name, value) static const Literal name{value, Literal::length(value)};
+#define CRAB_LITERAL(value) \
+	Literal { value, Literal::length(value) }
+// (CRAB_LITERAL == std::string) compile into very little # of instructions
+// and they have trivial constructor so no overhead on static initializer per function.
+// literals in C++ must be like CRAB_LITERAL, but they are not
+// bool compare_with_content_type(const std::string & str){
+//     return str == CRAB_LITERAL("content-type");
+// }
+// cmp     qword ptr [rdi + 8], 12
+// jne     .LBB0_1
+//         mov     rax, qword ptr [rdi]
+// movabs  rcx, 3275364211029340003
+// xor     rcx, qword ptr [rax]
+// mov     eax, dword ptr [rax + 8]
+// xor     rax, 1701869940
+// or      rax, rcx
+//         sete    al
+//         ret
+// .LBB0_1:
+// xor     eax, eax
+//         ret
 
 class Random {
 public:
 	Random();
+	void set_deterministic(uint32_t seed = 0) { mt.seed(seed); }
+	// For tests. Not a constructor, to simplify interface for normal usage.
 
 	void bytes(uint8_t *buffer, size_t size);
 	void bytes(char *buffer, size_t size) { bytes(reinterpret_cast<uint8_t *>(buffer), size); }
+	bdata data(size_t size);
 
 	std::string printable_string(size_t size);
 
@@ -100,8 +122,10 @@ public:
 	}
 
 private:
-	using MT = std::mt19937;
-	using VT = uint32_t;  // Too hard to get right type from MT so that memcpy is optimized
+	// Intent - do not select 64-bit version on 32-bit platforms
+	using MT = std::conditional<sizeof(void *) >= 8, std::mt19937_64, std::mt19937>::type;
+	using VT = std::conditional<sizeof(void *) >= 8, uint64_t, uint32_t>::type;
+	// Too hard to get right type from MT (it uses uint32_fast natively, which can be larger)
 	MT mt;
 };
 

@@ -21,7 +21,7 @@ namespace crab {
 
 // This is max heap (like in std::), so if less is used, front will be largest element
 
-class IntrusiveHeapIndex {
+class IntrusiveHeapIndex : public Nocopy {
 public:
 	bool in_heap() const { return heap_index != 0; }
 

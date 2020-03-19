@@ -21,8 +21,7 @@ CRAB_INLINE void RequestParser::parse(Buffer &buf) {
 // We tolerate \n instead of \r\n according to recomendation
 // https://www.w3.org/Protocols/rfc2616/rfc2616-sec19.html#sec19.3
 CRAB_INLINE RequestParser::State RequestParser::consume(char input) {
-	CRAB_LITERAL(lowcase_connection, "connection");
-	CRAB_LITERAL(lowcase_transfer_encoding, "transfer-encoding");
+	;
 	if (++total_length > max_total_length)
 		throw std::runtime_error("HTTP Header too long - security violation");
 
@@ -223,7 +222,8 @@ CRAB_INLINE RequestParser::State RequestParser::consume(char input) {
 		if (input != ':')
 			throw std::runtime_error("':' expected");
 		// We will add other comma-separated headers if we need them later
-		header_cms_list = (header.name == lowcase_connection) || (header.name == lowcase_transfer_encoding);
+		header_cms_list =
+		    (header.name == CRAB_LITERAL("connection")) || (header.name == CRAB_LITERAL("transfer-encoding"));
 		return SPACE_BEFORE_HEADER_VALUE;
 	case SPACE_BEFORE_HEADER_VALUE:
 		if (is_sp(input))
@@ -261,23 +261,8 @@ CRAB_INLINE void RequestParser::process_ready_header() {
 	trim_right(header.value);
 	if (header_cms_list && header.value.empty())
 		return;  // Empty is NOP in CMS list, like "  ,,keep-alive"
-	CRAB_LITERAL(lowcase_content_length, "content-length");
-	CRAB_LITERAL(lowcase_content_type, "content-type");
-	CRAB_LITERAL(lowcase_transfer_encoding, "transfer-encoding");
-	CRAB_LITERAL(lowcase_chunked, "chunked");
-	CRAB_LITERAL(lowcase_identity, "identity");
-	CRAB_LITERAL(lowcase_host, "host");
-	CRAB_LITERAL(lowcase_origin, "origin");
-	CRAB_LITERAL(lowcase_connection, "connection");
-	CRAB_LITERAL(lowcase_authorization, "authorization");
-	CRAB_LITERAL(lowcase_close, "close");
-	CRAB_LITERAL(lowcase_keep_alive, "keep-alive");
-	CRAB_LITERAL(lowcase_upgrade, "upgrade");
-	CRAB_LITERAL(lowcase_websocket, "websocket");
-	CRAB_LITERAL(lowcase_sec_websocket_key, "sec-websocket-key");
-	CRAB_LITERAL(lowcase_sec_websocket_version, "sec-websocket-version");
 	// Those comparisons are by size first so very fast
-	if (header.name == lowcase_content_length) {
+	if (header.name == CRAB_LITERAL("content-length")) {
 		if (req.has_content_length())
 			throw std::runtime_error("content length specified more than once");
 		try {
@@ -289,65 +274,65 @@ CRAB_INLINE void RequestParser::process_ready_header() {
 			throw std::runtime_error("content length of 2^64-1 is not allowed");
 		return;
 	}
-	if (header.name == lowcase_transfer_encoding) {
+	if (header.name == CRAB_LITERAL("transfer-encoding")) {
 		tolower(header.value);
-		if (header.value == lowcase_chunked) {
+		if (header.value == CRAB_LITERAL("chunked")) {
 			if (!req.transfer_encodings.empty())
 				throw std::runtime_error("chunk encoding must be applied last");
 			req.transfer_encoding_chunked = true;
 			return;
 		}
-		if (header.value == lowcase_identity) {
+		if (header.value == CRAB_LITERAL("identity")) {
 			return;  // like chunked, it is transparent to user
 		}
 		req.transfer_encodings.push_back(header.value);
 		return;
 	}
-	if (header.name == lowcase_host) {
+	if (header.name == CRAB_LITERAL("host")) {
 		req.host = header.value;
 		return;
 	}
-	if (header.name == lowcase_origin) {
+	if (header.name == CRAB_LITERAL("origin")) {
 		req.origin = header.value;
 		return;
 	}
-	if (header.name == lowcase_content_type) {
+	if (header.name == CRAB_LITERAL("content-type")) {
 		parse_content_type_value(header.value, req.content_type_mime, req.content_type_suffix);
 		return;
 	}
-	if (header.name == lowcase_connection) {
+	if (header.name == CRAB_LITERAL("connection")) {
 		tolower(header.value);
-		if (header.value == lowcase_close) {
+		if (header.value == CRAB_LITERAL("close")) {
 			req.keep_alive = false;
 			return;
 		}
-		if (header.value == lowcase_keep_alive) {
+		if (header.value == CRAB_LITERAL("keep-alive")) {
 			req.keep_alive = true;
 			return;
 		}
-		if (header.value == lowcase_upgrade) {
+		if (header.value == CRAB_LITERAL("upgrade")) {
 			req.connection_upgrade = true;
 			return;
 		}
 		throw std::runtime_error("Invalid 'connection' header value");
 	}
-	if (header.name == lowcase_authorization) {
+	if (header.name == CRAB_LITERAL("authorization")) {
 		parse_authorization_basic(header.value, req.basic_authorization);
 		return;
 	}
-	if (header.name == lowcase_upgrade) {
+	if (header.name == CRAB_LITERAL("upgrade")) {
 		tolower(header.value);
-		if (header.value == lowcase_websocket) {
+		if (header.value == CRAB_LITERAL("websocket")) {
 			req.upgrade_websocket = true;
 			return;
 		}
 		throw std::runtime_error("Invalid 'upgrade' header value");
 	}
-	if (header.name == lowcase_sec_websocket_key) {
+	if (header.name == CRAB_LITERAL("sec-websocket-key")) {
 		req.sec_websocket_key = header.value;  // Copy is better here
 		return;
 	}
-	if (header.name == lowcase_sec_websocket_version) {
+	if (header.name == CRAB_LITERAL("sec-websocket-version")) {
 		req.sec_websocket_version = header.value;  // Copy is better here
 		return;
 	}
