@@ -118,6 +118,7 @@ add_executable(benchmark_chrono ${SOURCE_FILES} examples/lowlevel/benchmark_chro
 add_executable(benchmark_map ${SOURCE_FILES} examples/lowlevel/benchmark_map.cpp)
 add_executable(benchmark_getifaddrs ${SOURCE_FILES} examples/lowlevel/benchmark_getifaddrs.cpp)
 add_executable(benchmark_atoi ${SOURCE_FILES} examples/lowlevel/benchmark_atoi.cpp)
+add_executable(benchmark_random ${SOURCE_FILES} examples/lowlevel/benchmark_random.cpp)
 
 # tests
 add_executable(test_atoi ${SOURCE_FILES} test/test_atoi.cpp)

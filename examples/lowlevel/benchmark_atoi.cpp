@@ -15,7 +15,7 @@
 #include <limits>
 #include <type_traits>
 
-#include <crab/integer_cast.hpp>
+#include <crab/crab.hpp>
 
 // Code from https://github.com/jsteemann/atoi used as a benchmark reference
 
@@ -248,30 +248,12 @@ U test(char const *label, U count) {
 }
 
 int main() {
+	crab::Random rnd;
+	std::cout << rnd.printable_string(32) << std::endl;
+	std::cout << rnd.printable_string(32) << std::endl;
+	std::cout << rnd.printable_string(32) << std::endl;
+	std::cout << rnd.printable_string(32) << std::endl;
 	unsigned long long limit = 1000000000;
-
-	std::vector<size_t> indexes(62);
-	std::mt19937 mt;
-	for (size_t i = 0; i < limit; i++) {
-		auto rem = (mt() >> 6) * 62;
-		//        indexes.at(rem >> 26) += 1;
-		rem = (rem & ((1 << 26) - 1)) * 62;
-		//        indexes.at(rem >> 26) += 1;
-		rem = (rem & ((1 << 26) - 1)) * 62;
-		//        indexes.at(rem >> 26) += 1;
-		rem = (rem & ((1 << 26) - 1)) * 62;
-		//        indexes.at(rem >> 26) += 1;
-		rem = (rem & ((1 << 26) - 1)) * 62;
-		//        indexes.at(rem >> 26) += 1;
-		rem = (rem & ((1 << 26) - 1)) * 62;
-		//        indexes.at(rem >> 26) += 1;
-		rem = (rem & ((1 << 26) - 1)) * 62;
-		//        indexes.at(rem >> 26) += 1;
-		rem = (rem & ((1 << 26) - 1)) * 62;
-		indexes.at(rem >> 26) += 1;
-	}
-	for (const auto &v : indexes)
-		std::cout << " " << v << std::endl;
 
 	auto result1 = test<std::mt19937>("mt19937: ", limit);
 	auto result2 = test<std::mt19937_64>("mt19937_64: ", limit);

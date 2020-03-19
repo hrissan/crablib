@@ -28,6 +28,12 @@ inline std::string to_hex(const bdata &data) { return to_hex(data.data(), data.s
 int from_hex_digit(char sym);
 bool from_hex(bdata &data, const std::string &str);
 
+template<typename T>
+T rol(T mask, size_t shift) {
+	shift = shift & (sizeof(T) * 8 - 1);
+	return (mask << shift) | (mask >> (sizeof(T) * 8 - shift));
+}
+
 namespace details {
 // Header-only libs cannot contain statics, we use workaround
 template<typename T>
@@ -105,7 +111,7 @@ class Random {
 public:
 	Random();
 	void set_deterministic(uint32_t seed = 0) { mt.seed(seed); }
-	// For tests. Not a constructor, to simplify interface for normal usage.
+	// For tests. Not a constructor, to simplify normal interface (when actual random is required)
 
 	void bytes(uint8_t *buffer, size_t size);
 	void bytes(char *buffer, size_t size) { bytes(reinterpret_cast<uint8_t *>(buffer), size); }

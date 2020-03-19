@@ -88,23 +88,35 @@ CRAB_INLINE bdata Random::data(size_t size) {
 	return result;
 }
 
+namespace details {
+template<typename T>
+static constexpr T power(T value, size_t pow, T collect = T{1}) {
+	return pow <= 0 ? collect : power(value, pow - 1, collect * value);
+}
+}  // namespace details
+
 CRAB_INLINE std::string Random::printable_string(size_t size) {
-	constexpr size_t BITS        = 6;
-	constexpr size_t OTHER_BITS  = (sizeof(VT) * 8 - BITS);
-	constexpr VT MASK            = (VT{1} << OTHER_BITS) - 1;
-	static const char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+	static const char alphabet[]   = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+	constexpr size_t ALPHABET_SIZE = sizeof(alphabet) - 1;
+	constexpr size_t BITS          = 6;
+
+	static_assert((1U << BITS) >= ALPHABET_SIZE, "Too little bits");
+	constexpr size_t CHARS_PER_MT = sizeof(VT) * 8 / BITS;
+	constexpr VT TAIL             = details::power(ALPHABET_SIZE, CHARS_PER_MT);
+	constexpr VT LONG_TAIL        = (std::numeric_limits<VT>::max() - TAIL + 1) / TAIL * TAIL + TAIL - 1;
+	// We want ideal distribution, without calling mt() too often and without dividing too much
+	// std::uniform_int_distribution<VT> distr(0, TAIL); is 2x slower
+	// std::uniform_int_distribution<VT> distr(0, ALPHABET_SIZE - 1); per symbol is 10x slower
+
 	std::string result(size, '\0');
 	size_t i = 0;
 	for (; i != size;) {
-		// If we do not want 1) non-alphanum chars, 2) divide by 62, 3) different # of mt() calls per char
-		// 4) lose almost half of string entropy (alphabet of 32)
-		// then we need to treat VT() as fixed point value of 0.XXXXX in range of [0..1)
-		// We will keep the code simple and just divide
-		VT value = static_cast<VT>(mt());
-
-		for (size_t j = 0; j != sizeof(VT) * 8 / BITS; ++j) {
-			result[i++] = alphabet[value % (sizeof(alphabet) - 1)];
-			value /= (sizeof(alphabet) - 1);
+		VT value = mt();
+		while (value > LONG_TAIL)
+			value = mt();
+		for (size_t j = 0; j != CHARS_PER_MT; ++j) {
+			result[i++] = alphabet[value % ALPHABET_SIZE];
+			value /= ALPHABET_SIZE;
 			if (i == size)
 				return result;
 		}

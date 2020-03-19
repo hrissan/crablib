@@ -108,18 +108,11 @@ CRAB_INLINE std::string MessageChunkParser::write_message_frame(
 // TODO - help compiler by splitting into start, mid, finish
 // start will advance data and rotate masking_key until aligned with uint64_t
 
-namespace details {
-CRAB_INLINE uint32_t local_rol(uint32_t mask, size_t shift) {
-	shift = shift & 31U;
-	return (mask << shift) | (mask >> (32 - shift));
-}
-}  // namespace details
-
 CRAB_INLINE void MessageChunkParser::mask_data(size_t masking_shift, char *data, size_t size, uint32_t masking_key) {
-	uint32_t x2 = details::local_rol(masking_key, 8 + 8 * masking_shift);
+	auto x2 = rol(masking_key, 8 + 8 * masking_shift);
 	for (size_t i = 0; i != size; ++i) {
 		data[i] ^= x2;
-		x2 = details::local_rol(x2, 8);
+		x2 = rol(x2, 8);
 	}
 }
 
