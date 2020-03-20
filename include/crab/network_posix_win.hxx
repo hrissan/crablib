@@ -75,7 +75,7 @@ CRAB_INLINE int Address::impl_get_sockaddr_length() const {
 	}
 }
 
-CRAB_INLINE bool Address::is_multicast_group() const {
+CRAB_INLINE bool Address::is_multicast() const {
 	switch (addr.ss_family) {
 	case AF_INET: {
 		auto ap                = reinterpret_cast<const sockaddr_in *>(impl_get_sockaddr());

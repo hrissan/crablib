@@ -17,7 +17,7 @@ class Timer {
 public:
 	explicit Timer(Handler &&cb) : a_handler(std::move(cb)) {}
 	void set_handler(Handler &&cb) { a_handler = std::move(cb); }
-	~Timer() { cancel(); };
+	~Timer();
 
 	// Timer is one-shot, semantic of calling once() on set timer is cancel+once, but it takes only
 	// 2 integer comparisons + 1 integer assignment to advance not yet fired timer further into
@@ -53,7 +53,7 @@ class Watcher {
 public:
 	explicit Watcher(Handler &&cb);
 	void set_handler(Handler &&cb) { a_handler.handler = std::move(cb); }
-	~Watcher() { cancel(); }
+	~Watcher();
 
 	void cancel();
 	// after cancel no callback is guaranted till next time call() is called
@@ -75,19 +75,18 @@ private:
 class Idle {
 public:
 	explicit Idle(Handler &&cb);
-	void set_handler(Handler &&cb) { a_handler.handler = std::move(cb); }
+	// Starts in active state, handlers of all active idles are called in fair manner. If
+	// several are activated between runloop iterations, last one activated will be last one called
+	void set_handler(Handler &&cb) { a_handler = std::move(cb); }
 	// Active after construction, only handlers of active Idles will run
 
 	void set_active(bool a);
 	bool is_active() { return idle_node.in_list(); }
 
 private:
-	Callable a_handler;
-	IntrusiveNode<Idle> idle_node;
-#if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL || CRAB_SOCKET_WINDOWS
-	friend struct details::RunLoopLinks;
-#else
-#endif
+	Handler a_handler;
+	IntrusiveNode<Idle> idle_node;  // None of our impls have idle handlers
+	friend class RunLoop;
 };
 
 // Handler of both SIGINT and SIGTERM, if you need to do something on Ctrl-C
@@ -127,7 +126,7 @@ public:
 	std::string get_address() const;
 	uint16_t get_port() const;
 	std::string to_string() const { return get_address() + ":" + std::to_string(get_port()); }
-	bool is_multicast_group() const;
+	bool is_multicast() const;
 
 #if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL || CRAB_SOCKET_WINDOWS
 	const sockaddr *impl_get_sockaddr() const { return reinterpret_cast<const sockaddr *>(&addr); }
@@ -301,10 +300,8 @@ struct RunLoopLinks : private Nocopy {  // Common structure when implementing ov
 	IntrusiveHeap<Timer, &Timer::heap_index, Timer::HeapPred> active_timers;
 
 	IntrusiveList<Callable, &Callable::triggered_callables_node> triggered_callables;
-	IntrusiveList<Idle, &Idle::idle_node> idle_handlers;
 	steady_clock::time_point now = steady_clock::now();
-	void trigger_idle_handlers();
-	bool quit = true;
+	bool quit                    = true;
 
 	bool process_timer(int &timeout_ms);
 
@@ -356,6 +353,7 @@ private:
 
 	using CurrentLoop = details::StaticHolderTL<RunLoop *>;
 
+	IntrusiveList<Idle, &Idle::idle_node> idle_handlers;  // None of our impls have idles
 #if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL || CRAB_SOCKET_WINDOWS
 	details::RunLoopLinks links;
 #endif

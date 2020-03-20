@@ -51,6 +51,16 @@ CRAB_INLINE std::ostream &operator<<(std::ostream &os, const Address &msg) {
 	return os << msg.get_address() << ":" << msg.get_port();
 }
 
+CRAB_INLINE Idle::Idle(Handler &&cb) : a_handler(std::move(cb)) { set_active(true); }
+
+CRAB_INLINE void Idle::set_active(bool a) {
+	if (a) {
+		RunLoop::current()->idle_handlers.push_back(*this);
+	} else {
+		idle_node.unlink();
+	}
+}
+
 #if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL || CRAB_SOCKET_WINDOWS
 
 CRAB_INLINE void Callable::add_pending_callable(bool can_read, bool can_write) {
@@ -60,15 +70,6 @@ CRAB_INLINE void Callable::add_pending_callable(bool can_read, bool can_write) {
 }
 
 namespace details {
-
-CRAB_INLINE void RunLoopLinks::trigger_idle_handlers() {
-	if (!triggered_callables.empty())
-		return;
-	// Nothing triggered during poll
-	for (auto &idle : idle_handlers) {
-		triggered_callables.push_back(idle.a_handler);
-	}
-}
 
 CRAB_INLINE bool RunLoopLinks::process_timer(int &timeout_ms) {
 	if (active_timers.empty())
@@ -141,8 +142,15 @@ CRAB_INLINE void RunLoop::run() {
 		if (links.idle_handlers.empty()) {
 			step(timeout_ms);  // Just waiting
 		} else {
-			step(0);  // Poll
-			links.trigger_idle_handlers();
+			step(0);  // Poll, beware, both lists in a line below could change as a result
+			if (links.triggered_callables.empty() && !idle_handlers.empty()) {
+				// Nothing triggered during poll, time for idle handlers to run
+				Idle &idle = *idle_handlers.begin();
+				// Rotate round-robin
+				idle.idle_node.unlink();
+				idle_handlers.push_back(idle);
+				idle.a_handler();
+			}
 		}
 		links.now = steady_clock::now();
 		// Runloop optimizes # of calls to now() because those can be slow
@@ -202,26 +210,15 @@ CRAB_INLINE void Timer::once_at(steady_clock::time_point time_point) {
 	}
 }
 
-// CRAB_INLINE Timer::~Timer() { cancel(); }
+CRAB_INLINE Timer::~Timer() { cancel(); }
 
 CRAB_INLINE bool Timer::is_set() const { return heap_index.in_heap(); }
 
 CRAB_INLINE void Timer::cancel() { RunLoop::current()->links.active_timers.erase(*this); }
 
-CRAB_INLINE Idle::Idle(Handler &&cb) : a_handler(std::move(cb)) {
-	RunLoop::current()->links.idle_handlers.push_back(*this);
-}
-
-CRAB_INLINE void Idle::set_active(bool a) {
-	if (a) {
-		RunLoop::current()->links.idle_handlers.push_back(*this);
-	} else {
-		a_handler.cancel_callable();
-		idle_node.unlink();
-	}
-}
-
 CRAB_INLINE Watcher::Watcher(Handler &&a_handler) : loop(RunLoop::current()), a_handler(std::move(a_handler)) {}
+
+CRAB_INLINE Watcher::~Watcher() { cancel(); }
 
 CRAB_INLINE void Watcher::call() {
 	loop->links.call_watcher(this);

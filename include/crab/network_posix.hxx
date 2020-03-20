@@ -101,18 +101,18 @@ CRAB_INLINE RunLoop::RunLoop()
     : efd(kqueue(), "crab::RunLoop kqeueu failed"), wake_callable([this]() { links.trigger_called_watchers(); }) {
 	if (CurrentLoop::instance)
 		throw std::runtime_error("RunLoop::RunLoop Only single RunLoop per thread is allowed");
-	struct kevent changeLst {
+	struct kevent changes {
 		details::EVFILT_USER_WAKEUP, EVFILT_USER, EV_ADD | EV_CLEAR, 0, 0, nullptr
 	};
-	details::check(kevent(efd.get_value(), &changeLst, 1, 0, 0, NULL) >= 0, "crab::RunLoopBase kevent_modify failed");
+	details::check(kevent(efd.get_value(), &changes, 1, 0, 0, NULL) >= 0, "crab::RunLoopBase kevent_modify failed");
 	CurrentLoop::instance = this;
 }
 
 CRAB_INLINE void RunLoop::impl_add_callable_fd(int fd, Callable *callable, bool read, bool write) {
-	struct kevent changelist[] = {{uintptr_t(fd), EVFILT_READ, EV_ADD | EV_CLEAR, 0, 0, callable},
+	struct kevent changes[] = {{uintptr_t(fd), EVFILT_READ, EV_ADD | EV_CLEAR, 0, 0, callable},
 	    {uintptr_t(fd), EVFILT_WRITE, EV_ADD | EV_CLEAR, 0, 0, callable}};
-	const int nchangesnchanges = (read ? 1 : 0) + (write ? 1 : 0);
-	details::check(kevent(efd.get_value(), changelist + (read ? 0 : 1), nchangesnchanges, 0, 0, NULL) >= 0,
+	const int count         = (read ? 1 : 0) + (write ? 1 : 0);
+	details::check(kevent(efd.get_value(), changes + (read ? 0 : 1), count, 0, 0, NULL) >= 0,
 	    "crab::RunLoop impl_kevent failed");
 }
 
@@ -149,9 +149,9 @@ CRAB_INLINE SignalStop::SignalStop(Handler &&cb) : a_handler(std::move(cb)) {
 	signal(SIGINT, SIG_IGN);
 	signal(SIGTERM, SIG_IGN);
 
-	struct kevent changeLst[] = {
+	struct kevent changes[] = {
 	    {SIGINT, EVFILT_SIGNAL, EV_ADD, 0, 0, &a_handler}, {SIGTERM, EVFILT_SIGNAL, EV_ADD, 0, 0, &a_handler}};
-	details::check(kevent(RunLoop::current()->efd.get_value(), changelist, 2, 0, 0, NULL) >= 0,
+	details::check(kevent(RunLoop::current()->efd.get_value(), changes, 2, 0, 0, NULL) >= 0,
 	    "crab::SignalStop impl_kevent failed");
 }
 
@@ -459,7 +459,7 @@ CRAB_INLINE UDPTransmitter::UDPTransmitter(const Address &address, Handler &&cb,
 	    "crab::UDPTransmitter socket() failed");
 	details::set_nonblocking(tmp.get_value());
 
-	if (address.is_multicast_group()) {
+	if (address.is_multicast()) {
 		details::setsockopt_1(tmp.get_value(), SOL_SOCKET, SO_BROADCAST);
 		auto mreq = details::fill_ip_mreqn(adapter);
 		details::check(setsockopt(tmp.get_value(), IPPROTO_IP, IP_MULTICAST_IF, &mreq, sizeof(mreq)) >= 0,
@@ -512,7 +512,7 @@ CRAB_INLINE UDPReceiver::UDPReceiver(const Address &address, Handler &&cb, const
 	// https://www.reddit.com/r/networking/comments/7nketv/proper_use_of_bind_for_multicast_receive_on_linux/
 	details::FileDescriptor tmp(::socket(address.impl_get_sockaddr()->sa_family, SOCK_DGRAM, IPPROTO_UDP),
 	    "crab::UDPReceiver socket() failed");
-	if (address.is_multicast_group()) {
+	if (address.is_multicast()) {
 		// TODO - check flag combination on Mac
 		details::setsockopt_1(tmp.get_value(), SOL_SOCKET, SO_REUSEADDR);
 		details::setsockopt_1(tmp.get_value(), SOL_SOCKET, SO_REUSEPORT);
@@ -521,7 +521,7 @@ CRAB_INLINE UDPReceiver::UDPReceiver(const Address &address, Handler &&cb, const
 
 	details::check(::bind(tmp.get_value(), address.impl_get_sockaddr(), address.impl_get_sockaddr_length()) >= 0,
 	    "crab::UDPReceiver bind() failed");
-	if (address.is_multicast_group()) {
+	if (address.is_multicast()) {
 		if (address.impl_get_sockaddr()->sa_family != AF_INET)
 			throw std::runtime_error("IPv6 multicast not supported yet");
 		auto sa = reinterpret_cast<const sockaddr_in *>(address.impl_get_sockaddr());

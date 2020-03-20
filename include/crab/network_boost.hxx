@@ -12,11 +12,16 @@
 #include <boost/bind.hpp>
 #include <boost/circular_buffer.hpp>
 
+// This impl is currently outdated and contains some bugs
+// TODO - trampoline counters, like in Windows impl
+// TODO - SignalStop
+// TODO - check TCPSocket state machine
+// TODO - convert std::chrono time points into boost
+// TODO - UDP
+
 namespace crab {
 
 CRAB_INLINE bool Address::parse(Address &address, const std::string &ip, uint16_t port) {
-	//    boost::asio::ip::tcp::endpoint endpoint( boost::asio::ip::address::from_string(addr), port);
-
 	boost::system::error_code ec;
 	address.addr = boost::asio::ip::address::from_string(ip, ec);
 	address.port = port;
@@ -30,12 +35,14 @@ CRAB_INLINE std::string Address::get_address() const {
 
 CRAB_INLINE uint16_t Address::get_port() const { return port; }
 
-CRAB_INLINE bool Address::is_multicast_group() const { return addr.is_multicast(); }
+CRAB_INLINE bool Address::is_multicast() const { return addr.is_multicast(); }
 
 struct RunLoopImpl {
 	boost::asio::io_service io;
-	size_t pending_counter = 0;
-	size_t impl_counter    = 0;
+	// size_t pending_counter = 0; // TODO
+	// size_t impl_counter    = 0; // TODO
+
+	steady_clock::time_point now = steady_clock::now();
 };
 
 CRAB_INLINE RunLoop::RunLoop() : impl(new RunLoopImpl()) {
@@ -46,9 +53,71 @@ CRAB_INLINE RunLoop::RunLoop() : impl(new RunLoopImpl()) {
 
 CRAB_INLINE RunLoop::~RunLoop() { CurrentLoop::instance = this; }
 
-CRAB_INLINE void RunLoop::run() { impl->io.run(); }
+CRAB_INLINE void RunLoop::run() {
+	auto &io = impl->io;
+	io.reset();
+	impl->now = steady_clock::now();
+	while (!io.stopped()) {
+		// Nothing triggered and no timers here
+		if (idle_handlers.empty()) {
+			io.run_one();  // Just waiting
+		} else {
+			if (io.poll() == 0 && !idle_handlers.empty()) {
+				// Nothing triggered during poll, time for idle handlers to run
+				Idle &idle = *idle_handlers.begin();
+				// Rotate round-robin
+				idle.idle_node.unlink();
+				idle_handlers.push_back(idle);
+				idle.a_handler();
+			}
+		}
+		impl->now = steady_clock::now();
+		// Runloop optimizes # of calls to now() because those can be slow
+	}
+}
 
-CRAB_INLINE steady_clock::time_point RunLoop::now() { return steady_clock::now(); }
+CRAB_INLINE void RunLoop::cancel() { impl->io.stop(); }
+
+CRAB_INLINE steady_clock::time_point RunLoop::now() { return impl->now; }
+
+class WatcherImpl {
+public:
+	explicit WatcherImpl(Watcher *owner) : owner(owner) {}
+	Watcher *owner;
+	std::atomic<size_t> pending_calls;
+
+	void close() {
+		if (pending_calls != 0) {
+			owner->impl.release();
+			owner = nullptr;
+		}
+	}
+	void handle_event() {
+		auto after = --pending_calls;
+		if (owner)
+			return owner->a_handler.handler();
+		if (after == 0)
+			delete this;
+	}
+	void post(RunLoop *loop) {
+		if (++pending_calls == 1)
+			loop->get_impl()->io.post([&]() { handle_event(); });
+	}
+};
+
+CRAB_INLINE Watcher::Watcher(Handler &&a_handler) : loop(RunLoop::current()), a_handler(std::move(a_handler)) {
+	impl.reset(new WatcherImpl(this));  // Cannot postpone this to call() because we need mutex
+}
+
+CRAB_INLINE Watcher::~Watcher() { cancel(); }
+
+CRAB_INLINE void Watcher::call() { impl->post(loop); }
+
+CRAB_INLINE void Watcher::cancel() {
+	impl->close();
+	if (!impl)
+		impl.reset(new WatcherImpl(this));
+}
 
 class TimerImpl {
 public:
@@ -86,7 +155,7 @@ public:
 	}
 };
 
-// CRAB_INLINE Timer::~Timer() { cancel(); }
+CRAB_INLINE Timer::~Timer() { cancel(); }
 
 CRAB_INLINE void Timer::cancel() {
 	if (impl)
@@ -102,7 +171,19 @@ CRAB_INLINE void Timer::once(double after_seconds) {
 	impl->start_timer(after_seconds);
 }
 
-class WatcherImpl {};
+CRAB_INLINE void Timer::once(steady_clock::duration delay) {
+	throw std::logic_error("TODO - implement");  // How to convert std::chrono to boost?
+}
+
+CRAB_INLINE void Timer::once_at(steady_clock::time_point time_point) {
+	throw std::logic_error("TODO - implement");  // How to convert std::chrono to boost?
+}
+
+CRAB_INLINE bool SignalStop::running_under_debugger() { return false; }
+
+CRAB_INLINE SignalStop::SignalStop(Handler &&cb) : a_handler(std::move(cb)) {}
+
+CRAB_INLINE SignalStop::~SignalStop() = default;
 
 class TCPSocketImpl {
 public:
@@ -141,6 +222,11 @@ public:
 		socket.shutdown(boost::asio::ip::tcp::socket::shutdown_send, ignored_ec);
 	}
 
+	void start_connect(const Address &address) {
+		pending_connect = true;
+		boost::asio::ip::tcp::endpoint endpoint(address.get_addr(), address.get_port());
+		socket.async_connect(endpoint, [&](boost::system::error_code e) { handle_connect(e); });
+	}
 	void handle_connect(const boost::system::error_code &e) {
 		pending_connect = false;
 		if (!e) {
@@ -214,16 +300,13 @@ CRAB_INLINE void TCPSocket::close() {
 		impl->close(false);
 }
 
-CRAB_INLINE bool TCPSocket::is_open() const { return impl && impl->connected; }
+CRAB_INLINE bool TCPSocket::is_open() const { return impl && (impl->connected || impl->pending_connect); }
 
 CRAB_INLINE bool TCPSocket::connect(const Address &address) {
 	close();
 	if (!impl)
 		impl.reset(new TCPSocketImpl(this));
-	impl->pending_connect = true;
-	boost::asio::ip::tcp::endpoint endpoint(address.get_addr(), address.get_port());
-	auto i = impl.get();
-	impl->socket.async_connect(endpoint, [i](boost::system::error_code e) { i->handle_connect(e); });
+	impl->start_connect(address);
 	return true;
 }
 
@@ -411,46 +494,21 @@ CRAB_INLINE std::vector<Address> DNSResolver::sync_resolve(
 	return names;
 }
 
-/*void test_network() {
-    boost::asio::io_service io_service;
-    System::EventLoop event_loop(io_service);
+CRAB_INLINE UDPTransmitter::UDPTransmitter(const Address &address, Handler &&cb, const std::string &adapter)
+    : w_handler(std::move(cb)) {
+	throw std::runtime_error("UDPTransmitter not yet implemented on Windows");
+}
 
-    Buffer ms(1024);
-    char getstr[]="GET / HTTP/1.1\r\n\r\n";
-    ms.writeSome(getstr, sizeof(getstr) - 1);
+CRAB_INLINE bool UDPTransmitter::write_datagram(const uint8_t *data, size_t count) { return 0; }
 
-    std::unique_ptr<TCPSocket> rws;
+CRAB_INLINE UDPReceiver::UDPReceiver(const Address &address, Handler &&cb, const std::string &adapter)
+    : r_handler(std::move(cb)) {
+	throw std::runtime_error("UDPReceiver not yet implemented on Windows");
+}
 
-    rws.reset( new TCPSocket( [&](){
-        auto written = rws->writeSome(ms.read_ptr(), ms.read_count());
-        ms.did_read(written);
-        if( ms.empty() )
-            rws->write_shutdown();
-
-        uint8_t buf[512]={};
-        size_t cou = rws->readSome(buf, sizeof(buf));
-        std::cout << std::string(reinterpret_cast<char *>(buf), cou);
-    }, [&](){
-        std::cout << std::endl << "test_disconnect" << std::endl;
-    }));
-
-    boost::asio::ip::tcp::resolver resolver(EventLoop::io());
-    boost::asio::ip::tcp::resolver::query query("google.com", "http");
-    resolver.async_resolve(query, [&](const boost::system::error_code& err, boost::asio::ip::tcp::resolver::iterator
-endpoint_iterator){ if (!err)
-        {
-            boost::asio::ip::tcp::endpoint ep = *endpoint_iterator;
-            std::cout << "Connecting to: " << ep.address().to_string() << "\n";
-            rws->connect(ep.address().to_string(), 80);
-        }
-        else
-        {
-            std::cout << "Error: " << err.message() << "\n";
-        }
-    });
-
-    EventLoop::io().run();
-}*/
+CRAB_INLINE std::pair<bool, size_t> UDPReceiver::read_datagram(uint8_t *data, size_t count, Address *peer_addr) {
+	return {false, 0};
+}
 
 }  // namespace crab
 
