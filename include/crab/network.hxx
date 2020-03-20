@@ -139,7 +139,7 @@ CRAB_INLINE void RunLoop::run() {
 		if (links.process_timer(timeout_ms))
 			continue;
 		// Nothing triggered and no timers here
-		if (links.idle_handlers.empty()) {
+		if (idle_handlers.empty()) {
 			step(timeout_ms);  // Just waiting
 		} else {
 			step(0);  // Poll, beware, both lists in a line below could change as a result

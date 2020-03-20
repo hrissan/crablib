@@ -10,7 +10,7 @@ message("-DCRAB_FUZZ=1 builds binaries for fuzzing. Disabled by default because 
 option(CRAB_FUZZ "builds binaries for fuzzing" OFF)
 
 # add_definitions(-DCRAB_COMPILE=1)
-add_definitions(-DCRAB_SOCKET_BOOST=1)
+# add_definitions(-DCRAB_SOCKET_BOOST=1)
 
 if(WIN32)
 #	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Ot")
