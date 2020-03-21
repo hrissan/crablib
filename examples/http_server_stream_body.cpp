@@ -8,9 +8,9 @@
 
 namespace http = crab::http;
 
-class ServerLongPollApp {
+class ServerStreamBodyApp {
 public:
-	explicit ServerLongPollApp(uint16_t port) : server(port), timer([&]() { on_timer(); }) {
+	explicit ServerStreamBodyApp(uint16_t port) : server(port), timer([&]() { on_timer(); }) {
 		server.r_handler = [&](http::Client *who, http::RequestBody &&request) {
 			if (request.r.path == "/chat") {
 				waiting_clients.emplace(who);
@@ -62,7 +62,7 @@ int main(int argc, char *argv[]) {
 	std::cout << "This server slowly streams long body to clients" << std::endl;
 	crab::RunLoop runloop;
 
-	ServerLongPollApp app(7000);
+	ServerStreamBodyApp app(7000);
 
 	runloop.run();
 	return 0;
