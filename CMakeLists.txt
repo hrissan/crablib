@@ -100,6 +100,7 @@ add_executable(watcher_latency ${SOURCE_FILES} examples/watcher_latency.cpp)
 
 add_executable(http_server_simple ${SOURCE_FILES} examples/http_server_simple.cpp)
 add_executable(http_server_longpoll ${SOURCE_FILES} examples/http_server_longpoll.cpp)
+add_executable(http_server_stream_body ${SOURCE_FILES} examples/http_server_stream_body.cpp)
 add_executable(http_server_multi ${SOURCE_FILES} examples/http_server_multi.cpp)
 add_executable(http_server_complex ${SOURCE_FILES} examples/http_server_complex.cpp)
 

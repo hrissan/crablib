@@ -20,13 +20,13 @@ int test_http(size_t num, uint16_t port) {
 	//	Idle idle([](){});
 	std::set<http::Client *> connected_sockets;
 	http::Server server(port);
-	server.r_handler = [&](http::Client *who, http::RequestBody &&request, http::ResponseBody &response) -> bool {
+	server.r_handler = [&](http::Client *who, http::RequestBody &&request) {
 		if (request.r.path == "/latency") {
 			who->web_socket_upgrade();
 			connected_sockets.insert(who);
-			return false;
+			return;
 		}
-		return true;
+		who->write(http::ResponseBody::simple_html(404));
 	};
 	server.d_handler = [&](http::Client *who) { connected_sockets.erase(who); };
 	server.w_handler = [&](http::Client *who, http::WebMessage &&message) {

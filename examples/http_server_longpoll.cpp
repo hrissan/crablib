@@ -11,10 +11,9 @@ namespace http = crab::http;
 class ServerLongPollApp {
 public:
 	explicit ServerLongPollApp(uint16_t port) : server(port), timer([&]() { on_timer(); }) {
-		server.r_handler = [&](http::Client *who, http::RequestBody &&request, http::ResponseBody &response) -> bool {
+		server.r_handler = [&](http::Client *who, http::RequestBody &&request) {
 			waiting_clients.emplace(who, ticks_counter + 5);
 			waiting_clients_inv.emplace(ticks_counter + 5, who);
-			return false;  // We did not respond immediately
 		};
 		server.d_handler = [&](http::Client *who) {
 			auto wit = waiting_clients.find(who);

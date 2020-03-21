@@ -29,8 +29,11 @@ class Client : protected Connection {  // So the type is opaque for users
 public:
 	using Connection::get_peer_address;
 	void write(ResponseBody &&response);
+	void write(ResponseHeader &&resp, bool buffer_only = false);
 	void write(WebMessage &&wm) { Connection::write(std::move(wm)); }
 	using Connection::web_socket_upgrade;
+	using Connection::write;
+	using Connection::write_last_chunk;
 
 private:
 	friend class Server;
@@ -38,9 +41,10 @@ private:
 
 class Server {
 public:
-	typedef std::function<bool(Client *who, RequestBody &&, ResponseBody &)> R_handler;
-	// return false if no reply should be sent (long poll, deferred serving).
-	// remember client and later call Server::write() to finish request
+	typedef std::function<void(Client *who, RequestBody &&)> R_handler;
+	// if you did not write response and exception is thrown, 422 will be returned
+	// if you did not write full response and no exception is thrown, you are expected
+	// to remember who and later call Client::write() to finish serving request
 	typedef std::function<void(Client *who)> D_handler;
 	// remove remembered client/websocket. Do not do anything with who, except using as an opaque key
 

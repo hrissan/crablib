@@ -137,6 +137,9 @@ struct ResponseBody {
 		body             = std::move(b);
 		r.content_length = body.size();
 	}
+
+	static ResponseBody simple_html(int status, std::string &&body = std::string{});
+	// Leave body empty for default message for status
 };
 
 bool is_sp(int c);

@@ -87,28 +87,28 @@ int test_http(size_t num, uint16_t port) {
 	int req_counter = 0;
 	std::set<http::Client *> connected_sockets;
 	http::Server server(port);
-	server.r_handler = [&](http::Client *who, http::RequestBody &&request, http::ResponseBody &response) -> bool {
-		if (request.r.path == "/") {
-			response.r.status = 200;
-			response.r.set_content_type("text/html", "charset=utf-8");
-			response.set_body(HTML);
-			return true;
-		}
-		if (request.r.path == "/quit") {
-			crab::RunLoop::current()->cancel();
-			return true;
-		}
+	server.r_handler = [&](http::Client *who, http::RequestBody &&request) {
 		if (request.r.path == "/ws") {
 			who->web_socket_upgrade();
 			connected_sockets.insert(who);
 			who->write(http::WebMessage("Server first!"));
-			return false;
+			return;
 		}
-		response.r.status = 200;
-		response.r.set_content_type("text/plain", "charset=utf-8");
-		response.set_body("Hello, Crab!");
+		if (request.r.path == "/") {
+			http::ResponseBody response;
+			response.r.status = 200;
+			response.r.set_content_type("text/html", "charset=utf-8");
+			response.set_body(HTML);
+			who->write(std::move(response));
+			return;
+		}
+		if (request.r.path == "/quit") {
+			crab::RunLoop::current()->cancel();
+			who->write(crab::http::ResponseBody::simple_html(200, "Server is stopped"));
+			return;
+		}
+		who->write(crab::http::ResponseBody::simple_html(200, "Hello, Crab!"));
 		req_counter += 1;
-		return true;
 	};
 	server.d_handler = [&](http::Client *who) { connected_sockets.erase(who); };
 	server.w_handler = [&](http::Client *who, http::WebMessage &&message) {

@@ -110,28 +110,24 @@ public:
 	    , server(settings.upsteam_http())
 	    , ab([&]() { on_fast_queue_changed(); })
 	    , th(&MDSourceApp::generator_thread, this) {
-		server.r_handler = [&](http::Client *who, http::RequestBody &&request, http::ResponseBody &response) -> bool {
+		server.r_handler = [&](http::Client *who, http::RequestBody &&request) {
 			if (request.r.path != "/messages")
-				return true;  // Default "not found"
+				return who->write(http::ResponseBody::simple_html(404));
 			MDRequest req;
 			crab::IStringStream is(&request.body);
 			req.read(&is);
-			if (req.end <= req.begin) {
-				response.r.status = 400;
-				response.r.set_content_type("text/plain", "charset=utf-8");
-				response.set_body("Invalid request range - inverted or empty!");
-				return true;
-			}
+			if (req.end <= req.begin)
+				return who->write(http::ResponseBody::simple_html(400, "Invalid request range - inverted or empty!"));
 			if (req.end - req.begin > MAX_RESPONSE_COUNT)
 				req.end = req.begin + MAX_RESPONSE_COUNT;
+			http::ResponseBody response;
 			if (create_response(response, req.begin, req.end))
-				return true;
+				return who->write(std::move(response));
 			// If client requests range which is not available yet, we add them to long-poll
 			// waiting_clients_inv is sorted by req.end so once sequence number reaches begin(),
 			// we can send response to that waiting client
 			waiting_clients.emplace(who, req.end);
 			waiting_clients_inv.emplace(req.end, std::make_pair(req, who));
-			return false;
 		};
 		server.d_handler = [&](http::Client *who) {
 			auto wit = waiting_clients.find(who);

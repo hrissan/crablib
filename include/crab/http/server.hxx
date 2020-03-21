@@ -21,7 +21,7 @@
 namespace crab { namespace http {
 
 namespace details {
-CRAB_INLINE bool empty_r_handler(Client *, RequestBody &&, ResponseBody &) { return true; }
+CRAB_INLINE void empty_r_handler(Client *, RequestBody &&) {}
 CRAB_INLINE void empty_d_handler(Client *) {}
 CRAB_INLINE void empty_w_handler(Client *, WebMessage &&) {}
 }  // namespace details
@@ -31,6 +31,14 @@ CRAB_INLINE void Client::write(ResponseBody &&response) {
 	// https://www.w3.org/Protocols/rfc2616/rfc2616-sec4.html#sec4.4
 	if (response.r.date.empty())
 		response.r.date = Server::get_date();
+	Connection::write(std::move(response));
+}
+
+CRAB_INLINE void Client::write(ResponseHeader &&response, bool buffer_only) {
+	// HTTP message length design is utter crap, we should conform better...
+	// https://www.w3.org/Protocols/rfc2616/rfc2616-sec4.html#sec4.4
+	if (response.date.empty())
+		response.date = Server::get_date();
 	Connection::write(std::move(response));
 }
 
@@ -96,29 +104,30 @@ CRAB_INLINE void Server::on_client_disconnected(std::list<Client>::iterator it) 
 
 CRAB_INLINE void Server::on_client_handle_request(Client *who, RequestBody &&request) {
 	ResponseBody response;
-	response.r.status = 404;
-	bool result       = true;
 	try {
 		if (r_handler)
-			result = r_handler(who, std::move(request), response);
+			r_handler(who, std::move(request));
 	} catch (const ErrorAuthorization &ex) {
 		// std::cout << "HTTP unauthorized request" << std::endl;
 		response.r.headers.push_back({"WWW-Authenticate", "Basic realm=\"" + ex.realm + "\", charset=\"UTF-8\""});
 		response.r.status = 401;
+		who->write(std::move(response));
 	} catch (const std::exception &ex) {
+		if (who->get_state() != Connection::WAITING_WRITE_RESPONSE_HEADER)
+			return;
 		// TODO - hope we do not leak security messages there
-		// std::cout << "HTTP request leads to throw/catch, what=" << ex.what() << std::endl;
 		// TODO - error handler, so that error can be written to log
 		response.r.status = 422;
 		response.set_body(ex.what());
-	}
-	if (result) {
-		if (response.r.status == 404 && !response.r.has_content_length()) {
-			response.r.set_content_type("text/html", "charset=utf-8");
-			response.set_body("<html><body>404 Not Found</body></html>");
-		}
 		who->write(std::move(response));
 	}
+	//	if (result) {
+	//		if (response.r.status == 404 && !response.r.has_content_length()) {
+	//			response.r.set_content_type("text/html", "charset=utf-8");
+	//			response.set_body("<html><body>404 Not Found</body></html>");
+	//		}
+	//		who->write(std::move(response));
+	//	}
 }
 
 CRAB_INLINE void Server::on_client_handle_message(Client *who, WebMessage &&message) {

@@ -32,7 +32,7 @@ int test_proxy(int num, uint16_t port, uint16_t upstream_port) {
 	std::map<std::string, http::Client *> connected_sockets_inv;
 	http::Server server(port);
 
-	server.r_handler = [&](http::Client *who, http::RequestBody &&request, http::ResponseBody &response) -> bool {
+	server.r_handler = [&](http::Client *who, http::RequestBody &&request) {
 		if (request.r.path == "/latency") {
 			who->web_socket_upgrade();
 			std::string id =
@@ -40,9 +40,9 @@ int test_proxy(int num, uint16_t port, uint16_t upstream_port) {
 
 			connected_sockets.emplace(who, id);
 			connected_sockets_inv.emplace(id, who);
-			return false;
+			return;
 		}
-		return true;
+		who->write(http::ResponseBody::simple_html(404));
 	};
 	server.d_handler = [&](http::Client *who) {
 		auto it = connected_sockets.find(who);

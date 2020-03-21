@@ -113,20 +113,15 @@ public:
 	    , th(&MDGate::retransmitter_thread, this) {
 		connect();
 		stat_timer.once(1);
-		server.r_handler = [&](http::Client *who, http::RequestBody &&request, http::ResponseBody &response) -> bool {
+		server.r_handler = [&](http::Client *who, http::RequestBody &&request) {
 			if (request.r.path != "/messages")
-				return true;  // Default "not found"
+				return who->write(http::ResponseBody::simple_html(404));
 			MDRequest req;
 			crab::IStringStream is(&request.body);
 			req.read(&is);
-			if (req.end <= req.begin) {
-				response.r.status = 400;
-				response.r.set_content_type("text/plain", "charset=utf-8");
-				response.set_body("Invalid request range - inverted or empty!");
-				return true;
-			}
+			if (req.end <= req.begin)
+				return who->write(http::ResponseBody::simple_html(400, "Invalid request range - inverted or empty!"));
 			// TODO - add to data structure here
-			return true;
 		};
 	}
 

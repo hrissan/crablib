@@ -138,9 +138,7 @@ CRAB_INLINE void to_string_common(const RequestResponseHeader &req, std::strings
 		ss << "\r\n";
 	}
 	if (req.has_content_length()) {
-		ss << "content-length: " << req.content_length << "\r\n\r\n";
-	} else {
-		ss << "\r\n";
+		ss << "content-length: " << req.content_length << "\r\n";
 	}
 	if (req.http_version_major == 1 && req.http_version_minor == 0 && req.keep_alive) {
 		ss << "connection: keep-alive\r\n";
@@ -182,6 +180,7 @@ CRAB_INLINE std::string RequestHeader::to_string() const {
 		ss << "sec-websocket-key: " << sec_websocket_key << "\r\n";
 	if (!sec_websocket_version.empty())
 		ss << "sec-websocket-version: " << sec_websocket_version << "\r\n";
+	ss << "\r\n";
 	return ss.str();
 }
 
@@ -198,6 +197,7 @@ CRAB_INLINE std::string ResponseHeader::to_string() const {
 	details::to_string_common(*this, ss);
 	if (!sec_websocket_accept.empty())
 		ss << "sec-websocket-accept: " << sec_websocket_accept << "\r\n";
+	ss << "\r\n";
 	return ss.str();
 }
 
@@ -210,6 +210,21 @@ CRAB_INLINE std::string ResponseHeader::generate_sec_websocket_accept(const std:
 	hash.finalize(result);
 
 	return base64::encode(result, sha1::hash_size);
+}
+
+ResponseBody ResponseBody::simple_html(int status, std::string &&body) {
+	ResponseBody response;
+	response.r.status = status;
+	response.r.set_content_type("text/html", "charset=utf-8");
+	std::stringstream ss;
+	ss << "<html><body>";
+	if (body.empty())
+		ss << status << " " << status_to_string(status);
+	else
+		ss << body;
+	ss << "</body></html>";
+	response.set_body(ss.str());
+	return response;
 }
 
 }}  // namespace crab::http

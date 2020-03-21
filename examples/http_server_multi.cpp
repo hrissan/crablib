@@ -12,11 +12,12 @@ int test_http(size_t num, uint16_t port) {
 	crab::RunLoop runloop;
 
 	http::Server server(port);
-	server.r_handler = [&](http::Client *who, http::RequestBody &&request, http::ResponseBody &response) -> bool {
+	server.r_handler = [&](http::Client *who, http::RequestBody &&request) {
+		http::ResponseBody response;
 		response.r.status = 200;
 		response.r.set_content_type("text/plain", "charset=utf-8");
 		response.set_body(std::string(body));
-		return true;
+		who->write(std::move(response));
 	};
 
 	runloop.run();

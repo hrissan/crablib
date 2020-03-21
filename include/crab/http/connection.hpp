@@ -29,6 +29,7 @@ public:
 
 	size_t read_some(uint8_t *val, size_t count) override;
 	void write(const uint8_t *val, size_t count, bool buffer_only = false);
+	void write(const char *val, size_t count, bool buffer_only = false);
 	void write(std::string &&ss, bool buffer_only = false);
 
 	void write_shutdown();
@@ -75,11 +76,17 @@ public:
 	bool read_next(WebMessage &);
 	void web_socket_upgrade();  // Will throw if not upgradable
 
+	void write(ResponseHeader &&resp, bool buffer_only = false);             // Write header now, body later
+	void write(const uint8_t *val, size_t count, bool buffer_only = false);  // Write body chunk
+	void write(std::string &&ss, bool buffer_only = false);                  // Write body chunk
+	void write_last_chunk();                                                 // for chunk encoding, finishes body
+
 	enum State {
-		REQUEST_HEADER,          // Server side
-		REQUEST_BODY,            // Server side
-		REQUEST_READY,           // Server side
-		WAITING_WRITE_RESPONSE,  // Server side
+		REQUEST_HEADER,                 // Server side
+		REQUEST_BODY,                   // Server side
+		REQUEST_READY,                  // Server side
+		WAITING_WRITE_RESPONSE_HEADER,  // Server side
+		WAITING_WRITE_RESPONSE_BODY,    // Server side
 
 		WAITING_WRITE_REQUEST,  // Client side
 		RESPONSE_HEADER,        // Client side
@@ -108,8 +115,9 @@ protected:
 	MessageBodyParser wm_body_parser;  // Single per several chunks
 	std::string sec_websocket_key;
 	std::mt19937 masking_key_random;
-	bool client_side   = false;  // Web Socket encryption is one-sided
-	bool wm_close_sent = false;
+	bool client_side        = false;  // Web Socket encryption is one-sided
+	bool wm_close_sent      = false;
+	uint64_t remaining_body = 0;  // for WAITING_WRITE_RESPONSE_BODY state, -1 for chunked
 
 	void sock_handler();
 	void advance_state(bool called_from_runloop);
