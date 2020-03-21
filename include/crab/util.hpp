@@ -73,7 +73,8 @@ struct Literal {
 	const char *value;
 	size_t size;
 
-	static constexpr size_t length(const char *str) { return *str ? 1U + length(str + 1) : 0U; }
+	template<size_t size>
+	explicit Literal(const char (&value)[size]) : value(value), size(size - 1) {}
 	constexpr int compare(const char *b, size_t bs) const {
 		return (size == bs) ? std::memcmp(value, b, size) : size > bs ? 1 : -1;
 	}
@@ -85,13 +86,11 @@ inline constexpr bool operator!=(const std::string &a, const Literal &b) { retur
 inline constexpr bool operator==(const Literal &a, const std::string &b) { return a.compare(b) == 0; }
 inline constexpr bool operator!=(const Literal &a, const std::string &b) { return !(a == b); }
 
-#define CRAB_LITERAL(value) \
-	Literal { value, Literal::length(value) }
-// (CRAB_LITERAL == std::string) compile into very little # of instructions
+// ==, != of Literal and std::string compile into very little # of instructions
 // and they have trivial constructor so no overhead on static initializer per function.
-// literals in C++ must be like CRAB_LITERAL, but they are not
+// literals in C++ must be like Literal, but they are not
 // bool compare_with_content_type(const std::string & str){
-//     return str == CRAB_LITERAL("content-type");
+//     return str == Literal{"content-type"};
 // }
 // cmp     qword ptr [rdi + 8], 12
 // jne     .LBB0_1
