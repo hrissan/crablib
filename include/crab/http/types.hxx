@@ -212,10 +212,10 @@ CRAB_INLINE std::string ResponseHeader::generate_sec_websocket_accept(const std:
 	return base64::encode(result, sha1::hash_size);
 }
 
-ResponseBody ResponseBody::simple_html(int status, std::string &&body) {
-	ResponseBody response;
-	response.r.status = status;
-	response.r.set_content_type("text/html", "charset=utf-8");
+Response Response::simple_html(int status, std::string &&body) {
+	Response response;
+	response.header.status = status;
+	response.header.set_content_type("text/html", "charset=utf-8");
 	std::stringstream ss;
 	ss << "<html><body>";
 	if (body.empty())

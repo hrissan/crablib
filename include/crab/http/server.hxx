@@ -21,16 +21,16 @@
 namespace crab { namespace http {
 
 namespace details {
-CRAB_INLINE void empty_r_handler(Client *, RequestBody &&) {}
+CRAB_INLINE void empty_r_handler(Client *, Request &&) {}
 CRAB_INLINE void empty_d_handler(Client *) {}
 CRAB_INLINE void empty_w_handler(Client *, WebMessage &&) {}
 }  // namespace details
 
-CRAB_INLINE void Client::write(ResponseBody &&response) {
+CRAB_INLINE void Client::write(Response &&response) {
 	// HTTP message length design is utter crap, we should conform better...
 	// https://www.w3.org/Protocols/rfc2616/rfc2616-sec4.html#sec4.4
-	if (response.r.date.empty())
-		response.r.date = Server::get_date();
+	if (response.header.date.empty())
+		response.header.date = Server::get_date();
 	Connection::write(std::move(response));
 }
 
@@ -76,7 +76,7 @@ CRAB_INLINE const std::string &Server::get_date() {
 CRAB_INLINE void Server::on_client_handler(std::list<Client>::iterator it) {
 	Client *who = &*it;
 	WebMessage message;
-	RequestBody request;
+	Request request;
 	while (true) {
 		if (who->read_next(message)) {
 			on_client_handle_message(who, std::move(message));
@@ -106,28 +106,29 @@ CRAB_INLINE void Server::on_client_disconnected(std::list<Client>::iterator it) 
 // Big TODO - reverse r_handler logic, so that user must explicitly call
 // save_for_longpoll(), and if they do not, 404 response will be sent
 
-CRAB_INLINE void Server::on_client_handle_request(Client *who, RequestBody &&request) {
-	ResponseBody response;
+CRAB_INLINE void Server::on_client_handle_request(Client *who, Request &&request) {
+	Response response;
 	try {
 		if (r_handler)
 			r_handler(who, std::move(request));
 	} catch (const ErrorAuthorization &ex) {
 		// std::cout << "HTTP unauthorized request" << std::endl;
-		response.r.headers.push_back({"WWW-Authenticate", "Basic realm=\"" + ex.realm + "\", charset=\"UTF-8\""});
-		response.r.status = 401;
+		response.header.headers.push_back(
+		    {"WWW-Authenticate", "Basic realm=\"" + ex.realm + "\", charset=\"UTF-8\""});
+		response.header.status = 401;
 		who->write(std::move(response));
 	} catch (const std::exception &ex) {
 		if (who->get_state() != Connection::WAITING_WRITE_RESPONSE_HEADER)
 			return;
 		// TODO - hope we do not leak security messages there
 		// TODO - error handler, so that error can be written to log
-		response.r.status = 422;
+		response.header.status = 422;
 		response.set_body(ex.what());
 		who->write(std::move(response));
 	}
 	//	if (result) {
-	//		if (response.r.status == 404 && !response.r.has_content_length()) {
-	//			response.r.set_content_type("text/html", "charset=utf-8");
+	//		if (response.header.status == 404 && !response.header.has_content_length()) {
+	//			response.header.set_content_type("text/html", "charset=utf-8");
 	//			response.set_body("<html><body>404 Not Found</body></html>");
 	//		}
 	//		who->write(std::move(response));

@@ -28,7 +28,7 @@ class Server;
 class Client : protected Connection {  // So the type is opaque for users
 public:
 	using Connection::get_peer_address;
-	void write(ResponseBody &&response);
+	void write(Response &&response);
 	void write(ResponseHeader &&response);
 	void write(ResponseHeader &&response, StreamHandler &&w_handler);
 	void write(WebMessage &&wm) { Connection::write(std::move(wm)); }
@@ -43,7 +43,7 @@ private:
 
 class Server {
 public:
-	typedef std::function<void(Client *who, RequestBody &&)> R_handler;
+	typedef std::function<void(Client *who, Request &&)> R_handler;
 	// if you did not write response and exception is thrown, 422 will be returned
 	// if you did not write full response and no exception is thrown, you are expected
 	// to remember who and later call Client::write() to finish serving request
@@ -79,7 +79,7 @@ private:
 	void on_client_disconnected(std::list<Client>::iterator it);
 	void accept_all();
 
-	void on_client_handle_request(Client *who, RequestBody &&);
+	void on_client_handle_request(Client *who, Request &&);
 	void on_client_handle_message(Client *who, WebMessage &&);
 };
 

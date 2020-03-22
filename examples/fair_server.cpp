@@ -91,7 +91,7 @@ private:
 		client.socket_buffer.did_read(REQUEST_SIZE);  // Skip
 		busy_sleep_microseconds(5);                   // Simulate processing latency
 		seqnum += 1;
-		client.socket.write(reinterpret_cast<const uint8_t *>(&seqnum), sizeof(uint64_t), true);
+		client.socket.write(reinterpret_cast<const uint8_t *>(&seqnum), sizeof(uint64_t), crab::BUFFER_ONLY);
 		client.socket.write(reinterpret_cast<const uint8_t *>(&seqnum), sizeof(uint64_t));
 		client.total_written += 2 * sizeof(uint64_t);
 		requests_processed += 1;

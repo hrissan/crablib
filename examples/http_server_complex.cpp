@@ -44,28 +44,28 @@ namespace http = crab::http;
 class ServerComplexApp {
 public:
 	explicit ServerComplexApp(uint16_t port) : server(port), stat_timer([&]() { on_stat_timer(); }) {
-		server.r_handler = [&](http::Client *who, http::RequestBody &&request) {
+		server.r_handler = [&](http::Client *who, http::Request &&request) {
 			req_counter += 1;
-			if (request.r.path == "/ws") {
+			if (request.header.path == "/ws") {
 				who->web_socket_upgrade();
 				connected_sockets.insert(who);
 				who->write(http::WebMessage("Server-initiated on connect message!"));
 				return;
 			}
-			if (request.r.path == "/") {
-				http::ResponseBody response;
-				response.r.status = 200;
-				response.r.set_content_type("text/html", "charset=utf-8");
+			if (request.header.path == "/") {
+				http::Response response;
+				response.header.status = 200;
+				response.header.set_content_type("text/html", "charset=utf-8");
 				response.set_body(HTML);
 				who->write(std::move(response));
 				return;
 			}
-			if (request.r.path == "/quit") {
+			if (request.header.path == "/quit") {
 				crab::RunLoop::current()->cancel();
-				who->write(http::ResponseBody::simple_html(200, "Server is stoped"));
+				who->write(http::Response::simple_html(200, "Server is stoped"));
 				return;
 			}
-			who->write(http::ResponseBody::simple_html(404));
+			who->write(http::Response::simple_html(404));
 		};
 		server.d_handler = [&](http::Client *who) { connected_sockets.erase(who); };
 		server.w_handler = [&](http::Client *who, http::WebMessage &&message) {

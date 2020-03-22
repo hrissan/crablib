@@ -11,24 +11,24 @@ namespace http = crab::http;
 class ServerStreamBodyApp {
 public:
 	explicit ServerStreamBodyApp(uint16_t port) : server(port), timer([&]() { on_timer(); }) {
-		server.r_handler = [&](http::Client *who, http::RequestBody &&request) {
-			if (request.r.path == "/chat") {
+		server.r_handler = [&](http::Client *who, http::Request &&request) {
+			if (request.header.path == "/chat") {
 				std::cout << "Streaming client added" << std::endl;
 				waiting_clients.emplace(who);
-				http::ResponseHeader r;
-				r.status                    = 200;
-				r.transfer_encoding_chunked = true;
-				r.set_content_type("text/html", "charset=utf-8");
-				who->write(std::move(r), crab::BUFFER_ONLY);
+				http::ResponseHeader header;
+				header.status                    = 200;
+				header.transfer_encoding_chunked = true;
+				header.set_content_type("text/html", "charset=utf-8");
+				who->write(std::move(header), crab::BUFFER_ONLY);
 				who->write(body_so_far.c_str(), body_so_far.size());
 				return;
 			}
-			if (request.r.path == "/download") {
-				http::ResponseHeader r;
-				r.status         = 200;
-				r.content_length = 1 * 1000 * 1000 * 1000;
-				r.set_content_type("application/octet-stream", "");
-				who->write(std::move(r), [](http::Connection *who, uint64_t pos, uint64_t len) {
+			if (request.header.path == "/download") {
+				http::ResponseHeader header;
+				header.status         = 200;
+				header.content_length = 1 * 1000 * 1000 * 1000;
+				header.set_content_type("application/octet-stream", "");
+				who->write(std::move(header), [](http::Connection *who, uint64_t pos, uint64_t len) {
 					uint8_t buffer[65536]{};
 					auto to_write = static_cast<size_t>(std::min<uint64_t>(len - pos, sizeof(buffer)));
 					auto wr       = who->write_some(buffer, to_write);
@@ -41,7 +41,7 @@ public:
 				});
 				return;
 			}
-			who->write(http::ResponseBody::simple_html(404));
+			who->write(http::Response::simple_html(404));
 		};
 		server.d_handler = [&](http::Client *who) {
 			if (waiting_clients.erase(who))

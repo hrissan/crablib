@@ -113,14 +113,14 @@ public:
 	    , th(&MDGate::retransmitter_thread, this) {
 		connect();
 		stat_timer.once(1);
-		server.r_handler = [&](http::Client *who, http::RequestBody &&request) {
-			if (request.r.path != "/messages")
-				return who->write(http::ResponseBody::simple_html(404));
+		server.r_handler = [&](http::Client *who, http::Request &&request) {
+			if (request.header.path != "/messages")
+				return who->write(http::Response::simple_html(404));
 			MDRequest req;
 			crab::IStringStream is(&request.body);
 			req.read(&is);
 			if (req.end <= req.begin)
-				return who->write(http::ResponseBody::simple_html(400, "Invalid request range - inverted or empty!"));
+				return who->write(http::Response::simple_html(400, "Invalid request range - inverted or empty!"));
 			// TODO - add to data structure here
 		};
 	}
@@ -199,15 +199,15 @@ private:
 			crab::StringStream os;
 			req.write(&os);
 
-			http::RequestBody request(settings.upstream_address, "GET", "/messages");
+			http::Request request(settings.upstream_address, "GET", "/messages");
 			request.set_body(std::move(os.get_buffer()));
 			http_client.write(std::move(request));
 		}
 	}
 	void on_http_client_data() {
-		http::ResponseBody response;
+		http::Response response;
 		while (http_client.read_next(response)) {
-			if (response.r.status == 200) {
+			if (response.header.status == 200) {
 				crab::IStringStream is(&response.body);
 				while (is.size() >= Msg::size) {
 					Msg msg;

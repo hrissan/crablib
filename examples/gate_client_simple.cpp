@@ -119,13 +119,13 @@ int test_watcher() {
 }
 
 int test_parsing() {
-	http::ResponseBody response;
+	http::Response response;
 	response.set_body("Good");
-	response.r.status             = 200;
-	response.r.http_version_minor = response.r.http_version_major = 1;
-	int si                                                        = 0;
+	response.header.status             = 200;
+	response.header.http_version_minor = response.header.http_version_major = 1;
+	int si                                                                  = 0;
 	for (size_t i = 0; i != 1000000; ++i) {
-		auto x = response.r.to_string();
+		auto x = response.header.to_string();
 		for (const auto a : x)
 			si += a;
 	}

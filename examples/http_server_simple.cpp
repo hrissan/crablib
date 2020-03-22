@@ -13,10 +13,10 @@ int main() {
 
 	http::Server server(7000);
 
-	server.r_handler = [&](http::Client *who, http::RequestBody &&request) {
-		http::ResponseBody response;
-		response.r.status = 200;
-		response.r.set_content_type("text/plain", "charset=utf-8");
+	server.r_handler = [&](http::Client *who, http::Request &&request) {
+		http::Response response;
+		response.header.status = 200;
+		response.header.set_content_type("text/plain", "charset=utf-8");
 		response.set_body("Hello, Crab!");
 		who->write(std::move(response));
 	};

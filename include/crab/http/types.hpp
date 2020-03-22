@@ -111,34 +111,34 @@ struct ResponseHeader : public RequestResponseHeader {
 	}
 };
 
-struct RequestBody {
-	http::RequestHeader r;
+struct Request {
+	http::RequestHeader header;
 	std::string body;
 
-	RequestBody() = default;
-	RequestBody(const std::string &host, const std::string &method, const std::string &uri) {
-		r.http_version_major = 1;
-		r.http_version_minor = 1;
-		r.method             = method;
-		r.set_uri(uri);
-		r.host = host;
+	Request() = default;
+	Request(const std::string &host, const std::string &method, const std::string &uri) {
+		header.http_version_major = 1;
+		header.http_version_minor = 1;
+		header.method             = method;
+		header.set_uri(uri);
+		header.host = host;
 	}
 	void set_body(std::string &&b) {
-		body             = std::move(b);
-		r.content_length = body.size();
+		body                  = std::move(b);
+		header.content_length = body.size();
 	}
 };
 
-struct ResponseBody {
-	http::ResponseHeader r;
+struct Response {
+	http::ResponseHeader header;
 	std::string body;
 
 	void set_body(std::string &&b) {
-		body             = std::move(b);
-		r.content_length = body.size();
+		body                  = std::move(b);
+		header.content_length = body.size();
 	}
 
-	static ResponseBody simple_html(int status, std::string &&body = std::string{});
+	static Response simple_html(int status, std::string &&body = std::string{});
 	// Leave body empty for default message for status
 };
 

@@ -82,11 +82,11 @@ public:
 	bool is_open() const { return sock.is_open(); }
 	const Address &get_peer_address() const { return peer_address; }
 
-	void write(ResponseBody &&resp);
-	void write(RequestBody &&resp);
+	void write(Response &&resp);
+	void write(Request &&resp);
 	void write(WebMessage &&);
-	bool read_next(RequestBody &request);
-	bool read_next(ResponseBody &request);
+	bool read_next(Request &request);
+	bool read_next(Response &request);
 	bool read_next(WebMessage &);
 	void web_socket_upgrade();  // Will throw if not upgradable
 

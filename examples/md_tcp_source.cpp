@@ -110,17 +110,17 @@ public:
 	    , server(settings.upsteam_http())
 	    , ab([&]() { on_fast_queue_changed(); })
 	    , th(&MDSourceApp::generator_thread, this) {
-		server.r_handler = [&](http::Client *who, http::RequestBody &&request) {
-			if (request.r.path != "/messages")
-				return who->write(http::ResponseBody::simple_html(404));
+		server.r_handler = [&](http::Client *who, http::Request &&request) {
+			if (request.header.path != "/messages")
+				return who->write(http::Response::simple_html(404));
 			MDRequest req;
 			crab::IStringStream is(&request.body);
 			req.read(&is);
 			if (req.end <= req.begin)
-				return who->write(http::ResponseBody::simple_html(400, "Invalid request range - inverted or empty!"));
+				return who->write(http::Response::simple_html(400, "Invalid request range - inverted or empty!"));
 			if (req.end - req.begin > MAX_RESPONSE_COUNT)
 				req.end = req.begin + MAX_RESPONSE_COUNT;
-			http::ResponseBody response;
+			http::Response response;
 			if (create_response(response, req.begin, req.end))
 				return who->write(std::move(response));
 			// If client requests range which is not available yet, we add them to long-poll
@@ -163,15 +163,15 @@ private:
 			waiting_clients_inv.erase(waiting_clients_inv.begin());
 			waiting_clients.erase(who);
 
-			http::ResponseBody response;
+			http::Response response;
 			create_response(response, req.begin, req.end);
 			who->write(std::move(response));
 		}
 	}
-	bool create_response(http::ResponseBody &response, uint64_t begin, uint64_t end) {
+	bool create_response(http::Response &response, uint64_t begin, uint64_t end) {
 		if (messages.empty() || begin < messages.front().seqnum) {
-			response.r.status = 400;
-			response.r.set_content_type("text/plain", "charset=utf-8");
+			response.header.status = 400;
+			response.header.set_content_type("text/plain", "charset=utf-8");
 			response.set_body("Invalid request range - before start!");
 			return true;
 		}
@@ -185,8 +185,8 @@ private:
 		for (auto s = begin; s != end; ++s) {
 			messages.at(static_cast<size_t>(s - messages_start)).write(&body);
 		}
-		response.r.status = 200;
-		response.r.set_content_type("text/plain", "charset=utf-8");
+		response.header.status = 200;
+		response.header.set_content_type("text/plain", "charset=utf-8");
 		response.set_body(std::move(body.get_buffer()));
 		return true;
 	}

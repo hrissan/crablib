@@ -69,13 +69,13 @@ static const char HTML[] = R"zzz(
 using namespace crab;
 
 int test_aha() {
-	http::ResponseBody response;
+	http::Response response;
 	response.set_body("Good");
-	response.r.status             = 200;
-	response.r.http_version_minor = response.r.http_version_major = 1;
-	int si                                                        = 0;
+	response.header.status             = 200;
+	response.header.http_version_minor = response.header.http_version_major = 1;
+	int si                                                                  = 0;
 	for (size_t i = 0; i != 1000000; ++i) {
-		auto x = response.r.to_string();
+		auto x = response.header.to_string();
 		for (const auto a : x)
 			si += a;
 	}
@@ -87,27 +87,27 @@ int test_http(size_t num, uint16_t port) {
 	int req_counter = 0;
 	std::set<http::Client *> connected_sockets;
 	http::Server server(port);
-	server.r_handler = [&](http::Client *who, http::RequestBody &&request) {
-		if (request.r.path == "/ws") {
+	server.r_handler = [&](http::Client *who, http::Request &&request) {
+		if (request.header.path == "/ws") {
 			who->web_socket_upgrade();
 			connected_sockets.insert(who);
 			who->write(http::WebMessage("Server first!"));
 			return;
 		}
-		if (request.r.path == "/") {
-			http::ResponseBody response;
-			response.r.status = 200;
-			response.r.set_content_type("text/html", "charset=utf-8");
+		if (request.header.path == "/") {
+			http::Response response;
+			response.header.status = 200;
+			response.header.set_content_type("text/html", "charset=utf-8");
 			response.set_body(HTML);
 			who->write(std::move(response));
 			return;
 		}
-		if (request.r.path == "/quit") {
+		if (request.header.path == "/quit") {
 			crab::RunLoop::current()->cancel();
-			who->write(crab::http::ResponseBody::simple_html(200, "Server is stopped"));
+			who->write(crab::http::Response::simple_html(200, "Server is stopped"));
 			return;
 		}
-		who->write(crab::http::ResponseBody::simple_html(200, "Hello, Crab!"));
+		who->write(crab::http::Response::simple_html(200, "Hello, Crab!"));
 		req_counter += 1;
 	};
 	server.d_handler = [&](http::Client *who) { connected_sockets.erase(who); };

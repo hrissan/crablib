@@ -11,7 +11,7 @@ namespace http = crab::http;
 class ServerLongPollApp {
 public:
 	explicit ServerLongPollApp(uint16_t port) : server(port), timer([&]() { on_timer(); }) {
-		server.r_handler = [&](http::Client *who, http::RequestBody &&request) {
+		server.r_handler = [&](http::Client *who, http::Request &&request) {
 			waiting_clients.emplace(who, ticks_counter + 5);
 			waiting_clients_inv.emplace(ticks_counter + 5, who);
 		};
@@ -35,9 +35,9 @@ private:
 			waiting_clients_inv.erase(waiting_clients_inv.begin());
 			waiting_clients.erase(who);
 
-			http::ResponseBody response;
-			response.r.status = 200;
-			response.r.set_content_type("text/plain", "charset=utf-8");
+			http::Response response;
+			response.header.status = 200;
+			response.header.set_content_type("text/plain", "charset=utf-8");
 			response.set_body("Hello, Crab " + std::to_string(ticks_counter) + "!");
 			who->write(std::move(response));
 		}

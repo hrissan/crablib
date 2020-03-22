@@ -160,23 +160,23 @@ CRAB_INLINE void Connection::close() {
 	w_handler    = StreamHandler{};
 }
 
-CRAB_INLINE bool Connection::read_next(RequestBody &req) {
+CRAB_INLINE bool Connection::read_next(Request &req) {
 	if (state != REQUEST_READY)
 		return false;
-	req.body = http_body_parser.body.clear();
-	req.r    = request_parser.req;
+	req.body   = http_body_parser.body.clear();
+	req.header = request_parser.req;
 	// We do not move req, because we must remember params for response
 	state = WAITING_WRITE_RESPONSE_HEADER;
 	advance_state(false);
 	return true;
 }
 
-CRAB_INLINE bool Connection::read_next(ResponseBody &req) {
+CRAB_INLINE bool Connection::read_next(Response &req) {
 	if (state != RESPONSE_READY)
 		return false;
-	req.body = http_body_parser.body.clear();
-	req.r    = std::move(response_parser.req);
-	state    = WAITING_WRITE_REQUEST;
+	req.body   = http_body_parser.body.clear();
+	req.header = std::move(response_parser.req);
+	state      = WAITING_WRITE_REQUEST;
 	advance_state(false);
 	return true;
 }
@@ -197,33 +197,33 @@ CRAB_INLINE void Connection::web_socket_upgrade() {
 	if (!request_parser.req.is_websocket_upgrade())
 		throw std::runtime_error("Attempt to upgrade non-upgradable connection");
 
-	ResponseBody response;
+	Response response;
 
-	response.r.connection_upgrade = request_parser.req.connection_upgrade;
-	response.r.upgrade_websocket  = request_parser.req.upgrade_websocket;
-	response.r.sec_websocket_accept =
+	response.header.connection_upgrade = request_parser.req.connection_upgrade;
+	response.header.upgrade_websocket  = request_parser.req.upgrade_websocket;
+	response.header.sec_websocket_accept =
 	    ResponseHeader::generate_sec_websocket_accept(request_parser.req.sec_websocket_key);
-	response.r.status = 101;
+	response.header.status = 101;
 
 	write(std::move(response));
 }
 
-CRAB_INLINE void Connection::write(RequestBody &&req) {
+CRAB_INLINE void Connection::write(Request &&req) {
 	if (state == SHUTDOWN)
 		return;  // This NOP simplifies state machines of connection users
 	invariant(state == WAITING_WRITE_REQUEST, "Connection unexpected write");
-	invariant(req.r.http_version_major, "Someone forgot to set version, method, status or url");
+	invariant(req.header.http_version_major, "Someone forgot to set version, method, status or url");
 
-	invariant(!req.r.transfer_encoding_chunked, "As the whole body is sent, makes no sense");
-	sock.write(req.r.to_string(), BUFFER_ONLY);
+	invariant(!req.header.transfer_encoding_chunked, "As the whole body is sent, makes no sense");
+	sock.write(req.header.to_string(), BUFFER_ONLY);
 	sock.write(std::move(req.body));
 
-	if (req.r.is_websocket_upgrade()) {
+	if (req.header.is_websocket_upgrade()) {
 		response_parser   = ResponseParser{};
 		state             = WEB_UPGRADE_RESPONSE_HEADER;
-		sec_websocket_key = req.r.sec_websocket_key;
+		sec_websocket_key = req.header.sec_websocket_key;
 	} else {
-		if (req.r.keep_alive) {
+		if (req.header.keep_alive) {
 			response_parser = ResponseParser{};
 			state           = RESPONSE_HEADER;
 		} else {
@@ -233,11 +233,11 @@ CRAB_INLINE void Connection::write(RequestBody &&req) {
 	}
 }
 
-CRAB_INLINE void Connection::write(ResponseBody &&resp) {
+CRAB_INLINE void Connection::write(Response &&resp) {
 	if (state == SHUTDOWN)
 		return;  // This NOP simplifies state machines of connection users
-	const bool is_websocket_upgrade = resp.r.is_websocket_upgrade();
-	write(std::move(resp.r), BUFFER_ONLY);
+	const bool is_websocket_upgrade = resp.header.is_websocket_upgrade();
+	write(std::move(resp.header), BUFFER_ONLY);
 	write(std::move(resp.body), BUFFER_ONLY);
 	write_last_chunk();
 	if (is_websocket_upgrade) {  // TODO - better logic here
