@@ -85,7 +85,7 @@ CRAB_INLINE void parse_content_type_value(const std::string &value, std::string 
 		start += 1;  // We simply allow whitespaces instead of ;
 	while (start < value.size() && is_sp(value[start]))
 		start += 1;
-	suffix = value.substr(start);
+	suffix = (start == std::string::npos) ? std::string{} : value.substr(start);
 }
 
 CRAB_INLINE bool parse_authorization_basic(const std::string &value, std::string &auth) {

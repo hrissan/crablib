@@ -242,10 +242,12 @@ CRAB_INLINE void Connection::write(Request &&req) {
 CRAB_INLINE void Connection::write(Response &&resp) {
 	if (state == SHUTDOWN)
 		return;  // This NOP simplifies state machines of connection users
-	const bool is_websocket_upgrade = resp.header.is_websocket_upgrade();
+	const bool is_websocket_upgrade      = resp.header.is_websocket_upgrade();
+	const bool transfer_encoding_chunked = resp.header.transfer_encoding_chunked;
 	write(std::move(resp.header), BUFFER_ONLY);
 	write(std::move(resp.body), BUFFER_ONLY);
-	write_last_chunk();
+	if (transfer_encoding_chunked)
+		write_last_chunk();      // Otherwise, state is already switched into RECEIVE_HEADER
 	if (is_websocket_upgrade) {  // TODO - better logic here
 		wm_header_parser = MessageChunkParser{};
 		wm_body_parser   = MessageBodyParser{};
@@ -308,6 +310,8 @@ CRAB_INLINE void Connection::write(const uint8_t *val, size_t count, BufferOptio
 		write_last_chunk();
 		return;
 	}
+	if (count == 0)
+		return;  // Empty chunk is terminator
 	char buf[64]{};
 	int buf_n = std::sprintf(buf, "%llx\r\n", (unsigned long long)count);
 	invariant(buf_n > 0, "sprintf error (unexpected)");
@@ -325,6 +329,8 @@ CRAB_INLINE void Connection::write(std::string &&ss, BufferOptions buffer_option
 		write_last_chunk();
 		return;
 	}
+	if (ss.empty())
+		return;  // Empty chunk is terminator
 	char buf[64]{};
 	int buf_n = std::sprintf(buf, "%llx\r\n", (unsigned long long)ss.size());
 	invariant(buf_n > 0, "sprintf error (unexpected)");
