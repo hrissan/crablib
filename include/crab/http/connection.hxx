@@ -345,7 +345,7 @@ CRAB_INLINE void Connection::write(ResponseHeader &&resp, StreamHandler &&cb) {
 	w_handler = std::move(cb);
 	// This interface experimental, so no understanding if Client and Connection be merged
 	while (state == WAITING_WRITE_RESPONSE_BODY && body_position < body_content_length && sock.can_write()) {
-		w_handler(this, body_position, body_content_length);
+		w_handler(body_position, body_content_length);
 	}
 }
 
@@ -378,7 +378,7 @@ CRAB_INLINE void Connection::sock_handler() {
 	}
 	if (w_handler) {
 		while (state == WAITING_WRITE_RESPONSE_BODY && body_position < body_content_length && sock.can_write()) {
-			w_handler(this, body_position, body_content_length);
+			w_handler(body_position, body_content_length);
 		}
 	}
 	advance_state(true);

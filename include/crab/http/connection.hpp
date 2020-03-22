@@ -66,7 +66,7 @@ class Client;
 
 class Connection : private Nocopy {
 public:
-	using StreamHandler = std::function<void(Connection *, uint64_t body_position, uint64_t body_length)>;
+	using StreamHandler = std::function<void(uint64_t body_position, uint64_t body_length)>;
 
 	explicit Connection() : Connection(empty_handler, empty_handler) {}
 	explicit Connection(Handler &&r_handler, Handler &&d_handler);

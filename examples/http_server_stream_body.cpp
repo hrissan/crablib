@@ -28,7 +28,7 @@ public:
 				header.status         = 200;
 				header.content_length = 1 * 1000 * 1000 * 1000;
 				header.set_content_type("application/octet-stream", "");
-				who->write(std::move(header), [](http::Connection *who, uint64_t pos, uint64_t len) {
+				who->write(std::move(header), [who](uint64_t pos, uint64_t len) {
 					uint8_t buffer[65536]{};
 					auto to_write = static_cast<size_t>(std::min<uint64_t>(len - pos, sizeof(buffer)));
 					auto wr       = who->write_some(buffer, to_write);
