@@ -34,22 +34,46 @@ CRAB_INLINE size_t BufferedTCPSocket::read_some(uint8_t *val, size_t count) {
 	}
 }
 
-CRAB_INLINE void BufferedTCPSocket::write(const char *val, size_t count, bool buffer_only) {
-	write(reinterpret_cast<const uint8_t *>(val), count, buffer_only);
+CRAB_INLINE size_t BufferedTCPSocket::write_some(const uint8_t *val, size_t count) {
+	if (!data_to_write.empty())
+		return 0;
+	return sock.write_some(val, count);
+}
+
+CRAB_INLINE void BufferedTCPSocket::buffer(const char *val, size_t count) {
+	buffer(reinterpret_cast<const uint8_t *>(val), count);
+}
+
+CRAB_INLINE void BufferedTCPSocket::buffer(const uint8_t *val, size_t count) {
+	if (write_shutdown_asked || count == 0)
+		return;
+	total_buffer_size += count;
+	if (!data_to_write.empty() && data_to_write.size() < 1024)
+		data_to_write.back().write(val, count);
+	else
+		data_to_write.emplace_back(std::string(reinterpret_cast<const char *>(val), count));
+}
+
+CRAB_INLINE void BufferedTCPSocket::buffer(std::string &&ss) {
+	if (write_shutdown_asked || ss.empty())
+		return;
+	total_buffer_size += ss.size();
+	if (!data_to_write.empty() && data_to_write.size() < 1024)
+		data_to_write.back().write(ss.data(), ss.size());
+	else
+		data_to_write.emplace_back(std::move(ss));
+}
+
+CRAB_INLINE void BufferedTCPSocket::write(const char *val, size_t count, BufferOptions buffer_options) {
+	write(reinterpret_cast<const uint8_t *>(val), count, buffer_options);
 }
 
 // TODO - do not allow to write when not connected (underlying socket has it as a NOP)
-CRAB_INLINE void BufferedTCPSocket::write(const uint8_t *val, size_t count, bool buffer_only) {
+CRAB_INLINE void BufferedTCPSocket::write(const uint8_t *val, size_t count, BufferOptions buffer_options) {
 	if (write_shutdown_asked)
 		return;
-	if (buffer_only) {
-		if (count == 0)
-			return;
-		total_buffer_size += count;
-		if (!data_to_write.empty() && data_to_write.size() < 1024)
-			data_to_write.back().write(val, count);
-		else
-			data_to_write.emplace_back(std::string(reinterpret_cast<const char *>(val), count));
+	if (buffer_options == BUFFER_ONLY) {
+		buffer(val, count);
 		return;
 	}
 	if (data_to_write.empty()) {
@@ -57,25 +81,13 @@ CRAB_INLINE void BufferedTCPSocket::write(const uint8_t *val, size_t count, bool
 		val += wr;
 		count -= wr;
 	}
-	if (count != 0) {
-		total_buffer_size += count;
-		if (!data_to_write.empty() && data_to_write.size() < 1024)
-			data_to_write.back().write(val, count);
-		else
-			data_to_write.emplace_back(std::string(reinterpret_cast<const char *>(val), count));
-	}
+	buffer(val, count);
 	write();
 }
 
-CRAB_INLINE void BufferedTCPSocket::write(std::string &&ss, bool buffer_only) {
-	if (write_shutdown_asked || (ss.empty() && buffer_only))
-		return;  // Even if ss.empty(), we must call write() if buffer_only == false
-	total_buffer_size += ss.size();
-	if (!data_to_write.empty() && data_to_write.size() < 1024)
-		data_to_write.back().write(ss.data(), ss.size());
-	else
-		data_to_write.emplace_back(std::move(ss));
-	if (!buffer_only)
+CRAB_INLINE void BufferedTCPSocket::write(std::string &&ss, BufferOptions buffer_options) {
+	buffer(std::move(ss));
+	if (buffer_options != BUFFER_ONLY)
 		write();
 }
 
@@ -145,6 +157,7 @@ CRAB_INLINE void Connection::close() {
 	read_buffer.clear();
 	sock.close();
 	peer_address = Address();
+	w_handler    = StreamHandler{};
 }
 
 CRAB_INLINE bool Connection::read_next(RequestBody &req) {
@@ -202,7 +215,7 @@ CRAB_INLINE void Connection::write(RequestBody &&req) {
 	invariant(req.r.http_version_major, "Someone forgot to set version, method, status or url");
 
 	invariant(!req.r.transfer_encoding_chunked, "As the whole body is sent, makes no sense");
-	sock.write(req.r.to_string(), true);
+	sock.write(req.r.to_string(), BUFFER_ONLY);
 	sock.write(std::move(req.body));
 
 	if (req.r.is_websocket_upgrade()) {
@@ -224,8 +237,8 @@ CRAB_INLINE void Connection::write(ResponseBody &&resp) {
 	if (state == SHUTDOWN)
 		return;  // This NOP simplifies state machines of connection users
 	const bool is_websocket_upgrade = resp.r.is_websocket_upgrade();
-	write(std::move(resp.r), true);
-	write(std::move(resp.body), true);
+	write(std::move(resp.r), BUFFER_ONLY);
+	write(std::move(resp.body), BUFFER_ONLY);
 	write_last_chunk();
 	if (is_websocket_upgrade) {  // TODO - better logic here
 		wm_header_parser = MessageChunkParser{};
@@ -247,20 +260,13 @@ CRAB_INLINE void Connection::write(WebMessage &&message) {
 	if (client_side)
 		MessageChunkParser::mask_data(0, &message.body[0], message.body.size(), masking_key);
 
-	//	data_to_write.write(frame_buffer, frame_buffer_len);
-	//	data_to_write.write(message.body.data(), message.body.size());
-
-	sock.write(frame_buffer, frame_buffer_len, true);
+	sock.write(frame_buffer, frame_buffer_len, BUFFER_ONLY);
 	sock.write(std::move(message.body));
-	//	if (data_to_write.back().get_buffer().size() < 1024 && message.body.size() < 1024)
-	//		data_to_write.back().write(message.body.data(), message.body.size());
-	//	else
-	//		data_to_write.emplace_back(std::move(message.body));
 	if (message.opcode == WebMessage::OPCODE_CLOSE)
 		wm_close_sent = true;
 }
 
-void Connection::write(http::ResponseHeader &&resp, bool buffer_only) {
+CRAB_INLINE void Connection::write(http::ResponseHeader &&resp, BufferOptions buffer_options) {
 	if (state == SHUTDOWN)
 		return;  // This NOP simplifies state machines of connection users
 	invariant(state == WAITING_WRITE_RESPONSE_HEADER, "Connection unexpected write");
@@ -271,55 +277,60 @@ void Connection::write(http::ResponseHeader &&resp, bool buffer_only) {
 
 	invariant(resp.transfer_encoding_chunked || resp.has_content_length(),
 	    "Please set either chunked encoding or content_length");
-	remaining_body = resp.content_length;
-	sock.write(resp.to_string(), buffer_only);
+	body_content_length = resp.content_length;
+	body_position       = 0;
+	sock.write(resp.to_string(), buffer_options);
 	state = WAITING_WRITE_RESPONSE_BODY;
 }
 
-void Connection::write(const uint8_t *val, size_t count, bool buffer_only) {
+CRAB_INLINE void Connection::write(const char *val, size_t count, BufferOptions buffer_options) {
+	write(reinterpret_cast<const uint8_t *>(val), count, buffer_options);
+}
+
+CRAB_INLINE void Connection::write(const uint8_t *val, size_t count, BufferOptions buffer_options) {
 	invariant(state == WAITING_WRITE_RESPONSE_BODY, "Connection unexpected write");
-	if (remaining_body != std::numeric_limits<uint64_t>::max()) {
-		invariant(count <= remaining_body, "Overshoot content-length");
-		remaining_body -= count;
-		sock.write(val, count, buffer_only);
+	if (body_content_length != std::numeric_limits<uint64_t>::max()) {
+		invariant(body_position + count <= body_content_length, "Overshoot content-length");
+		body_position += count;
+		sock.write(val, count, buffer_options);
 		write_last_chunk();
 		return;
 	}
 	char buf[64]{};
 	int buf_n = std::sprintf(buf, "%llx\r\n", (unsigned long long)count);
 	invariant(buf_n > 0, "sprintf error (unexpected)");
-	sock.write(buf, buf_n, true);
-	sock.write(val, count, true);
-	sock.write("\r\n", 2, buffer_only);
+	sock.write(buf, buf_n, BUFFER_ONLY);
+	sock.write(val, count, BUFFER_ONLY);
+	sock.write("\r\n", 2, buffer_options);
 }
 
-void Connection::write(std::string &&ss, bool buffer_only) {
+CRAB_INLINE void Connection::write(std::string &&ss, BufferOptions buffer_options) {
 	invariant(state == WAITING_WRITE_RESPONSE_BODY, "Connection unexpected write");
-	if (remaining_body != std::numeric_limits<uint64_t>::max()) {
-		invariant(ss.size() <= remaining_body, "Overshoot content-length");
-		remaining_body -= ss.size();
-		sock.write(std::move(ss), buffer_only);
+	if (body_content_length != std::numeric_limits<uint64_t>::max()) {
+		invariant(body_position + ss.size() <= body_content_length, "Overshoot content-length");
+		body_position += ss.size();
+		sock.write(std::move(ss), buffer_options);
 		write_last_chunk();
 		return;
 	}
 	char buf[64]{};
 	int buf_n = std::sprintf(buf, "%llx\r\n", (unsigned long long)ss.size());
 	invariant(buf_n > 0, "sprintf error (unexpected)");
-	sock.write(buf, buf_n, true);
-	sock.write(std::move(ss), true);
-	sock.write("\r\n", 2, buffer_only);
-	// Chunked encoding here, TODO
+	sock.write(buf, buf_n, BUFFER_ONLY);
+	sock.write(std::move(ss), BUFFER_ONLY);
+	sock.write("\r\n", 2, buffer_options);
 }
 
-void Connection::write_last_chunk() {
+CRAB_INLINE void Connection::write_last_chunk() {
 	invariant(state == WAITING_WRITE_RESPONSE_BODY, "Connection unexpected write");
-	if (remaining_body != std::numeric_limits<uint64_t>::max()) {
-		if (remaining_body != 0)
+	if (body_content_length != std::numeric_limits<uint64_t>::max()) {
+		if (body_position != body_content_length)
 			return;
-		sock.write(std::string{});
+		sock.write(std::string{});  // if everything was buffered, flush
 	} else {
 		sock.write(std::string{"0\r\n\r\n"});
 	}
+	w_handler = StreamHandler{};
 	if (request_parser.req.keep_alive) {  // We sent it in our response header
 		request_parser = RequestParser{};
 		state          = REQUEST_HEADER;
@@ -329,11 +340,46 @@ void Connection::write_last_chunk() {
 	}
 }
 
+CRAB_INLINE void Connection::write(ResponseHeader &&resp, StreamHandler &&cb) {
+	write(std::move(resp), WRITE);
+	w_handler = std::move(cb);
+	// This interface experimental, so no understanding if Client and Connection be merged
+	while (state == WAITING_WRITE_RESPONSE_BODY && body_position < body_content_length && sock.can_write()) {
+		w_handler(this, body_position, body_content_length);
+	}
+}
+
+CRAB_INLINE size_t Connection::write_some(const uint8_t *val, size_t count) {
+	invariant(state == WAITING_WRITE_RESPONSE_BODY, "Connection unexpected write");
+	if (body_content_length != std::numeric_limits<uint64_t>::max()) {
+		invariant(body_position + count <= body_content_length, "Overshoot content-length");
+		auto wr = sock.write_some(val, count);
+		body_position += wr;
+		write_last_chunk();
+		return wr;
+	}
+	// For chunked encoding, less efficient algo that will use some buffering
+	if (sock.get_total_buffer_size() != 0)
+		return 0;
+	char buf[64]{};
+	int buf_n = std::sprintf(buf, "%llx\r\n", (unsigned long long)count);
+	invariant(buf_n > 0, "sprintf error (unexpected)");
+	sock.write(buf, buf_n, BUFFER_ONLY);
+	sock.write(val, count, BUFFER_ONLY);
+	sock.write("\r\n", 2);
+	return count;
+}
+
 CRAB_INLINE void Connection::sock_handler() {
 	if (!sock.is_open()) {
 		close();
 		d_handler();
 		return;
+	}
+	if (w_handler) {
+		while (state == WAITING_WRITE_RESPONSE_BODY && body_position < body_content_length && sock.can_write()) {
+			w_handler(this, body_position, body_content_length);
+		}
 	}
 	advance_state(true);
 }

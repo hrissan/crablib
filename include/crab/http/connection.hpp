@@ -14,6 +14,8 @@
 
 namespace crab {
 
+enum BufferOptions { WRITE, BUFFER_ONLY };
+
 class BufferedTCPSocket : public IStream, private Nocopy {
 public:
 	explicit BufferedTCPSocket(Handler &&rwd_handler);
@@ -28,9 +30,15 @@ public:
 	}
 
 	size_t read_some(uint8_t *val, size_t count) override;
-	void write(const uint8_t *val, size_t count, bool buffer_only = false);
-	void write(const char *val, size_t count, bool buffer_only = false);
-	void write(std::string &&ss, bool buffer_only = false);
+
+	// Efficient direct-to-socket interface
+	size_t write_some(const uint8_t *val, size_t count);
+	bool can_write() const { return total_buffer_size == 0 && sock.can_write(); }
+
+	// Write into socket, all data that did not fit are store in a buffer and sent later
+	void write(const uint8_t *val, size_t count, BufferOptions buffer_options = WRITE);
+	void write(const char *val, size_t count, BufferOptions buffer_options = WRITE);
+	void write(std::string &&ss, BufferOptions buffer_options = WRITE);
 
 	void write_shutdown();
 
@@ -43,6 +51,9 @@ protected:
 
 	void write();
 	void sock_handler();
+	void buffer(const uint8_t *val, size_t count);
+	void buffer(const char *val, size_t count);
+	void buffer(std::string &&ss);
 
 	Handler rwd_handler;
 
@@ -51,9 +62,12 @@ protected:
 
 namespace http {
 class Server;
+class Client;
 
 class Connection : private Nocopy {
 public:
+	using StreamHandler = std::function<void(Connection *, uint64_t body_position, uint64_t body_length)>;
+
 	explicit Connection() : Connection(empty_handler, empty_handler) {}
 	explicit Connection(Handler &&r_handler, Handler &&d_handler);
 	void set_handlers(Handler &&r_handler, Handler &&d_handler) {
@@ -76,10 +90,15 @@ public:
 	bool read_next(WebMessage &);
 	void web_socket_upgrade();  // Will throw if not upgradable
 
-	void write(ResponseHeader &&resp, bool buffer_only = false);             // Write header now, body later
-	void write(const uint8_t *val, size_t count, bool buffer_only = false);  // Write body chunk
-	void write(std::string &&ss, bool buffer_only = false);                  // Write body chunk
-	void write_last_chunk();                                                 // for chunk encoding, finishes body
+	void write(ResponseHeader &&resp, BufferOptions buffer_options = WRITE);  // Write header now, body later
+	void write(const uint8_t *val, size_t count, BufferOptions buffer_options = WRITE);  // Write body chunk
+	void write(const char *val, size_t count, BufferOptions buffer_options = WRITE);     // Write body chunk
+	void write(std::string &&ss, BufferOptions buffer_options = WRITE);                  // Write body chunk
+	void write_last_chunk();  // for chunk encoding, finishes body
+
+	// Experimental, efficient direct-to-socket unbuffered interface
+	void write(ResponseHeader &&resp, StreamHandler &&w_handler);  // Call when can_write in socket buffer
+	size_t write_some(const uint8_t *val, size_t count);           // Write into socket buffer
 
 	enum State {
 		REQUEST_HEADER,                 // Server side
@@ -115,9 +134,12 @@ protected:
 	MessageBodyParser wm_body_parser;  // Single per several chunks
 	std::string sec_websocket_key;
 	std::mt19937 masking_key_random;
-	bool client_side        = false;  // Web Socket encryption is one-sided
-	bool wm_close_sent      = false;
-	uint64_t remaining_body = 0;  // for WAITING_WRITE_RESPONSE_BODY state, -1 for chunked
+	bool client_side   = false;  // Web Socket encryption is one-sided
+	bool wm_close_sent = false;
+
+	uint64_t body_content_length = 0;  // for WAITING_WRITE_RESPONSE_BODY state, -1 for chunked
+	uint64_t body_position       = 0;  // for WAITING_WRITE_RESPONSE_BODY state
+	StreamHandler w_handler;           // for WAITING_WRITE_RESPONSE_BODY state, -1 for chunked
 
 	void sock_handler();
 	void advance_state(bool called_from_runloop);

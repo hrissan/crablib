@@ -34,12 +34,16 @@ CRAB_INLINE void Client::write(ResponseBody &&response) {
 	Connection::write(std::move(response));
 }
 
-CRAB_INLINE void Client::write(ResponseHeader &&response, bool buffer_only) {
-	// HTTP message length design is utter crap, we should conform better...
-	// https://www.w3.org/Protocols/rfc2616/rfc2616-sec4.html#sec4.4
+CRAB_INLINE void Client::write(ResponseHeader &&response) {
 	if (response.date.empty())
 		response.date = Server::get_date();
 	Connection::write(std::move(response));
+}
+
+CRAB_INLINE void Client::write(ResponseHeader &&response, StreamHandler &&w_handler) {
+	if (response.date.empty())
+		response.date = Server::get_date();
+	Connection::write(std::move(response), std::move(w_handler));
 }
 
 CRAB_INLINE Server::Server(const Address &address)

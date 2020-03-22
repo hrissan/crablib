@@ -29,11 +29,13 @@ class Client : protected Connection {  // So the type is opaque for users
 public:
 	using Connection::get_peer_address;
 	void write(ResponseBody &&response);
-	void write(ResponseHeader &&resp, bool buffer_only = false);
+	void write(ResponseHeader &&response);
+	void write(ResponseHeader &&response, StreamHandler &&w_handler);
 	void write(WebMessage &&wm) { Connection::write(std::move(wm)); }
 	using Connection::web_socket_upgrade;
 	using Connection::write;
 	using Connection::write_last_chunk;
+	using Connection::write_some;
 
 private:
 	friend class Server;
