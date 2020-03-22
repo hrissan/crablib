@@ -54,7 +54,7 @@ class Server;
 
 class Connection : private Nocopy {
 public:
-	explicit Connection();
+	explicit Connection() : Connection(empty_handler, empty_handler) {}
 	explicit Connection(Handler &&r_handler, Handler &&d_handler);
 	void set_handlers(Handler &&r_handler, Handler &&d_handler) {
 		this->r_handler = std::move(r_handler);

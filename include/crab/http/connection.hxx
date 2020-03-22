@@ -115,8 +115,6 @@ CRAB_INLINE void BufferedTCPSocket::sock_handler() {
 
 namespace http {
 
-CRAB_INLINE Connection::Connection() : read_buffer(8192), sock([this]() { advance_state(true); }), state(SHUTDOWN) {}
-
 CRAB_INLINE Connection::Connection(Handler &&r_handler, Handler &&d_handler)
     : read_buffer(8192)
     , r_handler(std::move(r_handler))

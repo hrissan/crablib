@@ -13,6 +13,7 @@ public:
 	explicit ServerStreamBodyApp(uint16_t port) : server(port), timer([&]() { on_timer(); }) {
 		server.r_handler = [&](http::Client *who, http::RequestBody &&request) {
 			if (request.r.path == "/chat") {
+				std::cout << "Streaming client added" << std::endl;
 				waiting_clients.emplace(who);
 				http::ResponseHeader r;
 				r.status                    = 200;
@@ -24,7 +25,10 @@ public:
 			}
 			who->write(http::ResponseBody::simple_html(404));
 		};
-		server.d_handler = [&](http::Client *who) { waiting_clients.erase(who); };
+		server.d_handler = [&](http::Client *who) {
+			if (waiting_clients.erase(who))
+				std::cout << "Streaming client disconnected" << std::endl;
+		};
 		start_session();
 		timer.once(1);
 	}
