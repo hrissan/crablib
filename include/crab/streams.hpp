@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <deque>
 #include <limits>
@@ -18,7 +19,14 @@ public:
 	virtual ~IStream()                                   = default;
 	virtual size_t read_some(uint8_t *val, size_t count) = 0;
 	void read(uint8_t *val, size_t count);
-	void read(char *val, size_t count);
+
+	// We do not wish to use void* due to unsafe conversions, we wish all 3 common byte types
+	size_t read_some(char *val, size_t count) { return read_some(reinterpret_cast<uint8_t *>(val), count); }
+	void read(char *val, size_t count) { read(reinterpret_cast<uint8_t *>(val), count); }
+#if __cplusplus >= 201703L
+	size_t read_some(std::byte *val, size_t count) { return read_some(reinterpret_cast<uint8_t *>(val), count); }
+	void read(std::byte *val, size_t count) { read(reinterpret_cast<uint8_t *>(val), count); }
+#endif
 };
 
 class OStream {
@@ -26,8 +34,19 @@ public:
 	virtual ~OStream()                                          = default;
 	virtual size_t write_some(const uint8_t *val, size_t count) = 0;
 	void write(const uint8_t *val, size_t count);
-	void write(const char *val, size_t count);
 	void write_byte(uint8_t val) { write(&val, 1); }  // name prevents dangerous conversions
+
+	// We do not wish to use void* due to unsafe conversions, we wish all 3 common byte types
+	size_t write_some(const char *val, size_t count) {
+		return write_some(reinterpret_cast<const uint8_t *>(val), count);
+	}
+	void write(const char *val, size_t count) { write(reinterpret_cast<const uint8_t *>(val), count); }
+#if __cplusplus >= 201703L
+	size_t write_some(const std::byte *val, size_t count) {
+		return write_some(reinterpret_cast<const uint8_t *>(val), count);
+	}
+	void write(const std::byte *val, size_t count) { write(reinterpret_cast<const uint8_t *>(val), count); }
+#endif
 };
 
 class IFiniteStream : public IStream {
@@ -48,10 +67,12 @@ class Buffer : public IFiniteStream, public OStream {
 public:
 	explicit Buffer(size_t si) : impl(si), read_pos(0), write_pos(0) {}
 	size_t read_some(uint8_t *val, size_t count) override;
+	using IStream::read_some;  // Version for other char types
 	size_t size() const override final {
 		return write_pos - read_pos;  // Same as read_count() + read_count2();
 	}
 	size_t write_some(const uint8_t *val, size_t count) override;
+	using OStream::write_some;  // Version for other char types
 
 	void clear() { read_pos = write_pos = 0; }
 	void clear(size_t newsize) {
@@ -130,6 +151,7 @@ public:
 	IMemoryStream() = default;
 	explicit IMemoryStream(const uint8_t *data, size_t size) : data(data), si(size) {}
 	size_t read_some(uint8_t *val, size_t count) override;
+	using IStream::read_some;
 	size_t size() const override { return si; }
 	size_t write_to(OStream &out, size_t max_count) override;
 	using IFiniteStream::write_to;
@@ -144,6 +166,7 @@ public:
 	OMemoryStream() = default;
 	explicit OMemoryStream(uint8_t *data, size_t size) : data(data), si(size) {}
 	size_t write_some(const uint8_t *val, size_t count) override;
+	using OStream::write_some;
 };
 
 class IVectorStream : public IFiniteStream {
@@ -155,6 +178,7 @@ public:
 	IVectorStream() : rimpl(nullptr), read_pos(0) {}
 	explicit IVectorStream(const bdata *rimpl) : rimpl(rimpl), read_pos(0) {}
 	size_t read_some(uint8_t *val, size_t count) override;
+	using IStream::read_some;
 	size_t size() const override { return rimpl->size() - read_pos; }
 	size_t write_to(OStream &out, size_t max_count) override;
 	using IFiniteStream::write_to;
@@ -168,6 +192,7 @@ public:
 	OVectorStream() : wimpl(nullptr) {}
 	explicit OVectorStream(bdata *wimpl) : wimpl(wimpl) {}
 	size_t write_some(const uint8_t *val, size_t count) override;
+	using OStream::write_some;
 };
 
 // minimum stream implementation
@@ -210,6 +235,7 @@ public:
 	IStringStream() : rimpl(nullptr), read_pos(0) {}
 	explicit IStringStream(const std::string *rimpl) : rimpl(rimpl), read_pos(0) {}
 	size_t read_some(uint8_t *val, size_t count) override;
+	using IStream::read_some;
 	size_t size() const override { return rimpl->size() - read_pos; }
 	size_t write_to(OStream &out, size_t max_count) override;
 	using IFiniteStream::write_to;
@@ -223,6 +249,7 @@ public:
 	OStringStream() : wimpl(nullptr) {}
 	explicit OStringStream(std::string *wimpl) : wimpl(wimpl) {}
 	size_t write_some(const uint8_t *val, size_t count) override;
+	using OStream::write_some;
 };
 
 // minimum stream implementation
@@ -269,6 +296,7 @@ public:
 			return a->read_some(val, count);
 		return b->read_some(val, count);
 	}
+	using IStream::read_some;
 	size_t write_to(OStream &out, size_t max_count) override {
 		if (!a->empty()) {
 			size_t count = a->write_to(out, max_count);

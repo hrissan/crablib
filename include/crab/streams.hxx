@@ -20,8 +20,6 @@ CRAB_INLINE void IStream::read(uint8_t *val, size_t count) {
 	}
 }
 
-CRAB_INLINE void IStream::read(char *val, size_t count) { read(reinterpret_cast<uint8_t *>(val), count); }
-
 CRAB_INLINE void OStream::write(const uint8_t *val, size_t count) {
 	while (count != 0) {
 		size_t wc = write_some(val, count);
@@ -30,10 +28,6 @@ CRAB_INLINE void OStream::write(const uint8_t *val, size_t count) {
 		val += wc;
 		count -= wc;
 	}
-}
-
-CRAB_INLINE void OStream::write(const char *val, size_t count) {
-	write(reinterpret_cast<const uint8_t *>(val), count);
 }
 
 CRAB_INLINE size_t Buffer::read_some(uint8_t *val, size_t count) {
@@ -260,7 +254,7 @@ CRAB_INLINE size_t IStringStream::write_to(OStream &out, size_t max_count) {
 		size_t rc = std::min(size(), max_count);
 		if (rc == 0)
 			break;
-		size_t count = out.write_some(reinterpret_cast<const uint8_t *>(rimpl->data()) + read_pos, rc);
+		size_t count = out.write_some(rimpl->data() + read_pos, rc);
 		read_pos += count;
 		max_count -= count;
 		total_count += count;

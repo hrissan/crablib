@@ -171,9 +171,11 @@ public:
 	size_t read_some(uint8_t *val, size_t count) override;
 	// reads 0..count-1, if returns 0 (incoming buffer empty) would
 	// fire rwd_handler in future
+	using IStream::read_some;  // Version for other char types
 	size_t write_some(const uint8_t *val, size_t count) override;
 	// writes 0..count-1, if returns 0 (outgoing buffer full) will
 	// fire rwd_handler in future
+	using OStream::write_some;  // Version for other char types
 	bool can_write() const;
 	// write_some will return 0 if cannot write, but this is too late for clients
 	// who wish to work without buffer and need to prepare data,

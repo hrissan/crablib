@@ -30,14 +30,27 @@ public:
 	}
 
 	size_t read_some(uint8_t *val, size_t count) override;
+	using IStream::read_some;  // Version for other char types
 
 	// Efficient direct-to-socket interface
 	size_t write_some(const uint8_t *val, size_t count);
+	size_t write_some(const char *val, size_t count) {
+		return write_some(reinterpret_cast<const uint8_t *>(val), count);
+	}
+#if __cplusplus >= 201703L
+	size_t write_some(const std::byte *val, size_t count) {
+		return write_some(reinterpret_cast<const uint8_t *>(val), count);
+	}
+#endif
 	bool can_write() const { return total_buffer_size == 0 && sock.can_write(); }
 
 	// Write into socket, all data that did not fit are store in a buffer and sent later
 	void write(const uint8_t *val, size_t count, BufferOptions buffer_options = WRITE);
 	void write(const char *val, size_t count, BufferOptions buffer_options = WRITE);
+#if __cplusplus >= 201703L
+	void write(const std::byte *val, size_t count, BufferOptions buffer_options = WRITE);
+#endif
+
 	void write(std::string &&ss, BufferOptions buffer_options = WRITE);
 
 	void write_shutdown();
@@ -93,12 +106,23 @@ public:
 	void write(ResponseHeader &&resp, BufferOptions buffer_options = WRITE);  // Write header now, body later
 	void write(const uint8_t *val, size_t count, BufferOptions buffer_options = WRITE);  // Write body chunk
 	void write(const char *val, size_t count, BufferOptions buffer_options = WRITE);     // Write body chunk
-	void write(std::string &&ss, BufferOptions buffer_options = WRITE);                  // Write body chunk
-	void write_last_chunk();  // for chunk encoding, finishes body
+#if __cplusplus >= 201703L
+	void write(const std::byte *val, size_t count, BufferOptions buffer_options = WRITE);
+#endif
+	void write(std::string &&ss, BufferOptions buffer_options = WRITE);  // Write body chunk
+	void write_last_chunk();                                             // for chunk encoding, finishes body
 
 	// Experimental, efficient direct-to-socket unbuffered interface
 	void write(ResponseHeader &&resp, StreamHandler &&w_handler);  // Call when can_write in socket buffer
 	size_t write_some(const uint8_t *val, size_t count);           // Write into socket buffer
+	size_t write_some(const char *val, size_t count) {
+		return write_some(reinterpret_cast<const uint8_t *>(val), count);
+	}
+#if __cplusplus >= 201703L
+	size_t write_some(const std::byte *val, size_t count) {
+		return write_some(reinterpret_cast<const uint8_t *>(val), count);
+	}
+#endif
 
 	enum State {
 		REQUEST_HEADER,                 // Server side

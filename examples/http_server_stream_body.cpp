@@ -1,10 +1,9 @@
 // Copyright (c) 2007-2020, Grigory Buteyko aka Hrissan
 // Licensed under the MIT License. See LICENSE for details.
 
+#include <crab/crab.hpp>
 #include <iostream>
 #include <set>
-
-#include <crab/crab.hpp>
 
 namespace http = crab::http;
 
@@ -29,7 +28,7 @@ public:
 				header.content_length = 1 * 1000 * 1000 * 1000;
 				header.set_content_type("application/octet-stream", "");
 				who->write(std::move(header), [who](uint64_t pos, uint64_t len) {
-					uint8_t buffer[65536]{};
+					char buffer[65536]{};
 					auto to_write = static_cast<size_t>(std::min<uint64_t>(len - pos, sizeof(buffer)));
 					auto wr       = who->write_some(buffer, to_write);
 					if (wr != to_write) {

@@ -68,6 +68,12 @@ CRAB_INLINE void BufferedTCPSocket::write(const char *val, size_t count, BufferO
 	write(reinterpret_cast<const uint8_t *>(val), count, buffer_options);
 }
 
+#if __cplusplus >= 201703L
+CRAB_INLINE void BufferedTCPSocket::write(const std::byte *val, size_t count, BufferOptions buffer_options) {
+	write(reinterpret_cast<const uint8_t *>(val), count, buffer_options);
+}
+#endif
+
 // TODO - do not allow to write when not connected (underlying socket has it as a NOP)
 CRAB_INLINE void BufferedTCPSocket::write(const uint8_t *val, size_t count, BufferOptions buffer_options) {
 	if (write_shutdown_asked)
@@ -286,6 +292,12 @@ CRAB_INLINE void Connection::write(http::ResponseHeader &&resp, BufferOptions bu
 CRAB_INLINE void Connection::write(const char *val, size_t count, BufferOptions buffer_options) {
 	write(reinterpret_cast<const uint8_t *>(val), count, buffer_options);
 }
+
+#if __cplusplus >= 201703L
+CRAB_INLINE void Connection::write(const std::byte *val, size_t count, BufferOptions buffer_options) {
+	write(reinterpret_cast<const uint8_t *>(val), count, buffer_options);
+}
+#endif
 
 CRAB_INLINE void Connection::write(const uint8_t *val, size_t count, BufferOptions buffer_options) {
 	invariant(state == WAITING_WRITE_RESPONSE_BODY, "Connection unexpected write");
