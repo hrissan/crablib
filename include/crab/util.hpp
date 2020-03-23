@@ -114,6 +114,9 @@ public:
 
 	void bytes(uint8_t *buffer, size_t size);
 	void bytes(char *buffer, size_t size) { bytes(reinterpret_cast<uint8_t *>(buffer), size); }
+#if __cplusplus >= 201703L
+	void bytes(std::byte *buffer, size_t size) { bytes(reinterpret_cast<uint8_t *>(buffer), size); }
+#endif
 	bdata data(size_t size);
 
 	std::string printable_string(size_t size);
