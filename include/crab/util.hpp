@@ -74,7 +74,7 @@ struct Literal {
 	size_t size;
 
 	template<size_t size>
-	explicit Literal(const char (&value)[size]) : value(value), size(size - 1) {}
+	constexpr explicit Literal(const char (&value)[size]) : value(value), size(size - 1) {}
 	constexpr int compare(const char *b, size_t bs) const {
 		return (size == bs) ? std::memcmp(value, b, size) : size > bs ? 1 : -1;
 	}
