@@ -161,6 +161,17 @@ CRAB_INLINE void to_string_common(const RequestResponseHeader &req, std::strings
 		ss << h.name << ": " << h.value << "\r\n";
 }
 
+CRAB_INLINE std::string simple_response(int status, const char *pf, const std::string *body, const char *sf) {
+	std::stringstream ss;
+	ss << pf;
+	if (body)
+		ss << *body;
+	else
+		ss << status << " " << status_to_string(status);
+	ss << sf;
+	return ss.str();
+}
+
 }  // namespace details
 
 CRAB_INLINE std::string RequestHeader::to_string() const {
@@ -212,31 +223,6 @@ CRAB_INLINE std::string ResponseHeader::generate_sec_websocket_accept(const std:
 	return base64::encode(result, sha1::hash_size);
 }
 
-CRAB_INLINE Response Response::simple_html(int status, std::string &&body) {
-	Response response;
-	response.header.add_headers_nocache();
-	response.header.status = status;
-	response.header.set_content_type("text/html", "charset=utf-8");
-	std::stringstream ss;
-	ss << "<html><body>";
-	if (body.empty())
-		ss << status << " " << status_to_string(status);
-	else
-		ss << body;
-	ss << "</body></html>";
-	response.set_body(ss.str());
-	return response;
-}
-
-CRAB_INLINE Response Response::simple_text(int status, std::string &&body) {
-	Response response;
-	response.header.add_headers_nocache();
-	response.header.status = status;
-	response.header.set_content_type("text/plain", "charset=utf-8");
-	response.set_body(std::move(body));
-	return response;
-}
-
 CRAB_INLINE Response Response::simple(int status, const std::string &content_type, std::string &&body) {
 	Response response;
 	response.header.add_headers_nocache();
@@ -244,6 +230,26 @@ CRAB_INLINE Response Response::simple(int status, const std::string &content_typ
 	response.header.set_content_type(content_type);
 	response.set_body(std::move(body));
 	return response;
+}
+
+CRAB_INLINE Response Response::simple_html(int status, std::string &&text) {
+	return simple(status,
+	    "text/html; charset=utf-8",
+	    details::simple_response(status, "<html><body>", &text, "</body></html>"));
+}
+
+CRAB_INLINE Response Response::simple_html(int status) {
+	return simple(status,
+	    "text/html; charset=utf-8",
+	    details::simple_response(status, "<html><body>", nullptr, "</body></html>"));
+}
+
+CRAB_INLINE Response Response::simple_text(int status, std::string &&text) {
+	return simple(status, "text/plain; charset=utf-8", details::simple_response(status, "", &text, ""));
+}
+
+CRAB_INLINE Response Response::simple_text(int status) {
+	return simple(status, "text/plain; charset=utf-8", details::simple_response(status, "", nullptr, ""));
 }
 
 }}  // namespace crab::http

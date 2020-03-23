@@ -14,7 +14,14 @@ int main() {
 	http::Server server(7000);
 
 	server.r_handler = [&](http::Client *who, http::Request &&request) {
-		who->write(http::Response::simple_text(200, "Hello, Crab!"));
+		http::Response response;
+		response.header.status = 200;
+		response.header.set_content_type("text/plain", "charset=utf-8");
+		response.set_body("Hello, Crab!");
+		who->write(std::move(response));
+
+		// Or for even simpler code paths, like error messages
+		// who->write(http::Response::simple_text(200, "Hello, Crab!"));
 	};
 
 	runloop.run();

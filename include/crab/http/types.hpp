@@ -137,10 +137,12 @@ struct Response {
 		header.content_length = body.size();
 	}
 
-	static Response simple_html(int status, std::string &&body = std::string{});
-	// Leave body empty for default message for status
-	static Response simple_text(int status, std::string &&body);
 	static Response simple(int status, const std::string &content_type, std::string &&body);
+
+	static Response simple_html(int status);
+	static Response simple_html(int status, std::string &&text);
+	static Response simple_text(int status);
+	static Response simple_text(int status, std::string &&text);
 };
 
 bool is_sp(int c);
