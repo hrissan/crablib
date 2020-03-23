@@ -93,7 +93,6 @@ struct WebMessage {
 struct ResponseHeader : public RequestResponseHeader {
 	int status = 0;
 	std::string status_text;
-	std::vector<Header> headers;  // names are lower-case
 
 	std::string sec_websocket_accept;
 
