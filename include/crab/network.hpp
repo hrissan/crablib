@@ -15,7 +15,7 @@ namespace crab {
 
 class Timer {
 public:
-	explicit Timer(Handler &&cb) : a_handler(std::move(cb)) {}
+	explicit Timer(Handler &&cb);
 	void set_handler(Handler &&cb) { a_handler = std::move(cb); }
 	~Timer();
 
@@ -35,7 +35,7 @@ public:
 private:
 	Handler a_handler;
 
-#if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL || CRAB_SOCKET_WINDOWS
+#if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL || CRAB_IMPL_WINDOWS
 	struct HeapPred {
 		bool operator()(const Timer &a, const Timer &b) { return a.fire_time > b.fire_time; }
 	};
@@ -43,6 +43,9 @@ private:
 	steady_clock::time_point fire_time;  // Part of heap invariant, must not change, while timer is set
 	steady_clock::time_point moved_fire_time;
 	friend struct details::RunLoopLinks;
+#elif CRAB_IMPL_LIBEV
+	ev::timer impl;
+    void io_cb (ev::timer &w, int revents) { a_handler(); }
 #else
 	std::unique_ptr<TimerImpl> impl;
 	friend struct TimerImpl;
@@ -63,9 +66,12 @@ private:
 	RunLoop *loop = nullptr;  // Will need when calling from the other threads
 	Callable a_handler;
 
-#if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL || CRAB_SOCKET_WINDOWS
+#if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL || CRAB_IMPL_WINDOWS
 	IntrusiveNode<Watcher> fired_objects_node;  // protected by runloop mutex
 	friend struct details::RunLoopLinks;
+#elif CRAB_IMPL_LIBEV
+    ev::async impl;
+    void io_cb (ev::async &w, int revents) { a_handler.handler(); }
 #else
 	std::unique_ptr<WatcherImpl> impl;
 	friend struct WatcherImpl;
@@ -81,12 +87,17 @@ public:
 	// Active after construction, only handlers of active Idles will run
 
 	void set_active(bool a);
-	bool is_active() { return idle_node.in_list(); }
+	bool is_active();
 
 private:
 	Handler a_handler;
+#if CRAB_IMPL_LIBEV
+    ev::idle impl;
+    void io_cb (ev::idle &w, int revents) { a_handler(); }
+#else
 	IntrusiveNode<Idle> idle_node;  // None of our impls have idle handlers
 	friend class RunLoop;
+#endif
 };
 
 // Handler of both SIGINT and SIGTERM, if you need to do something on Ctrl-C
@@ -107,8 +118,10 @@ public:
 	// Sometimes signals interfere with debugger. Use this fun to conditionally create SignalStop
 private:
 	Callable a_handler;
-#if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL
+#if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL
 	details::FileDescriptor fd;
+#elif CRAB_IMPL_LIBEV
+	// TODO
 #else
 	// on Windows we can use https://stackoverflow.com/questions/18291284/handle-ctrlc-on-win32
 #endif
@@ -128,14 +141,14 @@ public:
 	std::string to_string() const { return get_address() + ":" + std::to_string(get_port()); }
 	bool is_multicast() const;
 
-#if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL || CRAB_SOCKET_WINDOWS
+#if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL || CRAB_IMPL_LIBEV || CRAB_IMPL_WINDOWS
 	const sockaddr *impl_get_sockaddr() const { return reinterpret_cast<const sockaddr *>(&addr); }
 	sockaddr *impl_get_sockaddr() { return reinterpret_cast<sockaddr *>(&addr); }
 	int impl_get_sockaddr_length() const;
 
 private:
 	sockaddr_storage addr = {};
-#elif CRAB_SOCKET_BOOST
+#elif CRAB_IMPL_BOOST
 	explicit Address(boost::asio::ip::address &&address, uint16_t port) : addr(std::move(address)), port(port) {}
 	const boost::asio::ip::address &get_addr() const { return addr; }
 
@@ -200,8 +213,14 @@ public:
 private:
 	Callable rwd_handler;
 
-#if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL
+#if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL || CRAB_IMPL_LIBEV
 	details::FileDescriptor fd;
+#if CRAB_IMPL_LIBEV
+    ev::io io_read;
+    ev::io io_write;
+    void io_cb_read(ev::io   &w, int revents);
+    void io_cb_write(ev::io   &w, int revents);
+#endif
 #else
 	std::unique_ptr<TCPSocketImpl> impl;
 	friend struct TCPSocketImpl;
@@ -221,7 +240,7 @@ private:
 
 	Callable a_handler;
 
-#if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL
+#if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL || CRAB_IMPL_LIBEV
 	details::FileDescriptor fd;
 
 	// We actually accept in can_accept, so that TCPSocket::accept never fails
@@ -237,6 +256,10 @@ private:
 	// So, if the user-code limits (for example in HTTP-server, etc) are not set, and
 	// we are out of file descriptors, we will simply set this timer to 1 second, and retry
 	// accept.
+#if CRAB_IMPL_LIBEV
+    ev::io io_read;
+    void io_cb_read(ev::io &w, int revents);
+#endif
 #else
 	std::unique_ptr<TCPAcceptorImpl> impl;
 	friend struct TCPAcceptorImpl;
@@ -260,8 +283,11 @@ public:
 private:
 	Callable w_handler;
 
-#if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL
+#if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL || CRAB_IMPL_LIBEV
 	details::FileDescriptor fd;
+#if CRAB_IMPL_LIBEV
+    // TODO
+#endif
 #else
 //  TODO - implement on other platforms
 //  std::unique_ptr<UDPTransmitterImpl> impl;
@@ -286,8 +312,11 @@ public:
 private:
 	Callable r_handler;
 
-#if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL
+#if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL || CRAB_IMPL_LIBEV
 	details::FileDescriptor fd;
+#if CRAB_IMPL_LIBEV
+    // TODO
+#endif
 #else
 	//  TODO - implement on other platforms
 //  std::unique_ptr<UDPReceiverImpl> impl;
@@ -295,7 +324,7 @@ private:
 #endif
 };
 
-#if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL || CRAB_SOCKET_WINDOWS
+#if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL || CRAB_IMPL_WINDOWS
 
 namespace details {
 struct RunLoopLinks : private Nocopy {  // Common structure when implementing over low-level interface
@@ -338,8 +367,11 @@ public:
 	// On some systems, epoll_wait() timeouts greater than 35.79 minutes are treated as infinity.
 	// Spurious wakeup once every 30 minutes is harmless, timeout can be reduced further if needed.
 
-#if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL
+#if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL || CRAB_IMPL_LIBEV
 	void impl_add_callable_fd(int fd, Callable *callable, bool read, bool write);
+#if CRAB_IMPL_LIBEV
+    ev::loop_ref & get_impl() { return impl; }
+#endif
 #else
 	RunLoopImpl *get_impl() const { return impl.get(); }
 #endif
@@ -355,16 +387,20 @@ private:
 
 	using CurrentLoop = details::StaticHolderTL<RunLoop *>;
 
+#if !CRAB_IMPL_LIBEV
 	IntrusiveList<Idle, &Idle::idle_node> idle_handlers;  // None of our impls have idles
-#if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL || CRAB_SOCKET_WINDOWS
+#endif
+#if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL || CRAB_IMPL_WINDOWS
 	details::RunLoopLinks links;
 #endif
-#if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL
+#if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL
 	details::FileDescriptor efd;
-#if CRAB_SOCKET_EPOLL
+#if CRAB_IMPL_EPOLL
 	details::FileDescriptor wake_fd;
 #endif
 	Callable wake_callable;
+#elif CRAB_IMPL_LIBEV
+    ev::dynamic_loop impl;
 #else
 	std::unique_ptr<RunLoopImpl> impl;
 #endif

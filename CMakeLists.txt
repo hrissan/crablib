@@ -10,7 +10,8 @@ message("-DCRAB_FUZZ=1 builds binaries for fuzzing. Disabled by default because 
 option(CRAB_FUZZ "builds binaries for fuzzing" OFF)
 
 # add_definitions(-DCRAB_COMPILE=1)
-# add_definitions(-DCRAB_SOCKET_BOOST=1)
+# add_definitions(-DCRAB_IMPL_BOOST=1)
+add_definitions(-DCRAB_IMPL_LIBEV=1)
 
 if(WIN32)
 #	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Ot")
@@ -43,6 +44,7 @@ set(SOURCE_FILES
 		include/crab/network.hxx
 		include/crab/network_base.hpp
 		include/crab/network_boost.hxx
+		include/crab/network_libev.hxx
 		include/crab/network_posix.hxx
 		include/crab/network_win.hxx
 		include/crab/network_posix_win.hxx

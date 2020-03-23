@@ -5,7 +5,7 @@
 #include <iostream>
 #include "network.hpp"
 
-#if CRAB_SOCKET_BOOST
+#if CRAB_IMPL_BOOST
 
 #include <boost/array.hpp>
 #include <boost/asio.hpp>

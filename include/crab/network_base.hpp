@@ -18,15 +18,17 @@
 #include "util.hpp"
 
 // We use address_storage structucre in crab::Address
-#if CRAB_SOCKET_WINDOWS
+#if CRAB_IMPL_WINDOWS
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #undef ERROR
 #undef min
 #undef max
-#elif CRAB_SOCKET_EPOLL
+#elif CRAB_IMPL_LIBEV
 #include <sys/socket.h>
-#elif CRAB_SOCKET_KEVENT
+#elif CRAB_IMPL_EPOLL
+#include <sys/socket.h>
+#elif CRAB_IMPL_KEVENT
 #include <sys/event.h>
 #include <sys/socket.h>
 #endif
@@ -92,7 +94,7 @@ private:
 	std::vector<PerformanceRecord> performance;
 };
 
-#if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL || CRAB_SOCKET_WINDOWS
+#if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL || CRAB_IMPL_LIBEV || CRAB_IMPL_WINDOWS
 
 struct Callable : private Nocopy {
 	explicit Callable(Handler &&handler) : handler(handler) {}
@@ -126,7 +128,7 @@ struct Callable : private Nocopy {
 
 #endif
 
-#if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL
+#if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL || CRAB_IMPL_LIBEV
 
 namespace details {
 class FileDescriptor : private Nocopy {
@@ -143,7 +145,7 @@ private:
 	int value;
 };
 }  // namespace details
-#else  // if CRAB_SOCKET_WINDOWS
+#else  // CRAB_IMPL_WINDOWS, CRAB_IMPL_BOOST
 
 struct RunLoopImpl;
 struct TimerImpl;

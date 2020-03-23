@@ -51,6 +51,8 @@ CRAB_INLINE std::ostream &operator<<(std::ostream &os, const Address &msg) {
 	return os << msg.get_address() << ":" << msg.get_port();
 }
 
+#if !CRAB_IMPL_LIBEV
+
 CRAB_INLINE Idle::Idle(Handler &&cb) : a_handler(std::move(cb)) { set_active(true); }
 
 CRAB_INLINE void Idle::set_active(bool a) {
@@ -61,7 +63,11 @@ CRAB_INLINE void Idle::set_active(bool a) {
 	}
 }
 
-#if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL || CRAB_SOCKET_WINDOWS
+CRAB_INLINE void RunLoop::cancel() { links.quit = true; }
+
+#endif
+
+#if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL || CRAB_IMPL_WINDOWS
 
 CRAB_INLINE void Callable::add_pending_callable(bool can_read, bool can_write) {
 	this->can_read  = this->can_read || can_read;
@@ -269,7 +275,7 @@ private:
 
 	std::thread dns_thread{&DNSWorker::worker_fun, this};
 	void worker_fun() {
-#if CRAB_SOCKET_BOOST
+#if CRAB_IMPL_BOOST
 		RunLoop runloop;  // boost sync resolve requires io_service
 #endif
 		while (true) {
