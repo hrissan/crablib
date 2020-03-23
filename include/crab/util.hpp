@@ -75,16 +75,16 @@ struct Literal {
 
 	template<size_t size>
 	constexpr explicit Literal(const char (&value)[size]) : value(value), size(size - 1) {}
-	constexpr int compare(const char *b, size_t bs) const {
+	int compare(const char *b, size_t bs) const {
 		return (size == bs) ? std::memcmp(value, b, size) : size > bs ? 1 : -1;
 	}
-	constexpr int compare(const std::string &b) const { return compare(b.data(), b.size()); }
+	int compare(const std::string &b) const { return compare(b.data(), b.size()); }
 };
 
-inline constexpr bool operator==(const std::string &a, const Literal &b) { return b.compare(a) == 0; }
-inline constexpr bool operator!=(const std::string &a, const Literal &b) { return !(a == b); }
-inline constexpr bool operator==(const Literal &a, const std::string &b) { return a.compare(b) == 0; }
-inline constexpr bool operator!=(const Literal &a, const std::string &b) { return !(a == b); }
+inline bool operator==(const std::string &a, const Literal &b) { return b.compare(a) == 0; }
+inline bool operator!=(const std::string &a, const Literal &b) { return !(a == b); }
+inline bool operator==(const Literal &a, const std::string &b) { return a.compare(b) == 0; }
+inline bool operator!=(const Literal &a, const std::string &b) { return !(a == b); }
 
 // ==, != of Literal and std::string compile into very little # of instructions
 // and they have trivial constructor so no overhead on static initializer per function.
