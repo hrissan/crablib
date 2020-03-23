@@ -140,6 +140,8 @@ struct Response {
 
 	static Response simple_html(int status, std::string &&body = std::string{});
 	// Leave body empty for default message for status
+	static Response simple_text(int status, std::string &&body);
+	static Response simple(int status, const std::string &content_type, std::string &&body);
 };
 
 bool is_sp(int c);

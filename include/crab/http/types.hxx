@@ -212,8 +212,9 @@ CRAB_INLINE std::string ResponseHeader::generate_sec_websocket_accept(const std:
 	return base64::encode(result, sha1::hash_size);
 }
 
-Response Response::simple_html(int status, std::string &&body) {
+CRAB_INLINE Response Response::simple_html(int status, std::string &&body) {
 	Response response;
+	response.header.add_headers_nocache();
 	response.header.status = status;
 	response.header.set_content_type("text/html", "charset=utf-8");
 	std::stringstream ss;
@@ -224,6 +225,24 @@ Response Response::simple_html(int status, std::string &&body) {
 		ss << body;
 	ss << "</body></html>";
 	response.set_body(ss.str());
+	return response;
+}
+
+CRAB_INLINE Response Response::simple_text(int status, std::string &&body) {
+	Response response;
+	response.header.add_headers_nocache();
+	response.header.status = status;
+	response.header.set_content_type("text/plain", "charset=utf-8");
+	response.set_body(std::move(body));
+	return response;
+}
+
+CRAB_INLINE Response Response::simple(int status, const std::string &content_type, std::string &&body) {
+	Response response;
+	response.header.add_headers_nocache();
+	response.header.status = status;
+	response.header.set_content_type(content_type);
+	response.set_body(std::move(body));
 	return response;
 }
 
