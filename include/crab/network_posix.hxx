@@ -541,6 +541,8 @@ CRAB_INLINE bool TCPAcceptor::can_accept() {
 	}
 }
 
+CRAB_INLINE bool UDPTransmitter::can_write() const { return w_handler.can_write; }
+
 #if CRAB_IMPL_LIBEV
 void UDPTransmitter::io_cb_write(ev::io &w, int revents) {
 	io_write.stop();

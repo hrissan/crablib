@@ -77,6 +77,8 @@ CRAB_INLINE void Callable::add_pending_callable(bool can_read, bool can_write) {
 
 #if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL || CRAB_IMPL_WINDOWS
 
+CRAB_INLINE Timer::Timer(Handler &&cb) : a_handler(std::move(cb)) {}
+
 CRAB_INLINE void Callable::add_pending_callable(bool can_read, bool can_write) {
 	this->can_read  = this->can_read || can_read;
 	this->can_write = this->can_write || can_write;
@@ -243,10 +245,6 @@ CRAB_INLINE void Watcher::cancel() {
 	a_handler.cancel_callable();
 	loop->links.cancel_called_watcher(this);
 }
-
-CRAB_INLINE bool TCPSocket::can_write() const { return rwd_handler.can_write; }
-
-CRAB_INLINE bool UDPTransmitter::can_write() const { return w_handler.can_write; }
 
 #endif
 

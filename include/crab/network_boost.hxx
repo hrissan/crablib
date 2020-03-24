@@ -155,6 +155,8 @@ public:
 	}
 };
 
+CRAB_INLINE Timer::Timer(Handler &&cb) : a_handler(std::move(cb)) {}
+
 CRAB_INLINE Timer::~Timer() { cancel(); }
 
 CRAB_INLINE void Timer::cancel() {

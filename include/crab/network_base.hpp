@@ -113,9 +113,6 @@ struct Callable : private Nocopy {
 };
 
 namespace details {
-struct LessTimerPtr {
-	bool operator()(Timer *a, Timer *b) const;
-};
 struct RunLoopLinks;
 }  // namespace details
 
@@ -127,6 +124,20 @@ struct Callable : private Nocopy {
 };
 
 #endif
+
+//#if CRAB_IMPL_LIBEV
+// namespace details {
+// template<typename E> // ev++ has no wrapper with lambda
+// class EC : public E {
+//	explicit EC(Handler && cb):E(RunLoop::current()->get_impl()), a_handler(std::move(cb)) {
+//		this->set<EC<E>, &EC<E>::io_cb>(this);
+//	}
+// private:
+//	Handler a_handler;
+//	void io_cb(E &w, int revents) { a_handler(); }
+//};
+//}
+//#endif
 
 #if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL || CRAB_IMPL_LIBEV
 
