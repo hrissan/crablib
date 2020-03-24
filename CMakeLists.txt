@@ -12,6 +12,8 @@ option(CRAB_FUZZ "builds binaries for fuzzing" OFF)
 # add_definitions(-DCRAB_COMPILE=1)
 # add_definitions(-DCRAB_IMPL_BOOST=1)
 add_definitions(-DCRAB_IMPL_LIBEV=1)
+link_directories(/usr/local/lib)
+link_libraries(ev)
 
 if(WIN32)
 #	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Ot")

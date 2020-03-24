@@ -24,10 +24,9 @@
 #include <sys/time.h>
 #include <sys/types.h>
 
-namespace crab {
-namespace details {
-constexpr int CRAB_MSG_NOSIGNAL  = 0;
-}}  // namespace details
+namespace crab { namespace details {
+constexpr int CRAB_MSG_NOSIGNAL = 0;
+}}  // namespace crab::details
 
 #endif
 
@@ -36,10 +35,9 @@ constexpr int CRAB_MSG_NOSIGNAL  = 0;
 #include <sys/eventfd.h>
 #include <sys/signalfd.h>
 
-namespace crab {
-namespace details {
+namespace crab { namespace details {
 constexpr int CRAB_MSG_NOSIGNAL = MSG_NOSIGNAL;
-}}  // namespace details
+}}  // namespace crab::details
 
 #endif
 
@@ -278,7 +276,25 @@ CRAB_INLINE bool SignalStop::running_under_debugger() {
 
 #endif
 
+#if CRAB_IMPL_LIBEV
+CRAB_INLINE TCPSocket::TCPSocket(Handler &&cb)
+    : rwd_handler(std::move(cb))
+    , io_read(RunLoop::current()->get_impl())
+    , io_write(RunLoop::current()->get_impl())
+    , closed_event([&] { rwd_handler.handler(); }) {
+	io_read.set<TCPSocket, &TCPSocket::io_cb_read>(this);
+	io_write.set<TCPSocket, &TCPSocket::io_cb_write>(this);
+}
+#else
+CRAB_INLINE TCPSocket::TCPSocket(Handler &&cb) : rwd_handler(std::move(cb)) {}
+#endif
+
 CRAB_INLINE void TCPSocket::close() {
+#if CRAB_IMPL_LIBEV
+	io_read.stop();
+	io_write.stop();
+	closed_event.cancel();
+#endif
 	rwd_handler.cancel_callable();
 	fd.reset();
 }
@@ -290,6 +306,21 @@ CRAB_INLINE void TCPSocket::write_shutdown() {
 }
 
 CRAB_INLINE bool TCPSocket::is_open() const { return fd.is_valid() || rwd_handler.is_pending_callable(); }
+
+CRAB_INLINE bool TCPSocket::can_write() const { return rwd_handler.can_write; }
+
+#if CRAB_IMPL_LIBEV
+void TCPSocket::io_cb_read(ev::io &w, int revents) {
+	io_read.stop();
+	rwd_handler.can_read = true;
+	rwd_handler.handler();
+}
+void TCPSocket::io_cb_write(ev::io &w, int revents) {
+	io_write.stop();
+	rwd_handler.can_write = true;
+	rwd_handler.handler();
+}
+#endif
 
 CRAB_INLINE bool TCPSocket::connect(const Address &address) {
 	close();
@@ -305,11 +336,16 @@ CRAB_INLINE bool TCPSocket::connect(const Address &address) {
 		if (connect_result < 0 && errno != EINPROGRESS)
 			return false;
 		details::setsockopt_1(tmp.get_value(), IPPROTO_TCP, TCP_NODELAY);
+#if CRAB_IMPL_LIBEV
+		io_read.start(tmp.get_value(), ev::READ);
+		io_write.start(tmp.get_value(), ev::WRITE);
+#else
 		RunLoop::current()->impl_add_callable_fd(tmp.get_value(), &rwd_handler, true, true);
 		if (connect_result >= 0) {
 			// On some systems if localhost socket is connected right away, no epoll happens
 			rwd_handler.add_pending_callable(true, true);
 		}
+#endif
 		fd.swap(tmp);
 		return true;
 	} catch (const std::exception &) {
@@ -327,6 +363,10 @@ CRAB_INLINE void TCPSocket::accept(TCPAcceptor &acceptor, Address *accepted_addr
 		*accepted_addr = acceptor.accepted_addr;
 	acceptor.accepted_addr = Address();
 	fd.swap(acceptor.accepted_fd);
+#if CRAB_IMPL_LIBEV
+	io_read.start(fd.get_value(), ev::READ);
+	io_write.start(fd.get_value(), ev::WRITE);
+#else
 	try {
 		RunLoop::current()->impl_add_callable_fd(fd.get_value(), &rwd_handler, true, true);
 	} catch (const std::exception &) {
@@ -337,6 +377,7 @@ CRAB_INLINE void TCPSocket::accept(TCPAcceptor &acceptor, Address *accepted_addr
 		rwd_handler.add_pending_callable(true, false);
 		return;
 	}
+#endif
 }
 
 CRAB_INLINE size_t TCPSocket::read_some(uint8_t *data, size_t count) {
@@ -348,16 +389,27 @@ CRAB_INLINE size_t TCPSocket::read_some(uint8_t *data, size_t count) {
 	RunLoop::current()->stats.push_record("R(recv)", fd.get_value(), int(result));
 	if (result == 0) {  // remote closed
 		close();
+#if CRAB_IMPL_LIBEV
+		closed_event.once(0);
+#else
 		rwd_handler.add_pending_callable(true, false);
+#endif
 		return 0;
 	}
 	if (result < 0) {
 		if (errno != EAGAIN && errno != EWOULDBLOCK) {  // some REAL error
 			close();
+#if CRAB_IMPL_LIBEV
+			closed_event.once(0);
+#else
 			rwd_handler.add_pending_callable(true, false);
+#endif
 			return 0;
 		}
 		rwd_handler.can_read = false;
+#if CRAB_IMPL_LIBEV
+		io_read.start(fd.get_value(), ev::READ);
+#endif
 		return 0;  // Will fire on_epoll_call in future automatically
 	}
 	RunLoop::current()->stats.RECV_size += result;
@@ -374,18 +426,40 @@ CRAB_INLINE size_t TCPSocket::write_some(const uint8_t *data, size_t count) {
 	if (result < 0) {
 		if (errno != EAGAIN && errno != EWOULDBLOCK) {  // some REAL error
 			close();
+#if CRAB_IMPL_LIBEV
+			closed_event.once(0);
+#else
 			rwd_handler.add_pending_callable(true, false);
+#endif
 			return 0;
 		}
 		rwd_handler.can_write = false;
+#if CRAB_IMPL_LIBEV
+		io_write.start(fd.get_value(), ev::WRITE);
+#endif
 		return 0;  // Will fire on_epoll_call in future automatically
 	}
 	RunLoop::current()->stats.SEND_size += result;
 	return result;
 }
 
+#if CRAB_IMPL_LIBEV
+void TCPAcceptor::io_cb_read(ev::io &w, int revents) {
+	io_read.stop();
+	a_handler.can_read = true;
+	a_handler.handler();
+}
+#endif
+
 CRAB_INLINE TCPAcceptor::TCPAcceptor(const Address &address, Handler &&cb)
-    : a_handler(std::move(cb)), fd_limit_timer([&]() { a_handler.handler(); }) {
+    : a_handler(std::move(cb))
+    , fd_limit_timer([&]() { a_handler.handler(); })
+#if CRAB_IMPL_LIBEV
+    , io_read(RunLoop::current()->get_impl()) {
+	io_read.set<TCPAcceptor, &TCPAcceptor::io_cb_read>(this);
+#else
+{
+#endif
 	details::FileDescriptor tmp(::socket(address.impl_get_sockaddr()->sa_family, SOCK_STREAM, IPPROTO_TCP),
 	    "crab::TCPAcceptor socket() failed");
 #if defined(__MACH__)
@@ -397,7 +471,11 @@ CRAB_INLINE TCPAcceptor::TCPAcceptor(const Address &address, Handler &&cb)
 	    "crab::TCPAcceptor bind failed");
 	details::set_nonblocking(tmp.get_value());
 	details::check(listen(tmp.get_value(), SOMAXCONN) >= 0, "crab::TCPAcceptor listen failed");
+#if CRAB_IMPL_LIBEV
+	io_read.start(tmp.get_value(), ev::READ);
+#else
 	RunLoop::current()->impl_add_callable_fd(tmp.get_value(), &a_handler, true, false);
+#endif
 	fd.swap(tmp);
 }
 
@@ -422,6 +500,9 @@ CRAB_INLINE bool TCPAcceptor::can_accept() {
 			if (!sd.is_valid()) {
 				if (errno == EAGAIN || errno == EWOULDBLOCK) {
 					a_handler.can_read = false;
+#if CRAB_IMPL_LIBEV
+					io_read.start(fd.get_value(), ev::READ);
+#endif
 					return false;
 				}
 				// All real errors are divided into 2 classes - those that remove entry from backlog
@@ -460,8 +541,22 @@ CRAB_INLINE bool TCPAcceptor::can_accept() {
 	}
 }
 
+#if CRAB_IMPL_LIBEV
+void UDPTransmitter::io_cb_write(ev::io &w, int revents) {
+	io_write.stop();
+	w_handler.can_write = true;
+	w_handler.handler();
+}
+#endif
+
 CRAB_INLINE UDPTransmitter::UDPTransmitter(const Address &address, Handler &&cb, const std::string &adapter)
-    : w_handler(std::move(cb)) {
+    : w_handler(std::move(cb))
+#if CRAB_IMPL_LIBEV
+    , io_write(RunLoop::current()->get_impl()) {
+	io_write.set<UDPTransmitter, &UDPTransmitter::io_cb_write>(this);
+#else
+{
+#endif
 	details::FileDescriptor tmp(::socket(address.impl_get_sockaddr()->sa_family, SOCK_DGRAM, IPPROTO_UDP),
 	    "crab::UDPTransmitter socket() failed");
 	details::set_nonblocking(tmp.get_value());
@@ -479,11 +574,15 @@ CRAB_INLINE UDPTransmitter::UDPTransmitter(const Address &address, Handler &&cb,
 	}
 	int connect_result = ::connect(tmp.get_value(), address.impl_get_sockaddr(), address.impl_get_sockaddr_length());
 	details::check(connect_result >= 0 || errno == EINPROGRESS, "crab::UDPTransmitter connect() failed");
+#if CRAB_IMPL_LIBEV
+	io_write.start(tmp.get_value(), ev::WRITE);
+#else
 	RunLoop::current()->impl_add_callable_fd(tmp.get_value(), &w_handler, false, true);
 	if (connect_result >= 0) {
 		// On some systems if socket is connected right away, no epoll happens
 		w_handler.add_pending_callable(false, true);
 	}
+#endif
 	fd.swap(tmp);
 }
 
@@ -496,6 +595,9 @@ CRAB_INLINE bool UDPTransmitter::write_datagram(const uint8_t *data, size_t coun
 	RunLoop::current()->stats.push_record("R(sendto)", fd.get_value(), int(result));
 	if (result < 0) {
 		if (errno == EAGAIN || errno == EWOULDBLOCK) {
+#if CRAB_IMPL_LIBEV
+			io_write.start(fd.get_value(), ev::WRITE);
+#endif
 			w_handler.can_write = false;
 			return false;  // Will fire on_epoll_call in future automatically
 		}
@@ -508,8 +610,22 @@ CRAB_INLINE bool UDPTransmitter::write_datagram(const uint8_t *data, size_t coun
 	return true;
 }
 
+#if CRAB_IMPL_LIBEV
+void UDPReceiver::io_cb_read(ev::io &w, int revents) {
+	io_read.stop();
+	r_handler.can_read = true;
+	r_handler.handler();
+}
+#endif
+
 CRAB_INLINE UDPReceiver::UDPReceiver(const Address &address, Handler &&cb, const std::string &adapter)
-    : r_handler(std::move(cb)) {
+    : r_handler(std::move(cb))
+#if CRAB_IMPL_LIBEV
+    , io_read(RunLoop::current()->get_impl()) {
+	io_read.set<UDPReceiver, &UDPReceiver::io_cb_read>(this);
+#else
+{
+#endif
 	// On Linux & Mac OSX we can bind either to 0.0.0.0, adapter address or multicast group
 	// TODO - on some other systems, when using multicast, we must bind exactly to 0.0.0.0,
 	// On Linux, at least, when multicast socket is bound to 0.0.0.0 and other process joins another group
@@ -544,7 +660,11 @@ CRAB_INLINE UDPReceiver::UDPReceiver(const Address &address, Handler &&cb, const
 		details::check(setsockopt(tmp.get_value(), IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) >= 0,
 		    "crab::UDPReceiver: Failed to join multicast group");
 	}
+#if CRAB_IMPL_LIBEV
+	io_read.start(tmp.get_value(), ev::READ);
+#else
 	RunLoop::current()->impl_add_callable_fd(tmp.get_value(), &r_handler, true, false);
+#endif
 	fd.swap(tmp);
 }
 
@@ -570,6 +690,9 @@ CRAB_INLINE std::pair<bool, size_t> UDPReceiver::read_datagram(uint8_t *data, si
 	RunLoop::current()->stats.push_record("R(recvfrom)", fd.get_value(), int(result));
 	if (result < 0) {
 		if (errno == EAGAIN || errno == EWOULDBLOCK) {
+#if CRAB_IMPL_LIBEV
+			io_read.start(fd.get_value(), ev::READ);
+#endif
 			r_handler.can_read = false;
 			return {false, 0};  // Will fire on_epoll_call in future automatically
 		}

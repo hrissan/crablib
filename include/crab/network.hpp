@@ -45,7 +45,7 @@ private:
 	friend struct details::RunLoopLinks;
 #elif CRAB_IMPL_LIBEV
 	ev::timer impl;
-    void io_cb (ev::timer &w, int revents) { a_handler(); }
+	void io_cb(ev::timer &w, int revents) { a_handler(); }
 #else
 	std::unique_ptr<TimerImpl> impl;
 	friend struct TimerImpl;
@@ -70,8 +70,8 @@ private:
 	IntrusiveNode<Watcher> fired_objects_node;  // protected by runloop mutex
 	friend struct details::RunLoopLinks;
 #elif CRAB_IMPL_LIBEV
-    ev::async impl;
-    void io_cb (ev::async &w, int revents) { a_handler.handler(); }
+	ev::async impl;
+	void io_cb(ev::async &w, int revents) { a_handler.handler(); }
 #else
 	std::unique_ptr<WatcherImpl> impl;
 	friend struct WatcherImpl;
@@ -92,8 +92,8 @@ public:
 private:
 	Handler a_handler;
 #if CRAB_IMPL_LIBEV
-    ev::idle impl;
-    void io_cb (ev::idle &w, int revents) { a_handler(); }
+	ev::idle impl;
+	void io_cb(ev::idle &w, int revents) { a_handler(); }
 #else
 	IntrusiveNode<Idle> idle_node;  // None of our impls have idle handlers
 	friend class RunLoop;
@@ -165,7 +165,7 @@ std::ostream &operator<<(std::ostream &os, const Address &msg);
 // socket is not RAII because it can go to disconnected state by external interaction
 class TCPSocket : public IStream, public OStream {
 public:
-	explicit TCPSocket(Handler &&cb) : rwd_handler(std::move(cb)) {}
+	explicit TCPSocket(Handler &&cb);
 	// cb is called when read or write is possible or socket closed from other side
 	// in your handler, first check for is_open(), if false, socket was closed
 	void set_handler(Handler &&cb) { rwd_handler.handler = std::move(cb); }
@@ -216,10 +216,11 @@ private:
 #if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL || CRAB_IMPL_LIBEV
 	details::FileDescriptor fd;
 #if CRAB_IMPL_LIBEV
-    ev::io io_read;
-    ev::io io_write;
-    void io_cb_read(ev::io   &w, int revents);
-    void io_cb_write(ev::io   &w, int revents);
+	Timer closed_event;
+	ev::io io_read;
+	ev::io io_write;
+	void io_cb_read(ev::io &w, int revents);
+	void io_cb_write(ev::io &w, int revents);
 #endif
 #else
 	std::unique_ptr<TCPSocketImpl> impl;
@@ -257,8 +258,8 @@ private:
 	// we are out of file descriptors, we will simply set this timer to 1 second, and retry
 	// accept.
 #if CRAB_IMPL_LIBEV
-    ev::io io_read;
-    void io_cb_read(ev::io &w, int revents);
+	ev::io io_read;
+	void io_cb_read(ev::io &w, int revents);
 #endif
 #else
 	std::unique_ptr<TCPAcceptorImpl> impl;
@@ -286,7 +287,8 @@ private:
 #if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL || CRAB_IMPL_LIBEV
 	details::FileDescriptor fd;
 #if CRAB_IMPL_LIBEV
-    // TODO
+	ev::io io_write;
+	void io_cb_write(ev::io &w, int revents);
 #endif
 #else
 //  TODO - implement on other platforms
@@ -315,7 +317,8 @@ private:
 #if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL || CRAB_IMPL_LIBEV
 	details::FileDescriptor fd;
 #if CRAB_IMPL_LIBEV
-    // TODO
+	ev::io io_read;
+	void io_cb_read(ev::io &w, int revents);
 #endif
 #else
 	//  TODO - implement on other platforms
@@ -367,11 +370,10 @@ public:
 	// On some systems, epoll_wait() timeouts greater than 35.79 minutes are treated as infinity.
 	// Spurious wakeup once every 30 minutes is harmless, timeout can be reduced further if needed.
 
-#if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL || CRAB_IMPL_LIBEV
+#if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL
 	void impl_add_callable_fd(int fd, Callable *callable, bool read, bool write);
-#if CRAB_IMPL_LIBEV
-    ev::loop_ref & get_impl() { return impl; }
-#endif
+#elif CRAB_IMPL_LIBEV
+	ev::loop_ref &get_impl() { return impl; }
 #else
 	RunLoopImpl *get_impl() const { return impl.get(); }
 #endif
@@ -400,7 +402,7 @@ private:
 #endif
 	Callable wake_callable;
 #elif CRAB_IMPL_LIBEV
-    ev::dynamic_loop impl;
+	ev::dynamic_loop impl;
 #else
 	std::unique_ptr<RunLoopImpl> impl;
 #endif

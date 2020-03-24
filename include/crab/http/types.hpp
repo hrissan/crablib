@@ -12,6 +12,9 @@
 #include <string>
 #include <vector>
 
+// TODO - cookie https://stackoverflow.com/questions/1969232/what-are-allowed-characters-in-cookies
+// TODO - query string
+
 namespace crab { namespace http {
 
 struct Header {

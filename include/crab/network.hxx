@@ -67,6 +67,14 @@ CRAB_INLINE void RunLoop::cancel() { links.quit = true; }
 
 #endif
 
+#if CRAB_IMPL_LIBEV
+
+CRAB_INLINE void Callable::add_pending_callable(bool can_read, bool can_write) {
+	this->can_read  = this->can_read || can_read;
+	this->can_write = this->can_write || can_write;
+}
+#endif
+
 #if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL || CRAB_IMPL_WINDOWS
 
 CRAB_INLINE void Callable::add_pending_callable(bool can_read, bool can_write) {

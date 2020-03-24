@@ -5,6 +5,7 @@
 
 #include "network.hxx"
 #include "network_boost.hxx"
+#include "network_libev.hxx"
 #include "network_posix_win.hxx"
 #include "streams.hxx"
 #include "util.hxx"
