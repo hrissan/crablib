@@ -231,7 +231,7 @@ CRAB_INLINE std::unordered_map<std::string, std::string> Request::parse_query_pa
 		return std::move(p.parsed);
 	// TODO - multipart data
 	if (header.content_type_mime != Literal{"application/x-www-form-urlencoded"})
-		return;
+		return std::move(p.parsed);
 	p.parse(body);
 	p.parse_end();
 	return std::move(p.parsed);
