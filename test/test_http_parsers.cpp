@@ -62,7 +62,6 @@ void print_params(const std::unordered_map<std::string, std::string> &params, st
 	std::cout << "-----\n\n";
 }
 
-
 void test_query_parser() {
 	auto p0  = http::parse_query_string("simple=test&oh=mygod&it=works");
 	auto p1  = http::parse_query_string("simple=&=mygod");

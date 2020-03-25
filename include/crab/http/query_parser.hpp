@@ -21,6 +21,7 @@ public:
 		while (begin != end)
 			state = consume(*begin++);
 	}
+	// This grammar has no stop state, has to be stopped manually
 	void parse_end() { state = consume_end(); }
 
 	void parse(const std::string &str) { parse(str.data(), str.data() + str.size()); }
@@ -48,5 +49,33 @@ private:
 };
 
 std::unordered_map<std::string, std::string> parse_query_string(const std::string &str);
+
+class CookieParser {
+public:
+	CookieParser() = default;
+
+	template<typename InputIterator>
+	void parse(InputIterator begin, InputIterator end) {
+		while (begin != end)
+			state = consume(*begin++);
+	}
+	// This grammar has no stop state, has to be stopped manually
+	void parse_end() { state = consume_end(); }
+
+	void parse(const std::string &str) { parse(str.data(), str.data() + str.size()); }
+	std::unordered_map<std::string, std::string> parsed;
+
+private:
+	enum State { KEY_WS_BEFORE, KEY, VALUE_WS_BEFORE, VALUE } state = KEY_WS_BEFORE;
+
+	std::string key_;    // key being parsed
+	std::string value_;  // value being parsed
+
+	State consume(char input);
+	State consume_end();
+	void persist_pair();
+};
+
+std::unordered_map<std::string, std::string> parse_cookie_string(const std::string &str);
 
 }}  // namespace crab::http

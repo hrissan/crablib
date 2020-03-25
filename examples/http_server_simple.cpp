@@ -15,7 +15,10 @@ int main() {
 
 	server.r_handler = [&](http::Client *who, http::Request &&request) {
 		std::cout << "Request" << std::endl;
-		for (const auto &q : request.get_query_params())
+		for (const auto &q : request.parse_query_params())
+			std::cout << "    '" << q.first << "' => '" << q.second << "'" << std::endl;
+		std::cout << "Cookies" << std::endl;
+		for (const auto &q : request.parse_cookies())
 			std::cout << "    '" << q.first << "' => '" << q.second << "'" << std::endl;
 		http::Response response;
 		response.header.status = 200;

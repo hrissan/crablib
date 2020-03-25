@@ -32,7 +32,7 @@ namespace crab { namespace http {
 */
 
 CRAB_INLINE void QueryParser::persist_pair() {
-	parsed[key_] = value_;  // If identical, second wins
+	parsed[key_] = value_;  // If identical, second one wins
 	key_.clear();
 	value_.clear();
 }
@@ -160,6 +160,59 @@ CRAB_INLINE QueryParser::State QueryParser::consume(char input) {
 
 CRAB_INLINE std::unordered_map<std::string, std::string> parse_query_string(const std::string &str) {
 	QueryParser p;
+	p.parse(str);
+	p.parse_end();
+	return std::move(p.parsed);
+}
+
+CRAB_INLINE void CookieParser::persist_pair() {
+	trim_right(key_);
+	trim_right(value_);
+	if (key_.empty() && value_.empty())
+		return;
+	parsed[key_] = value_;  // If identical, second one wins
+	key_.clear();
+	value_.clear();
+}
+
+CRAB_INLINE CookieParser::State CookieParser::consume_end() {
+	persist_pair();
+	return KEY_WS_BEFORE;
+}
+
+CRAB_INLINE CookieParser::State CookieParser::consume(char input) {
+	switch (state) {
+	case KEY_WS_BEFORE:
+		if (is_sp(input))
+			return KEY_WS_BEFORE;
+		// note: fallthru to KEY
+	case KEY:
+		if (input == ';') {
+			persist_pair();
+			return KEY_WS_BEFORE;
+		}
+		if (input == '=')
+			return VALUE_WS_BEFORE;
+		key_.push_back(input);
+		return KEY;
+	case VALUE_WS_BEFORE:
+		if (is_sp(input))
+			return VALUE_WS_BEFORE;
+		// note: fallthru to VALUE
+	case VALUE:
+		if (input == ';') {
+			persist_pair();
+			return KEY_WS_BEFORE;
+		}
+		value_.push_back(input);
+		return VALUE;
+	default:
+		throw std::logic_error("Invalid cookie parser state");
+	}
+}
+
+CRAB_INLINE std::unordered_map<std::string, std::string> parse_cookie_string(const std::string &str) {
+	CookieParser p;
 	p.parse(str);
 	p.parse_end();
 	return std::move(p.parsed);
