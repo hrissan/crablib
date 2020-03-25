@@ -55,7 +55,7 @@ void message_eq(const Message &msg, const http::RequestHeader &req, const std::s
 }
 
 void print_params(const std::unordered_map<std::string, std::string> &params, std::string name) {
-	std::cout << name << " query params:\n";
+	std::cout << name << ":\n";
 	for (auto q : params) {
 		std::cout << "'" << q.first << "' => '" << q.second << "'\n";
 	}
@@ -88,18 +88,65 @@ void test_query_parser() {
 	// check access via index operator
 	assert(p0["simple"] == "test");
 
-	print_params(p0, "p0");
-	print_params(p1, "p1");
-	print_params(p2, "p2");
-	print_params(p3, "p3");
-	print_params(p4, "p4");
-	print_params(p5, "p5");
-	print_params(p6, "p6");
-	print_params(p7, "p7");
-	print_params(p8, "p8");
-	print_params(p9, "p9");
-	print_params(p10, "p10");
-	print_params(p11, "p11");
+	print_params(p0, "query p0");
+	print_params(p1, "query p1");
+	print_params(p2, "query p2");
+	print_params(p3, "query p3");
+	print_params(p4, "query p4");
+	print_params(p5, "query p5");
+	print_params(p6, "query p6");
+	print_params(p7, "query p7");
+	print_params(p8, "query p8");
+	print_params(p9, "query p9");
+	print_params(p10, "query p10");
+	print_params(p11, "query p11");
+}
+
+void test_cookie_parser() {
+	auto p0 = http::parse_cookie_string("simple=test;oh=my=god;it=works");
+	auto p1 = http::parse_cookie_string("_session=lqJlEC9ypWiEX3OB;another=value;=");
+	auto p2 =
+	    http::parse_cookie_string("  _session  =  lqJlEC9ypWiEX3OB  ; another = value  ;keyonly =  ;=valueonly");
+	auto p3 = http::parse_cookie_string(
+	    " _se$$ss1 n = lqJlEC, 9y,pWi , EX3OB ; another = v=a,l! #$ue  ;hren,123; last key with spaces ");
+	auto p4 = http::parse_cookie_string(" test =  last value with spaces   ");
+
+	assert(p1.count("_session"));
+	assert(p2.count("_session"));
+	assert(p3.count("_se$$ss1 n"));
+
+	assert(p2.count("keyonly"));
+	assert(p2.count(""));
+
+	assert(p1.count("another"));
+	assert(p2.count("another"));
+	assert(p3.count("another"));
+
+	assert(p1.at("_session") == "lqJlEC9ypWiEX3OB");
+	assert(p2.at("_session") == "lqJlEC9ypWiEX3OB");
+	assert(p3.at("_se$$ss1 n") == "lqJlEC, 9y,pWi , EX3OB");
+	assert(p3.at("another") == "v=a,l! #$ue");
+
+	assert(p1.at("") == "");
+	assert(p2.at("keyonly") == "");
+	assert(p2.at("") == "valueonly");
+
+	// NOTE: despite what the rfc says, we store a standalone value as a key instead
+	// this is so that multiple standalone values can actually be still recovered from the map.
+	assert(p3.at("hren,123") == "");
+	assert(p3.at("last key with spaces") == "");
+
+	// check access via index operator
+	assert(p1["_session"] == "lqJlEC9ypWiEX3OB");
+	assert(p3["_se$$ss1 n"] == "lqJlEC, 9y,pWi , EX3OB");
+
+	assert(p4["test"] == "last value with spaces");
+
+	print_params(p0, "cookies p0");
+	print_params(p1, "cookies p1");
+	print_params(p2, "cookies p2");
+	print_params(p3, "cookies p3");
+	print_params(p4, "cookies p4");
 }
 
 void message_eq(const Message &msg, const http::ResponseHeader &req, const std::string &body) {
@@ -158,6 +205,7 @@ int main() {
 		//*)pos);
 	}
 	test_query_parser();
+	test_cookie_parser();
 	return 0;
 }
 
