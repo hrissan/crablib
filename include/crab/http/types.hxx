@@ -223,6 +223,20 @@ CRAB_INLINE std::string ResponseHeader::generate_sec_websocket_accept(const std:
 	return base64::encode(result, sha1::hash_size);
 }
 
+CRAB_INLINE std::unordered_map<std::string, std::string> Request::get_query_params() const {
+	QueryParser p;
+	p.parse(header.query_string);
+	p.parse_end();
+	if (header.method == Literal{"GET"})  // All other methods support params in body
+		return std::move(p.parsed);
+	// TODO - multipart data
+	if (header.content_type_mime != Literal{"application/x-www-form-urlencoded"})
+		return;
+	p.parse(body);
+	p.parse_end();
+	return std::move(p.parsed);
+}
+
 CRAB_INLINE Response Response::simple(int status, const std::string &content_type, std::string &&body) {
 	Response response;
 	response.header.add_headers_nocache();

@@ -10,6 +10,7 @@
 #include "util.hxx"
 
 #include "http/connection.hxx"
+#include "http/query_parser.hxx"
 #include "http/request_parser.hxx"
 #include "http/response_parser.hxx"
 #include "http/server.hxx"

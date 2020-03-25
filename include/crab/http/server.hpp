@@ -12,6 +12,7 @@
 #include "../network.hpp"
 #include "../util.hpp"
 #include "connection.hpp"
+#include "query_parser.hpp"
 #include "types.hpp"
 
 namespace crab { namespace http {

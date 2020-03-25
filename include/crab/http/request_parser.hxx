@@ -47,6 +47,7 @@ CRAB_INLINE RequestParser::State RequestParser::consume(char input) {
 			throw std::runtime_error("Invalid character in method");
 		req.method.push_back(input);
 		return METHOD;
+	// TODO - collapse ./ and ../
 	case URI_START:
 		if (is_sp(input))
 			return URI_START;
@@ -92,22 +93,8 @@ CRAB_INLINE RequestParser::State RequestParser::consume(char input) {
 			throw std::runtime_error("Invalid (control) character in uri");
 		if (input == '#')
 			return URI_ANCHOR;
-		if (input == '%')
-			return URI_QUERY_STRING_PERCENT1;
 		req.query_string.push_back(input);
 		return URI_QUERY_STRING;
-	case URI_QUERY_STRING_PERCENT1:
-		percent1_hex_digit = from_hex_digit(input);
-		if (percent1_hex_digit < 0)
-			throw std::runtime_error("URI percent-encoding invalid first hex digit");
-		return URI_QUERY_STRING_PERCENT2;
-	case URI_QUERY_STRING_PERCENT2: {
-		int digit2 = from_hex_digit(input);
-		if (digit2 < 0)
-			throw std::runtime_error("URI percent-encoding invalid second hex digit");
-		req.query_string.push_back(static_cast<uint8_t>(percent1_hex_digit * 16 + digit2));
-		return URI_QUERY_STRING;
-	}
 	case URI_ANCHOR:
 		if (is_sp(input))
 			return HTTP_VERSION_H;

@@ -54,6 +54,55 @@ void message_eq(const Message &msg, const http::RequestHeader &req, const std::s
 	//	std::string sec_websocket_version;
 }
 
+void print_params(const std::unordered_map<std::string, std::string> &params, std::string name) {
+	std::cout << name << " query params:\n";
+	for (auto q : params) {
+		std::cout << "'" << q.first << "' => '" << q.second << "'\n";
+	}
+	std::cout << "-----\n\n";
+}
+
+
+void test_query_parser() {
+	auto p0  = http::parse_query_string("simple=test&oh=mygod&it=works");
+	auto p1  = http::parse_query_string("simple=&=mygod");
+	auto p2  = http::parse_query_string("test=mega=giga&=&&&");
+	auto p3  = http::parse_query_string("x=y&x=z&вася=ма%5ша&коля=ник%41а&%1%1%1%");
+	auto p4  = http::parse_query_string("hren&mega");
+	auto p5  = http::parse_query_string("Fran%C3%A7ois=%D1%82%D0%B5%D1%81%D1%82+123+%D0%BD%D0%B0%D1%84%D0%B8%D0%B3");
+	auto p6  = http::parse_query_string("end_on_%=bruh%");
+	auto p7  = http::parse_query_string("end_on_%f=bruh%a");
+	auto p8  = http::parse_query_string("end_on_%fz=bruh%az&valid%41=ok%41");
+	auto p9  = http::parse_query_string("end_on_%");
+	auto p10 = http::parse_query_string("end_on_%f");
+	auto p11 = http::parse_query_string("end_on_%41");
+
+	assert(p0.count("simple"));
+	assert(!p0.count("session"));
+	assert(p1.count("simple"));
+	assert(p1.count(""));
+
+	assert(p0.at("oh") == "mygod");
+	assert(p1.at("simple") == "");
+	assert(p1.at("") == "mygod");
+
+	// check access via index operator
+	assert(p0["simple"] == "test");
+
+	print_params(p0, "p0");
+	print_params(p1, "p1");
+	print_params(p2, "p2");
+	print_params(p3, "p3");
+	print_params(p4, "p4");
+	print_params(p5, "p5");
+	print_params(p6, "p6");
+	print_params(p7, "p7");
+	print_params(p8, "p8");
+	print_params(p9, "p9");
+	print_params(p10, "p10");
+	print_params(p11, "p11");
+}
+
 void message_eq(const Message &msg, const http::ResponseHeader &req, const std::string &body) {
 	invariant(msg.status_code == req.status, "");
 	invariant(msg.body == body, "");
@@ -109,6 +158,7 @@ int main() {
 		// (const uint8_t
 		//*)pos);
 	}
+	test_query_parser();
 	return 0;
 }
 

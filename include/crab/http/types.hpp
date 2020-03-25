@@ -10,6 +10,7 @@
 
 #include <limits>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 namespace crab { namespace http {
@@ -126,6 +127,7 @@ struct Request {
 		body                  = std::move(b);
 		header.content_length = body.size();
 	}
+	std::unordered_map<std::string, std::string> get_query_params() const;
 };
 
 struct Response {

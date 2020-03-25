@@ -58,6 +58,8 @@ set(SOURCE_FILES
 		include/crab/http/connection.hxx
 		include/crab/http/request_parser.hpp
 		include/crab/http/request_parser.hxx
+		include/crab/http/query_parser.hpp
+		include/crab/http/query_parser.hxx
 		include/crab/http/response_parser.hpp
 		include/crab/http/response_parser.hxx
 		include/crab/http/server.hpp
