@@ -43,7 +43,7 @@ namespace crab { namespace base64 {
 
 inline size_t encoded_size(size_t in_len) { return 4 * ((in_len + 2) / 3); }
 
-inline size_t max_decoded_size(const char *in, size_t in_len) {
+inline size_t max_decoded_size(const char *, size_t in_len) {
 	// In case of concatenated base64, actual count can be much less
 	return 3 * ((in_len + 3) / 4);
 }

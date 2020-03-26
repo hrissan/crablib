@@ -23,7 +23,7 @@ CRAB_INLINE void PerformanceStats::print_records(std::ostream &out) {
 	for (const auto &p : get_records()) {
 		auto mksec = std::chrono::duration_cast<std::chrono::microseconds>(p.tm.time_since_epoch()).count();
 		auto sec   = mksec / 1000000;
-		std::cout << "* " << sec << "." << mksec % 1000000 << " " << p.event_type << " " << p.count << std::endl;
+		out << "* " << sec << "." << mksec % 1000000 << " " << p.event_type << " " << p.count << std::endl;
 	}
 	clear_records();
 }

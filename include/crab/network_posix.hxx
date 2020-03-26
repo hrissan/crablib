@@ -310,12 +310,12 @@ CRAB_INLINE bool TCPSocket::is_open() const { return fd.is_valid() || rwd_handle
 CRAB_INLINE bool TCPSocket::can_write() const { return rwd_handler.can_write; }
 
 #if CRAB_IMPL_LIBEV
-void TCPSocket::io_cb_read(ev::io &w, int revents) {
+CRAB_INLINE void TCPSocket::io_cb_read(ev::io &, int) {
 	io_read.stop();
 	rwd_handler.can_read = true;
 	rwd_handler.handler();
 }
-void TCPSocket::io_cb_write(ev::io &w, int revents) {
+CRAB_INLINE void TCPSocket::io_cb_write(ev::io &, int) {
 	io_write.stop();
 	rwd_handler.can_write = true;
 	rwd_handler.handler();
@@ -444,7 +444,7 @@ CRAB_INLINE size_t TCPSocket::write_some(const uint8_t *data, size_t count) {
 }
 
 #if CRAB_IMPL_LIBEV
-void TCPAcceptor::io_cb_read(ev::io &w, int revents) {
+CRAB_INLINE void TCPAcceptor::io_cb_read(ev::io &, int) {
 	io_read.stop();
 	a_handler.can_read = true;
 	a_handler.handler();
@@ -544,7 +544,7 @@ CRAB_INLINE bool TCPAcceptor::can_accept() {
 CRAB_INLINE bool UDPTransmitter::can_write() const { return w_handler.can_write; }
 
 #if CRAB_IMPL_LIBEV
-void UDPTransmitter::io_cb_write(ev::io &w, int revents) {
+CRAB_INLINE void UDPTransmitter::io_cb_write(ev::io &, int) {
 	io_write.stop();
 	w_handler.can_write = true;
 	w_handler.handler();
@@ -613,7 +613,7 @@ CRAB_INLINE bool UDPTransmitter::write_datagram(const uint8_t *data, size_t coun
 }
 
 #if CRAB_IMPL_LIBEV
-void UDPReceiver::io_cb_read(ev::io &w, int revents) {
+CRAB_INLINE void UDPReceiver::io_cb_read(ev::io &, int) {
 	io_read.stop();
 	r_handler.can_read = true;
 	r_handler.handler();

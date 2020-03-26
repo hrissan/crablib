@@ -45,7 +45,7 @@ private:
 	friend struct details::RunLoopLinks;
 #elif CRAB_IMPL_LIBEV
 	ev::timer impl;
-	void io_cb(ev::timer &w, int revents) { a_handler(); }
+	void io_cb(ev::timer &, int) { a_handler(); }
 #else
 	std::unique_ptr<TimerImpl> impl;
 	friend struct TimerImpl;
@@ -71,7 +71,7 @@ private:
 	friend struct details::RunLoopLinks;
 #elif CRAB_IMPL_LIBEV
 	ev::async impl;
-	void io_cb(ev::async &w, int revents) { a_handler.handler(); }
+	void io_cb(ev::async &, int) { a_handler.handler(); }
 #else
 	std::unique_ptr<WatcherImpl> impl;
 	friend struct WatcherImpl;
@@ -93,7 +93,7 @@ private:
 	Handler a_handler;
 #if CRAB_IMPL_LIBEV
 	ev::idle impl;
-	void io_cb(ev::idle &w, int revents) { a_handler(); }
+	void io_cb(ev::idle &, int) { a_handler(); }
 #else
 	IntrusiveNode<Idle> idle_node;  // None of our impls have idle handlers
 	friend class RunLoop;
@@ -216,11 +216,11 @@ private:
 #if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL || CRAB_IMPL_LIBEV
 	details::FileDescriptor fd;
 #if CRAB_IMPL_LIBEV
-	Timer closed_event;
 	ev::io io_read;
 	ev::io io_write;
-	void io_cb_read(ev::io &w, int revents);
-	void io_cb_write(ev::io &w, int revents);
+	void io_cb_read(ev::io &, int);
+	void io_cb_write(ev::io &, int);
+	Timer closed_event;
 #endif
 #else
 	std::unique_ptr<TCPSocketImpl> impl;
@@ -259,7 +259,7 @@ private:
 	// accept.
 #if CRAB_IMPL_LIBEV
 	ev::io io_read;
-	void io_cb_read(ev::io &w, int revents);
+	void io_cb_read(ev::io &, int);
 #endif
 #else
 	std::unique_ptr<TCPAcceptorImpl> impl;
@@ -288,7 +288,7 @@ private:
 	details::FileDescriptor fd;
 #if CRAB_IMPL_LIBEV
 	ev::io io_write;
-	void io_cb_write(ev::io &w, int revents);
+	void io_cb_write(ev::io &, int);
 #endif
 #else
 //  TODO - implement on other platforms
@@ -318,7 +318,7 @@ private:
 	details::FileDescriptor fd;
 #if CRAB_IMPL_LIBEV
 	ev::io io_read;
-	void io_cb_read(ev::io &w, int revents);
+	void io_cb_read(ev::io &, int);
 #endif
 #else
 	//  TODO - implement on other platforms
@@ -352,6 +352,11 @@ struct RunLoopLinks : private Nocopy {  // Common structure when implementing ov
 
 class RunLoop {
 public:
+#if CRAB_IMPL_LIBEV
+	// TODO - remove after KITTEN is cured
+	enum DefaultLoop {};
+	explicit RunLoop(DefaultLoop);
+#endif
 	RunLoop();
 	~RunLoop();
 
@@ -373,7 +378,7 @@ public:
 #if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL
 	void impl_add_callable_fd(int fd, Callable *callable, bool read, bool write);
 #elif CRAB_IMPL_LIBEV
-	ev::loop_ref &get_impl() { return impl; }
+	ev::loop_ref &get_impl() { return *impl.get(); }
 #else
 	RunLoopImpl *get_impl() const { return impl.get(); }
 #endif
@@ -402,7 +407,9 @@ private:
 #endif
 	Callable wake_callable;
 #elif CRAB_IMPL_LIBEV
-	ev::dynamic_loop impl;
+	// TODO - change back after KITTEN is cured
+	std::unique_ptr<ev::loop_ref> impl;
+//	ev::dynamic_loop impl;
 #else
 	std::unique_ptr<RunLoopImpl> impl;
 #endif

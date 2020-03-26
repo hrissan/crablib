@@ -64,9 +64,15 @@ CRAB_INLINE SignalStop::SignalStop(Handler &&cb) : a_handler(std::move(cb)) {}
 
 CRAB_INLINE SignalStop::~SignalStop() {}
 
-CRAB_INLINE bool SignalStop::running_under_debugger() {}
+CRAB_INLINE bool SignalStop::running_under_debugger() { return false; }
 
-CRAB_INLINE RunLoop::RunLoop() {
+CRAB_INLINE RunLoop::RunLoop() : impl(new ev::dynamic_loop{}) {
+	if (CurrentLoop::instance)
+		throw std::runtime_error("RunLoop::RunLoop Only single RunLoop per thread is allowed");
+	CurrentLoop::instance = this;
+}
+
+CRAB_INLINE RunLoop::RunLoop(DefaultLoop) : impl(new ev::default_loop{}) {
 	if (CurrentLoop::instance)
 		throw std::runtime_error("RunLoop::RunLoop Only single RunLoop per thread is allowed");
 	CurrentLoop::instance = this;
@@ -74,9 +80,9 @@ CRAB_INLINE RunLoop::RunLoop() {
 
 CRAB_INLINE RunLoop::~RunLoop() { CurrentLoop::instance = this; }
 
-CRAB_INLINE void RunLoop::run() { impl.run(); }
+CRAB_INLINE void RunLoop::run() { impl->run(); }
 
-CRAB_INLINE void RunLoop::cancel() { impl.break_loop(); }
+CRAB_INLINE void RunLoop::cancel() { impl->break_loop(); }
 
 CRAB_INLINE steady_clock::time_point RunLoop::now() {
 	return steady_clock::now();  // TODO convert impl.now();
