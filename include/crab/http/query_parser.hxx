@@ -168,15 +168,14 @@ CRAB_INLINE std::unordered_map<std::string, std::string> parse_query_string(cons
 CRAB_INLINE void CookieParser::persist_pair() {
 	trim_right(key_);
 	trim_right(value_);
-	if (key_.empty() && value_.empty())
-		return;
 	parsed[key_] = value_;  // If identical, second one wins
 	key_.clear();
 	value_.clear();
 }
 
 CRAB_INLINE CookieParser::State CookieParser::consume_end() {
-	persist_pair();
+	if (state != KEY_WS_BEFORE)
+		persist_pair();
 	return KEY_WS_BEFORE;
 }
 
@@ -184,6 +183,8 @@ CRAB_INLINE CookieParser::State CookieParser::consume(char input) {
 	switch (state) {
 	case KEY_WS_BEFORE:
 		if (is_sp(input))
+			return KEY_WS_BEFORE;
+		if (input == ';')
 			return KEY_WS_BEFORE;
 		// note: fallthru to KEY
 	case KEY:
