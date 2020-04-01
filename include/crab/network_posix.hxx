@@ -3,7 +3,7 @@
 
 #include "network.hpp"
 
-#if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL
+#if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL
 
 #include <algorithm>
 #include <iostream>
@@ -19,13 +19,13 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#if CRAB_SOCKET_KEVENT
+#if CRAB_IMPL_KEVENT
 #include <sys/event.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #endif
 
-#if CRAB_SOCKET_EPOLL
+#if CRAB_IMPL_EPOLL
 #include <sys/epoll.h>
 #include <sys/eventfd.h>
 #include <sys/signalfd.h>
@@ -88,7 +88,7 @@ CRAB_INLINE ip_mreqn fill_ip_mreqn(const std::string &adapter) {
 
 }  // namespace details
 
-#if CRAB_SOCKET_KEVENT
+#if CRAB_IMPL_KEVENT
 
 namespace details {
 
@@ -163,7 +163,7 @@ CRAB_INLINE SignalStop::~SignalStop() {
 
 CRAB_INLINE bool SignalStop::running_under_debugger() { return false; }
 
-#elif CRAB_SOCKET_EPOLL
+#elif CRAB_IMPL_EPOLL
 namespace details {
 
 constexpr int CRAB_MSG_NOSIGNAL = MSG_NOSIGNAL;
@@ -293,7 +293,7 @@ CRAB_INLINE bool TCPSocket::connect(const Address &address) {
 	try {
 		details::FileDescriptor tmp(::socket(address.impl_get_sockaddr()->sa_family, SOCK_STREAM, IPPROTO_TCP),
 		    "crab::connect socket() failed");
-#if CRAB_SOCKET_KEVENT
+#if CRAB_IMPL_KEVENT
 		details::setsockopt_1(tmp.get_value(), SOL_SOCKET, SO_NOSIGPIPE);
 #endif
 		details::set_nonblocking(tmp.get_value());
@@ -385,7 +385,7 @@ CRAB_INLINE TCPAcceptor::TCPAcceptor(const Address &address, Handler &&cb)
     : a_handler(std::move(cb)), fd_limit_timer([&]() { a_handler.handler(); }) {
 	details::FileDescriptor tmp(::socket(address.impl_get_sockaddr()->sa_family, SOCK_STREAM, IPPROTO_TCP),
 	    "crab::TCPAcceptor socket() failed");
-#if CRAB_SOCKET_KEVENT
+#if CRAB_IMPL_KEVENT
 	details::setsockopt_1(tmp.get_value(), SOL_SOCKET, SO_NOSIGPIPE);
 #endif
 	details::setsockopt_1(tmp.get_value(), SOL_SOCKET, SO_REUSEADDR);
@@ -409,10 +409,10 @@ CRAB_INLINE bool TCPAcceptor::can_accept() {
 	while (true) {
 		try {
 			socklen_t in_len = sizeof(sockaddr_storage);
-#if CRAB_SOCKET_KEVENT
+#if CRAB_IMPL_KEVENT
 			details::FileDescriptor sd(::accept(fd.get_value(), in_addr.impl_get_sockaddr(), &in_len));
 			// On FreeBSD non-blocking flag is inherited automatically - very smart :)
-#else  // CRAB_SOCKET_EPOLL
+#else  // CRAB_IMPL_EPOLL
 			details::FileDescriptor sd(
 			    ::accept4(fd.get_value(), in_addr.impl_get_sockaddr(), &in_len, SOCK_NONBLOCK));
 #endif
@@ -443,7 +443,7 @@ CRAB_INLINE bool TCPAcceptor::can_accept() {
 				fd_limit_timer.once(1);
 				return false;
 			}
-#if CRAB_SOCKET_KEVENT
+#if CRAB_IMPL_KEVENT
 			details::setsockopt_1(sd.get_value(), SOL_SOCKET, SO_NOSIGPIPE);
 #endif
 			details::setsockopt_1(sd.get_value(), IPPROTO_TCP, TCP_NODELAY);

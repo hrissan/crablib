@@ -35,7 +35,7 @@ public:
 private:
 	Handler a_handler;
 
-#if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL || CRAB_SOCKET_WINDOWS
+#if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL || CRAB_IMPL_WINDOWS
 	struct HeapPred {
 		bool operator()(const Timer &a, const Timer &b) { return a.fire_time > b.fire_time; }
 	};
@@ -63,7 +63,7 @@ private:
 	RunLoop *loop = nullptr;  // Will need when calling from the other threads
 	Callable a_handler;
 
-#if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL || CRAB_SOCKET_WINDOWS
+#if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL || CRAB_IMPL_WINDOWS
 	IntrusiveNode<Watcher> fired_objects_node;  // protected by runloop mutex
 	friend struct details::RunLoopLinks;
 #else
@@ -107,7 +107,7 @@ public:
 	// Sometimes signals interfere with debugger. Use this fun to conditionally create SignalStop
 private:
 	Callable a_handler;
-#if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL
+#if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL
 	details::FileDescriptor fd;
 #else
 	// on Windows we can use https://stackoverflow.com/questions/18291284/handle-ctrlc-on-win32
@@ -128,14 +128,14 @@ public:
 	std::string to_string() const { return get_address() + ":" + std::to_string(get_port()); }
 	bool is_multicast() const;
 
-#if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL || CRAB_SOCKET_WINDOWS
+#if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL || CRAB_IMPL_WINDOWS
 	const sockaddr *impl_get_sockaddr() const { return reinterpret_cast<const sockaddr *>(&addr); }
 	sockaddr *impl_get_sockaddr() { return reinterpret_cast<sockaddr *>(&addr); }
 	int impl_get_sockaddr_length() const;
 
 private:
 	sockaddr_storage addr = {};
-#elif CRAB_SOCKET_BOOST
+#elif CRAB_IMPL_BOOST
 	explicit Address(boost::asio::ip::address &&address, uint16_t port) : addr(std::move(address)), port(port) {}
 	const boost::asio::ip::address &get_addr() const { return addr; }
 
@@ -200,7 +200,7 @@ public:
 private:
 	Callable rwd_handler;
 
-#if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL
+#if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL
 	details::FileDescriptor fd;
 #else
 	std::unique_ptr<TCPSocketImpl> impl;
@@ -221,7 +221,7 @@ private:
 
 	Callable a_handler;
 
-#if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL
+#if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL
 	details::FileDescriptor fd;
 
 	// We actually accept in can_accept, so that TCPSocket::accept never fails
@@ -260,7 +260,7 @@ public:
 private:
 	Callable w_handler;
 
-#if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL
+#if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL
 	details::FileDescriptor fd;
 #else
 //  TODO - implement on other platforms
@@ -286,7 +286,7 @@ public:
 private:
 	Callable r_handler;
 
-#if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL
+#if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL
 	details::FileDescriptor fd;
 #else
 	//  TODO - implement on other platforms
@@ -295,7 +295,7 @@ private:
 #endif
 };
 
-#if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL || CRAB_SOCKET_WINDOWS
+#if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL || CRAB_IMPL_WINDOWS
 
 namespace details {
 struct RunLoopLinks : private Nocopy {  // Common structure when implementing over low-level interface
@@ -338,7 +338,7 @@ public:
 	// On some systems, epoll_wait() timeouts greater than 35.79 minutes are treated as infinity.
 	// Spurious wakeup once every 30 minutes is harmless, timeout can be reduced further if needed.
 
-#if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL
+#if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL
 	void impl_add_callable_fd(int fd, Callable *callable, bool read, bool write);
 #else
 	RunLoopImpl *get_impl() const { return impl.get(); }
@@ -356,12 +356,12 @@ private:
 	using CurrentLoop = details::StaticHolderTL<RunLoop *>;
 
 	IntrusiveList<Idle, &Idle::idle_node> idle_handlers;  // None of our impls have idles
-#if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL || CRAB_SOCKET_WINDOWS
+#if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL || CRAB_IMPL_WINDOWS
 	details::RunLoopLinks links;
 #endif
-#if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL
+#if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL
 	details::FileDescriptor efd;
-#if CRAB_SOCKET_EPOLL
+#if CRAB_IMPL_EPOLL
 	details::FileDescriptor wake_fd;
 #endif
 	Callable wake_callable;

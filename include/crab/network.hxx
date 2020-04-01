@@ -61,7 +61,7 @@ CRAB_INLINE void Idle::set_active(bool a) {
 	}
 }
 
-#if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL || CRAB_SOCKET_WINDOWS
+#if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL || CRAB_IMPL_WINDOWS
 
 CRAB_INLINE void Callable::add_pending_callable(bool can_read, bool can_write) {
 	this->can_read  = this->can_read || can_read;
@@ -271,7 +271,7 @@ private:
 
 	std::thread dns_thread{&DNSWorker::worker_fun, this};
 	void worker_fun() {
-#if CRAB_SOCKET_BOOST
+#if CRAB_IMPL_BOOST
 		RunLoop runloop;  // boost sync resolve requires io_service
 #endif
 		while (true) {

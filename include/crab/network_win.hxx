@@ -6,7 +6,7 @@
 #include <iostream>
 #include "network.hpp"
 
-#if CRAB_SOCKET_WINDOWS
+#if CRAB_IMPL_WINDOWS
 
 #include <WS2tcpip.h>
 #include <WinSock2.h>

@@ -22,17 +22,17 @@ option(CRAB_FUZZ "builds binaries for fuzzing" OFF)
 #	add_definitions(-DCRAB_COMPILE=1)
 #endif()
 
-message("-DCRAB_SOCKET_BOOST=1 builds examples using boost as an implementation")
-option(CRAB_SOCKET_BOOST "builds examples using headers+sources" OFF)
+message("-DCRAB_IMPL_BOOST=1 builds examples using boost as an implementation")
+option(CRAB_IMPL_BOOST "builds examples using headers+sources" OFF)
 
-if(CRAB_SOCKET_BOOST)
-	message("-DCRAB_SOCKET_BOOST=1")
-	add_definitions(-DCRAB_SOCKET_BOOST=1)
+if(CRAB_IMPL_BOOST)
+	message("-DCRAB_IMPL_BOOST=1")
+	add_definitions(-DCRAB_IMPL_BOOST=1)
 endif()
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/bin")
 
-if(CRAB_SOCKET_BOOST) # Must be before all executables
+if(CRAB_IMPL_BOOST) # Must be before all executables
 	set(Boost_USE_STATIC_LIBS ON)
 	add_definitions(-DBOOST_BIND_NO_PLACEHOLDERS=1 -DBOOST_CONFIG_SUPPRESS_OUTDATED_MESSAGE=1) # boost::_1 conflicts with std::_1
 	add_definitions(-DBOOST_ERROR_CODE_HEADER_ONLY=1 -DBOOST_SYSTEM_NO_DEPRECATED=1) # required for header-only compilation

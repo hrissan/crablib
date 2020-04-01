@@ -4,7 +4,7 @@
 #include "network_posix.hxx"
 #include "network_win.hxx"
 
-#if CRAB_SOCKET_KEVENT || CRAB_SOCKET_EPOLL || CRAB_SOCKET_WINDOWS
+#if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL || CRAB_IMPL_WINDOWS
 
 // Surprisngly, some code compiles without changes on all 3 systems
 
