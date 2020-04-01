@@ -77,7 +77,7 @@ CRAB_INLINE void Random::bytes(uint8_t *buffer, size_t size) {
 		return;
 	auto value = mt();
 	for (; i < size; i += 1) {
-		buffer[i] = value;
+		buffer[i] = static_cast<uint8_t>(value);
 		value >>= 8U;
 	}
 }

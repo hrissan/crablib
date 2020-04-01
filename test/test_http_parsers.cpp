@@ -22,6 +22,7 @@
 // Copyright (c) 2007-2020, Grigory Buteyko aka Hrissan
 // Licensed under the MIT License. See LICENSE for details.
 
+#include <assert.h>
 #include <fstream>
 #include <iostream>
 
@@ -236,7 +237,7 @@ int main2() {
 	std::cout << "Running benchmark..." << std::endl;
 
 	auto start = std::chrono::steady_clock::now();
-	int result = 0;
+	size_t result = 0;
 	http::RequestParser req;
 	for (size_t i = 0; i < iterations; i++) {
 		req = http::RequestParser{};
@@ -254,5 +255,5 @@ int main2() {
 	std::cout << "---" << std::endl << "Benchmark result:" << std::endl;
 	std::cout << total / (1024 * 1024) << " mb | " << bw / (1024 * 1024) << " mb/s | " << iterations / elapsed
 	          << " req/sec | " << elapsed << " s" << std::endl;
-	return result;
+	return static_cast<int>(result);
 }

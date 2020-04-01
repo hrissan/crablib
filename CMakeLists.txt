@@ -17,12 +17,12 @@ if(CRAB_SOCKET_BOOST)
 	add_definitions(-DCRAB_SOCKET_BOOST=1)
 endif()
 
-#if(MSVC)
-#    add_definitions(-D_SCL_SECURE_NO_WARNINGS=1 -D_CRT_SECURE_NO_WARNINGS=1 -D_WIN32_WINNT=0x0601)
-#    add_compile_options(/we4715) # not all paths return value is error
-#else()
+if(MSVC)
+    add_definitions(-D_SCL_SECURE_NO_WARNINGS=1 -D_CRT_SECURE_NO_WARNINGS=1) #  -D_WIN32_WINNT=0x0601
+    add_compile_options(/we4715) # not all paths return value is error
+else()
 #	add_compile_options(-g -Wall -Wextra -Werror=return-type -Wno-unused-parameter)
-#endif()
+endif()
 
 
 set(SOURCE_FILES

@@ -1,6 +1,10 @@
 // License not clear, taken from https://rextester.com/BUAFK86204
 // https://stackoverflow.com/questions/14388706/how-do-so-reuseaddr-and-so-reuseport-differ
 
+#if defined(_WIN32)
+int main() { return 0; }
+#else
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <inttypes.h>
@@ -350,3 +354,4 @@ int main (
 
     return EXIT_SUCCESS;
 }
+#endif

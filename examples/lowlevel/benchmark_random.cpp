@@ -7,6 +7,7 @@
 #include <iostream>
 #include <limits>
 #include <random>
+#include <string>
 
 template<typename T>
 T local_rol(T mask, size_t shift) {
@@ -31,23 +32,23 @@ void check_uniformity(const std::string &label) {
 	std::array<std::vector<size_t>, 5> indexes;
 	for (auto &arr : indexes)
 		arr.resize(62);
-	for (size_t i = 0; i <= std::numeric_limits<uint32_t>::max(); i++) {
+	for (uint64_t i = 0; i <= std::numeric_limits<uint32_t>::max(); i++) {
 		if (Alg == 0) {
-			uint32_t value = i;
+			uint32_t value = static_cast<uint32_t>(i);
 			for (size_t a = 0; a != 5; ++a) {
-				uint32_t result = (uint64_t(value) * 62) >> 32;
+				uint32_t result = static_cast<uint32_t>((uint64_t(value) * 62) >> 32);
 				value           = local_rol(value, 6);
 				indexes[a][result] += 1;
 			}
 		} else if (Alg == 1) {
-			uint32_t value = i;  // distr(mt); //mt(); // Simulate rnd()
+			uint32_t value = static_cast<uint32_t>(i);  // distr(mt); //mt(); // Simulate rnd()
 			for (size_t a = 0; a != 5; ++a) {
-				uint32_t result = ((value >> 6) * 62) >> 26;
+				uint32_t result = static_cast<uint32_t>(((value >> 6) * 62) >> 26);
 				value           = local_rol(value, 6);
 				indexes[a][result] += 1;
 			}
 		} else if (Alg == 2) {
-			uint32_t value = i;  // distr(mt); //mt(); // Simulate rnd()
+			uint32_t value = static_cast<uint32_t>(i);  // distr(mt); //mt(); // Simulate rnd()
 			if (value > LONG_TAIL)
 				continue;
 			for (size_t a = 0; a != 5; ++a) {

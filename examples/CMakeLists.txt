@@ -54,7 +54,7 @@ endif()
 
 add_subdirectory ( .. EXCLUDE_FROM_ALL ${CMAKE_CURRENT_BINARY_DIR}/crablib)
 
-link_libraries(crablib::crablib-header-only)
+link_libraries(crablib::crablib)
 
 find_package (Threads)
 link_libraries (Threads::Threads)
