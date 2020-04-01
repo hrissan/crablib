@@ -8,8 +8,10 @@ project(crablib
 
 set(CMAKE_CXX_STANDARD 11)
 
-#message("-DCRAB_IMPL_BOOST=1 builds examples using boost as an implementation")
-#option(CRAB_IMPL_BOOST "builds examples using headers+sources" OFF)
+if(CRAB_IMPL_LIBEV)
+	message("-DCRAB_IMPL_LIBEV=1")
+	add_definitions(-DCRAB_IMPL_LIBEV=1)
+endif()
 
 if(CRAB_IMPL_BOOST)
 	message("-DCRAB_IMPL_BOOST=1")
@@ -21,6 +23,7 @@ if(MSVC)
     add_definitions(-D_SCL_SECURE_NO_WARNINGS=1 -D_CRT_SECURE_NO_WARNINGS=1) #  -D_WIN32_WINNT=0x0601
     add_compile_options(/we4715) # not all paths return value is error
 else()
+    add_compile_options(-Wno-noexcept-type)
 #	add_compile_options(-g -Wall -Wextra -Werror=return-type -Wno-unused-parameter)
 endif()
 

@@ -63,8 +63,6 @@ CRAB_INLINE void Idle::set_active(bool a) {
 	}
 }
 
-CRAB_INLINE void RunLoop::cancel() { links.quit = true; }
-
 #endif
 
 #if CRAB_IMPL_LIBEV
@@ -138,6 +136,8 @@ CRAB_INLINE void RunLoopLinks::trigger_called_watchers() {
 	}
 }
 }  // namespace details
+
+CRAB_INLINE void RunLoop::cancel() { links.quit = true; }
 
 CRAB_INLINE void RunLoop::run() {
 	links.quit = false;
