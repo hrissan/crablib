@@ -296,6 +296,8 @@ public:
 	}
 };
 
+CRAB_INLINE TCPSocket::~TCPSocket() { close(); }
+
 CRAB_INLINE void TCPSocket::close() {
 	if (impl)
 		impl->close(false);

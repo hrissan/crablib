@@ -157,7 +157,7 @@ public:
 	// in your handler, first check for is_open(), if false, socket was closed
 	void set_handler(Handler &&cb) { rwd_handler.handler = std::move(cb); }
 
-	~TCPSocket() override { close(); }
+	~TCPSocket() override;
 	void close();
 	// after close you are guaranteed that no handlers will be called
 	bool is_open() const;  // Connecting or connected

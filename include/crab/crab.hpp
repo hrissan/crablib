@@ -9,6 +9,9 @@
 #include "integer_cast.hpp"
 #include "network.hpp"
 
+#include "crypto/base64.hpp"
+#include "crypto/sha1.hpp"
+
 namespace crab {
 
 }  // namespace crab

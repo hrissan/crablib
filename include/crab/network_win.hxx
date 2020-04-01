@@ -332,6 +332,8 @@ struct TCPSocketImpl {
 
 size_t TCPSocketImpl::tcp_id_counter = 0;
 
+CRAB_INLINE TCPSocket::~TCPSocket() { close(); }
+
 CRAB_INLINE void TCPSocket::close() {
 	rwd_handler.cancel_callable();
 	if (!impl || impl->fd.get_value() == -1)
