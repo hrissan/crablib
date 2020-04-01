@@ -25,9 +25,10 @@ option(CRAB_FUZZ "builds binaries for fuzzing" OFF)
 message("-DCRAB_SOCKET_BOOST=1 builds examples using boost as an implementation")
 option(CRAB_SOCKET_BOOST "builds examples using headers+sources" OFF)
 
-#if(CRAB_SOCKET_BOOST)
-#	add_definitions(-DCRAB_SOCKET_BOOST=1)
-#endif()
+if(CRAB_SOCKET_BOOST)
+	message("-DCRAB_SOCKET_BOOST=1")
+	add_definitions(-DCRAB_SOCKET_BOOST=1)
+endif()
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/bin")
 
@@ -40,6 +41,7 @@ if(CRAB_SOCKET_BOOST) # Must be before all executables
 	find_package(Boost 1.65)
 	if(Boost_FOUND)
 		message( STATUS "Boost found by find_boost, Boost_INCLUDE_DIRS: " ${Boost_INCLUDE_DIRS})
+		include_directories(${Boost_INCLUDE_DIRS})
 	else()
 		if(NOT EXISTS "${PARENT_DIR}/boost/boost/version.hpp")
 			message(FATAL_ERROR "Boost not found, please download and unpack boost into ${PARENT_DIR}/boost")
