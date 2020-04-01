@@ -236,7 +236,7 @@ const size_t iterations = kBytes / int64_t(data_len);
 int main2() {
 	std::cout << "Running benchmark..." << std::endl;
 
-	auto start = std::chrono::steady_clock::now();
+	auto start    = std::chrono::steady_clock::now();
 	size_t result = 0;
 	http::RequestParser req;
 	for (size_t i = 0; i < iterations; i++) {

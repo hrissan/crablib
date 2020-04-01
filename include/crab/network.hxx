@@ -210,6 +210,8 @@ CRAB_INLINE void Timer::once_at(steady_clock::time_point time_point) {
 	}
 }
 
+CRAB_INLINE Timer::Timer(Handler &&cb) : a_handler(std::move(cb)) {}
+
 CRAB_INLINE Timer::~Timer() { cancel(); }
 
 CRAB_INLINE bool Timer::is_set() const { return heap_index.in_heap(); }

@@ -49,7 +49,6 @@ CRAB_INLINE RunLoop::RunLoop() : impl(new RunLoopImpl()) {
 	if (CurrentLoop::instance)
 		throw std::runtime_error("RunLoop::RunLoop Only single RunLoop per thread is allowed");
 	CurrentLoop::instance = this;
-	std::cout << "crab::RunLoop is using boost as a low-level" << std::endl;
 }
 
 CRAB_INLINE RunLoop::~RunLoop() { CurrentLoop::instance = this; }
@@ -155,6 +154,8 @@ public:
 		timer.async_wait([&](boost::system::error_code e) { handle_timeout(e); });
 	}
 };
+
+CRAB_INLINE Timer::Timer(Handler &&cb) : a_handler(std::move(cb)) {}
 
 CRAB_INLINE Timer::~Timer() { cancel(); }
 

@@ -9,6 +9,8 @@ namespace http = crab::http;
 
 int main() {
 	std::cout << "This is simple HTTP server on port 7000" << std::endl;
+	std::cout << "crab_version=" << crab::version_string() << std::endl;
+
 	crab::RunLoop runloop;
 
 	http::Server server(7000);

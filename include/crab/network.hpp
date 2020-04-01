@@ -15,7 +15,7 @@ namespace crab {
 
 class Timer {
 public:
-	explicit Timer(Handler &&cb) : a_handler(std::move(cb)) {}
+	explicit Timer(Handler &&cb);
 	void set_handler(Handler &&cb) { a_handler = std::move(cb); }
 	~Timer();
 

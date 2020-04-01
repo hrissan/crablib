@@ -8,12 +8,6 @@
 // #define CRAB_COMPILE 1 <- Set this in project settings to select compiled version of lib
 // #define CRAB_SOCKET_BOOST 1 <- Set this to make crab a wrapper around boost::asio
 
-namespace crab {
-
-inline std::string version() { return "0.8"; }
-
-}  // namespace crab
-
 // Our selector of network implementation
 #if CRAB_SOCKET_BOOST  // Define in CMakeLists to select this impl
 #include <boost/asio.hpp>
@@ -34,3 +28,22 @@ inline std::string version() { return "0.8"; }
 #else
 #define CRAB_INLINE inline
 #endif
+
+#define CRAB_VERSION "0.8.0"
+// Not in cmake, we wish to be easily includable in header-only mode
+
+namespace crab {
+
+#if CRAB_SOCKET_KEVENT
+inline std::string version_string() { return CRAB_VERSION " (kevent)"; }
+#elif CRAB_SOCKET_EPOLL
+inline std::string version_string() { return CRAB_VERSION " (epoll)"; }
+#elif CRAB_SOCKET_WINDOWS
+inline std::string version_string() { return CRAB_VERSION " (windows)"; }
+#elif CRAB_SOCKET_BOOST
+inline std::string version_string() { return CRAB_VERSION " (boost)"; }
+#else
+#error "Please add appropriate version string here"
+#endif
+
+}  // namespace crab

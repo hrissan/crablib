@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.0)
 
 project(crablib
-	VERSION "0.8"
+	VERSION "0.8.0"
 	DESCRIPTION "Experiments to create cross-platform wrapper for Runloop/Timers/Sockets/ITC with lowest possible overhead on UNIX platforms"
 	HOMEPAGE_URL "https://github.com/hrissan/crablib"
 	LANGUAGES C CXX)
