@@ -1,6 +1,9 @@
 build
 build2
 bin
+examples/build
+examples/build2
+examples/bin
 
 # Mac specific
 .DS_Store

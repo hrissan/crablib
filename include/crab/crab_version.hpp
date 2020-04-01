@@ -10,12 +10,6 @@
 // #define CRAB_IMPL_BOOST 1 <- Set this to make crab a wrapper around boost::asio
 // #define CRAB_IMPL_LIBEV 1 <- Set this to make crab a wrapper around libev
 
-namespace crab {
-
-inline std::string version() { return "0.4"; }
-
-}  // namespace crab
-
 // Our selector of low-level implementation
 
 // clang-format off
@@ -41,5 +35,26 @@ inline std::string version() { return "0.4"; }
 #else
     #define CRAB_INLINE inline
 #endif
+
+#define CRAB_VERSION "0.8.0"
+// Not in cmake, we wish to be easily includable in header-only mode
+
+namespace crab {
+
+#if CRAB_IMPL_KEVENT
+	inline std::string version_string() { return CRAB_VERSION " (kevent)"; }
+#elif CRAB_IMPL_EPOLL
+	inline std::string version_string() { return CRAB_VERSION " (epoll)"; }
+#elif CRAB_IMPL_WINDOWS
+	inline std::string version_string() { return CRAB_VERSION " (windows)"; }
+#elif CRAB_IMPL_BOOST
+	inline std::string version_string() { return CRAB_VERSION " (boost)"; }
+#elif CRAB_IMPL_LIBEV
+	inline std::string version_string() { return CRAB_VERSION " (libev)"; }
+#else
+	#error "Please add appropriate version string here"
+#endif
+
+}  // namespace crab
 
 // clang-format on

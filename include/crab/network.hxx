@@ -77,8 +77,6 @@ CRAB_INLINE void Callable::add_pending_callable(bool can_read, bool can_write) {
 
 #if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL || CRAB_IMPL_WINDOWS
 
-CRAB_INLINE Timer::Timer(Handler &&cb) : a_handler(std::move(cb)) {}
-
 CRAB_INLINE void Callable::add_pending_callable(bool can_read, bool can_write) {
 	this->can_read  = this->can_read || can_read;
 	this->can_write = this->can_write || can_write;
@@ -225,6 +223,8 @@ CRAB_INLINE void Timer::once_at(steady_clock::time_point time_point) {
 		RunLoop::current()->links.active_timers.insert(*this);
 	}
 }
+
+CRAB_INLINE Timer::Timer(Handler &&cb) : a_handler(std::move(cb)) {}
 
 CRAB_INLINE Timer::~Timer() { cancel(); }
 

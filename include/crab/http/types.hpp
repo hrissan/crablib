@@ -10,6 +10,7 @@
 
 #include <limits>
 #include <string>
+#include <unordered_map>
 #include <vector>
 
 // TODO - cookie https://stackoverflow.com/questions/1969232/what-are-allowed-characters-in-cookies
@@ -129,6 +130,8 @@ struct Request {
 		body                  = std::move(b);
 		header.content_length = body.size();
 	}
+	std::unordered_map<std::string, std::string> parse_query_params() const;
+	std::unordered_map<std::string, std::string> parse_cookies() const;
 };
 
 struct Response {

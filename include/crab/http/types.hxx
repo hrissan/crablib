@@ -223,6 +223,30 @@ CRAB_INLINE std::string ResponseHeader::generate_sec_websocket_accept(const std:
 	return base64::encode(result, sha1::hash_size);
 }
 
+CRAB_INLINE std::unordered_map<std::string, std::string> Request::parse_query_params() const {
+	QueryParser p;
+	p.parse(header.query_string);
+	p.parse_end();
+	if (header.method == Literal{"GET"})  // All other methods support params in body
+		return std::move(p.parsed);
+	// TODO - multipart data
+	if (header.content_type_mime != Literal{"application/x-www-form-urlencoded"})
+		return std::move(p.parsed);
+	p.parse(body);
+	p.parse_end();
+	return std::move(p.parsed);
+}
+
+CRAB_INLINE std::unordered_map<std::string, std::string> Request::parse_cookies() const {
+	CookieParser p;
+	for (const auto &h : header.headers)
+		if (h.name == Literal{"cookie"}) {
+			p.parse(h.value);
+			p.parse_end();
+		}
+	return std::move(p.parsed);
+}
+
 CRAB_INLINE Response Response::simple(int status, const std::string &content_type, std::string &&body) {
 	Response response;
 	response.header.add_headers_nocache();

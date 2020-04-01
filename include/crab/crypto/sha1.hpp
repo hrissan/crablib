@@ -1,7 +1,11 @@
 // Licensed under the Unlicense. See https://github.com/983/SHA1/blob/master/LICENSE for details.
 
+#pragma once
+
 #include <stdint.h>
 #include <string.h>
+
+namespace crab {
 
 class sha1 {
 private:
@@ -211,3 +215,5 @@ public:
 
 	static constexpr size_t hash_size = 20;
 };
+
+}  // namespace crab
