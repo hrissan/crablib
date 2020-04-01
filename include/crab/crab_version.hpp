@@ -10,7 +10,7 @@
 
 namespace crab {
 
-inline std::string version() { return "0.4"; }
+inline std::string version() { return "0.8"; }
 
 }  // namespace crab
 

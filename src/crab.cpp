@@ -3,7 +3,7 @@
 
 #if CRAB_COMPILE
 
-#include "crab.hpp"
-#include "all.hxx"
+#include "../include/crab/crab.hpp"
+#include "../include/crab/all.hxx"
 
 #endif
