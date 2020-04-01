@@ -296,6 +296,8 @@ public:
 	}
 };
 
+CRAB_INLINE TCPSocket::TCPSocket(Handler &&cb) : rwd_handler(std::move(cb)) {}
+
 CRAB_INLINE TCPSocket::~TCPSocket() { close(); }
 
 CRAB_INLINE void TCPSocket::close() {

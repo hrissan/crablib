@@ -271,6 +271,8 @@ CRAB_INLINE bool SignalStop::running_under_debugger() {
 
 CRAB_INLINE void RunLoop::cancel() { links.quit = true; }
 
+CRAB_INLINE TCPSocket::TCPSocket(Handler &&cb) : rwd_handler(std::move(cb)) {}
+
 CRAB_INLINE TCPSocket::~TCPSocket() { close(); }
 
 CRAB_INLINE void TCPSocket::close() {

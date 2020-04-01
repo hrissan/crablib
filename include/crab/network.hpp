@@ -152,7 +152,7 @@ std::ostream &operator<<(std::ostream &os, const Address &msg);
 // socket is not RAII because it can go to disconnected state by external interaction
 class TCPSocket : public IStream, public OStream {
 public:
-	explicit TCPSocket(Handler &&cb) : rwd_handler(std::move(cb)) {}
+	explicit TCPSocket(Handler &&cb);
 	// cb is called when read or write is possible or socket closed from other side
 	// in your handler, first check for is_open(), if false, socket was closed
 	void set_handler(Handler &&cb) { rwd_handler.handler = std::move(cb); }
