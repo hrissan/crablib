@@ -155,6 +155,9 @@ public:
 private:
 	int value;
 };
+
+void set_nonblocking(int fd);
+
 }  // namespace details
 #else  // CRAB_IMPL_WINDOWS, CRAB_IMPL_BOOST
 
