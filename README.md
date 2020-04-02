@@ -1,11 +1,33 @@
+# How to include in your project
+
+## If using cmake
+
+```
+add_subdirectory (some_path/crablib)
+
+link_libraries(crablib::crablib)
+```
+
+## plain and simple
+
+```
+$myproject> g++ -Isome_path/crablib/include -std=c++11 mydemo.cpp -o mydemo
+```
+
+You only need a path to `crablib/include`, for example to compile simple http demo
+```
+$crablib> g++ -Iinclude -std=c++11 examples/http_server_simple.cpp -o http_server_simple
+
+```
+
 # How to build and run examples
 
 ```
-$crablib> mkdir build
-$crablib> cd build
-$crablib/build> cmake ..
-$crablib/build> time make -j4
-$crablib/build> ../bin/server_simple
+$crablib/examples> mkdir build
+$crablib/examples> cd build
+$crablib/examples/build> cmake ..
+$crablib/examples/build> time make -j4
+$crablib/examples/build> ../bin/http_server_simple
 ```
 
 In some other console
@@ -195,7 +217,7 @@ Some ideas are described here (Linux-specific)) https://blog.cloudflare.com/when
 
 Currently, the server reads the whole request body, then creates the whole response body. This is good for small requests and responses, but cannot be used to upload/download large files, for example.
 
-The plans are to tweak HTTP server interface to allow both request body and response body streaming.
+The plans are to tweak HTTP server interface to allow both request body and response body streaming. (Experimental response streaming is added in `dev` branch)
 
 HTTP server is currently very good for long-polling, if you choose to delay response, you just save `Client *` to your data structure, then either client disconnects and you remove it from your data structure in 'd_handler', or you become ready to send a response and you just do it. (See `http_server_longpoll.cpp` in examples).
 
@@ -213,7 +235,9 @@ For now, clients should use try-block in handlers, otherwise the exception will 
 
 # UDP
 
-There is a proprietary project ongoing now, using crab, which promises to share UDP implementation some day. 
+For the long time, UDP was only used to make local service discoveries. With stateful receiver automatically listening on all interfaces and stateless transmitter (static function), transmitting each packet also on all interfaces.
+
+This old-style UDP class is removed from main branches for now, and UDP will slowly be improved to offer more high-speed implementation with interface similar to TCPSocket.
 
 # Other async - Files, etc
 
@@ -225,4 +249,5 @@ Probably, an example of asynchronous file reader should be added to examples.
 
 Secrets were accidentally committed.
 
-So repository had to be wiped, then added again.   
+So repository had to be wiped, then added again.
+

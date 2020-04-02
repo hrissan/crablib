@@ -16,14 +16,8 @@ message("CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}")
 message("-DCRAB_FUZZ=1 builds binaries for fuzzing. Disabled by default because builds only on Linux and Mac OSX (with additional dependencies)")
 option(CRAB_FUZZ "builds binaries for fuzzing" OFF)
 
-#message("-DCRAB_COMPILE=1 builds examples using headers+sources version of library")
-#option(CRAB_COMPILE "builds examples using headers+sources" OFF)
-#if(CRAB_COMPILE)
-#	add_definitions(-DCRAB_COMPILE=1)
-#endif()
-
 message("-DCRAB_IMPL_BOOST=1 builds examples using boost as an implementation")
-option(CRAB_IMPL_BOOST "builds examples using headers+sources" OFF)
+option(CRAB_IMPL_BOOST "builds examples using boost as an implementation" OFF)
 
 if(CRAB_IMPL_BOOST)
 	message("-DCRAB_IMPL_BOOST=1")
@@ -58,11 +52,6 @@ link_libraries(crablib::crablib)
 
 find_package (Threads)
 link_libraries (Threads::Threads)
-
-#if(WIN32)
-#else()
-#	link_libraries(pthread)
-#endif(WIN32)
 
 add_executable(dns_resolve ${SOURCE_FILES} dns_resolve.cpp)
 add_executable(watcher_latency ${SOURCE_FILES} watcher_latency.cpp)
