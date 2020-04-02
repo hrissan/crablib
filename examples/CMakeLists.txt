@@ -16,12 +16,6 @@ message("CMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}")
 message("-DCRAB_FUZZ=1 builds binaries for fuzzing. Disabled by default because builds only on Linux and Mac OSX (with additional dependencies)")
 option(CRAB_FUZZ "builds binaries for fuzzing" OFF)
 
-#message("-DCRAB_COMPILE=1 builds examples using headers+sources version of library")
-#option(CRAB_COMPILE "builds examples using headers+sources" OFF)
-#if(CRAB_COMPILE)
-#	add_definitions(-DCRAB_COMPILE=1)
-#endif()
-
 message("-DCRAB_IMPL_LIBEV=1 builds examples using libev as an implementation")
 option(CRAB_IMPL_LIBEV "builds examples using libev as an implementation" OFF)
 

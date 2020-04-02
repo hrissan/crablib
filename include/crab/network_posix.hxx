@@ -176,6 +176,11 @@ CRAB_INLINE SignalStop::~SignalStop() {
 CRAB_INLINE bool SignalStop::running_under_debugger() { return false; }
 
 #elif CRAB_IMPL_EPOLL
+namespace details {
+
+constexpr int CRAB_MSG_NOSIGNAL = MSG_NOSIGNAL;
+
+}  // namespace details
 
 CRAB_INLINE RunLoop::RunLoop()
     : efd(epoll_create1(0)), wake_fd(eventfd(0, EFD_NONBLOCK)), wake_callable([this]() {
