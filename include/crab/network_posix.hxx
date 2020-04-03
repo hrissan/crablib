@@ -307,7 +307,13 @@ CRAB_INLINE void TCPSocket::write_shutdown() {
 	::shutdown(fd.get_value(), SHUT_WR);
 }
 
-CRAB_INLINE bool TCPSocket::is_open() const { return fd.is_valid() || rwd_handler.is_pending_callable(); }
+CRAB_INLINE bool TCPSocket::is_open() const {
+#if CRAB_IMPL_LIBEV
+	return fd.is_valid() || closed_event.is_set();
+#else
+	return fd.is_valid() || rwd_handler.is_pending_callable();
+#endif
+}
 
 CRAB_INLINE bool TCPSocket::can_write() const { return rwd_handler.can_write; }
 
