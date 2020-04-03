@@ -56,7 +56,7 @@ namespace crab {
 #elif CRAB_IMPL_EPOLL
 	inline std::string version_string() { return CRAB_VERSION " (epoll)"; }
 #elif CRAB_IMPL_WINDOWS
-	inline std::string version_string() { return CRAB_VERSION " (overlapped IO)"; }
+	inline std::string version_string() { return CRAB_VERSION " (Overlapped I/O)"; }
 #else
 	#error "Please add appropriate version string here"
 #endif
