@@ -8,6 +8,10 @@ project(crablib
 
 set(CMAKE_CXX_STANDARD 11)
 
+if(APPLE)
+    set(CMAKE_OSX_DEPLOYMENT_TARGET "10.11")
+endif()
+
 if(NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
    set(CMAKE_BUILD_TYPE Release)
 endif()
@@ -34,6 +38,15 @@ if(CRAB_IMPL_BOOST)
 	message("-DCRAB_IMPL_BOOST=1")
 	add_definitions(-DCRAB_IMPL_BOOST=1)
 endif()
+
+message("-DCRAB_IMPL_CF=1 builds examples using Core Foundation as an implementation")
+option(CRAB_IMPL_CF "builds examples using Core Foundation as an implementation" OFF)
+
+if(CRAB_IMPL_CF)
+	message("-DCRAB_IMPL_CF=1")
+	add_definitions(-DCRAB_IMPL_CF=1)
+endif()
+
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/bin")
 
@@ -67,6 +80,10 @@ link_libraries (Threads::Threads)
 if(MSVC)
 else()
     add_compile_options(-Wno-noexcept-type)
+endif()
+
+if(APPLE)
+    link_libraries(-dead_strip  "-framework Foundation -framework CFNetwork")
 endif()
 
 add_executable(dns_resolve ${SOURCE_FILES} dns_resolve.cpp)

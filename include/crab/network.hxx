@@ -51,7 +51,7 @@ CRAB_INLINE std::ostream &operator<<(std::ostream &os, const Address &msg) {
 	return os << msg.get_address() << ":" << msg.get_port();
 }
 
-#if !CRAB_IMPL_LIBEV
+#if !CRAB_IMPL_LIBEV && !CRAB_IMPL_CF
 
 CRAB_INLINE Idle::Idle(Handler &&cb) : a_handler(std::move(cb)) { set_active(true); }
 

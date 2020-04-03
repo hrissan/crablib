@@ -7,8 +7,9 @@
 
 // #define CRAB_COMPILE 1 <- Set this in project settings to select compiled version of lib
 
-// #define CRAB_IMPL_BOOST 1 <- Set this to make crab a wrapper around boost::asio
 // #define CRAB_IMPL_LIBEV 1 <- Set this to make crab a wrapper around libev
+// #define CRAB_IMPL_BOOST 1 <- Set this to make crab a wrapper around boost::asio
+// #define CRAB_IMPL_CF 1 <- Set this to make crab a wrapper around CFRunLoop (mostly for iOS)
 
 // Our selector of low-level implementation
 
@@ -19,6 +20,9 @@
 #elif CRAB_IMPL_BOOST  // Define in CMakeLists to select this impl
     #include <boost/asio.hpp>
     #include <boost/circular_buffer.hpp>
+#elif CRAB_IMPL_CF
+    #include <CFNetwork/CFNetwork.h>
+    #include <CoreFoundation/CoreFoundation.h>
 #elif defined(__MACH__)
     #define CRAB_IMPL_KEVENT 1
 #elif defined(__linux__)
@@ -41,16 +45,18 @@
 
 namespace crab {
 
-#if CRAB_IMPL_KEVENT
+#if CRAB_IMPL_LIBEV
+	inline std::string version_string() { return CRAB_VERSION " (libev)"; }
+#elif CRAB_IMPL_BOOST
+	inline std::string version_string() { return CRAB_VERSION " (boost::asio)"; }
+#elif CRAB_IMPL_CF
+	inline std::string version_string() { return CRAB_VERSION " (Core Foundation)"; }
+#elif CRAB_IMPL_KEVENT
 	inline std::string version_string() { return CRAB_VERSION " (kevent)"; }
 #elif CRAB_IMPL_EPOLL
 	inline std::string version_string() { return CRAB_VERSION " (epoll)"; }
 #elif CRAB_IMPL_WINDOWS
-	inline std::string version_string() { return CRAB_VERSION " (windows)"; }
-#elif CRAB_IMPL_BOOST
-	inline std::string version_string() { return CRAB_VERSION " (boost)"; }
-#elif CRAB_IMPL_LIBEV
-	inline std::string version_string() { return CRAB_VERSION " (libev)"; }
+	inline std::string version_string() { return CRAB_VERSION " (overlapped IO)"; }
 #else
 	#error "Please add appropriate version string here"
 #endif

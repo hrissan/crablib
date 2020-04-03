@@ -30,7 +30,7 @@ CRAB_INLINE bool Address::parse(Address &address, const std::string &ip, uint16_
 
 CRAB_INLINE std::string Address::get_address() const {
 	boost::system::error_code ec;
-	return addr.to_string(ec) + ":" + std::to_string(get_port());
+	return addr.to_string(ec);
 }
 
 CRAB_INLINE uint16_t Address::get_port() const { return port; }

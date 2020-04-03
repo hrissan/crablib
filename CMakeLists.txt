@@ -19,6 +19,11 @@ if(CRAB_IMPL_BOOST)
 	add_definitions(-DCRAB_IMPL_BOOST=1)
 endif()
 
+if(CRAB_IMPL_CF)
+	message("-DCRAB_IMPL_CF=1")
+	add_definitions(-DCRAB_IMPL_CF=1)
+endif()
+
 if(MSVC)
     add_definitions(-D_SCL_SECURE_NO_WARNINGS=1 -D_CRT_SECURE_NO_WARNINGS=1) #  -D_WIN32_WINNT=0x0601
     add_compile_options(/we4715) # not all paths return value is error
@@ -38,6 +43,7 @@ set(SOURCE_FILES
 		include/crab/network.hxx
 		include/crab/network_base.hpp
 		include/crab/network_boost.hxx
+		include/crab/network_cf.hxx
 		include/crab/network_libev.hxx
 		include/crab/network_posix.hxx
 		include/crab/network_win.hxx

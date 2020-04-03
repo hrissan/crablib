@@ -46,6 +46,9 @@ private:
 #elif CRAB_IMPL_LIBEV
 	ev::timer impl;
 	void io_cb(ev::timer &, int) { a_handler(); }
+#elif CRAB_IMPL_CF
+	CFRunLoopTimerRef impl = nullptr;
+	static void static_cb(CFRunLoopTimerRef, void *);
 #else
 	std::unique_ptr<TimerImpl> impl;
 	friend struct TimerImpl;
@@ -72,6 +75,10 @@ private:
 #elif CRAB_IMPL_LIBEV
 	ev::async impl;
 	void io_cb(ev::async &, int) { a_handler.handler(); }
+#elif CRAB_IMPL_CF
+	CFRunLoopRef loop_loop  = nullptr;
+	CFRunLoopSourceRef impl = nullptr;
+	static void static_cb(void *);
 #else
 	std::unique_ptr<WatcherImpl> impl;
 	friend struct WatcherImpl;
@@ -95,7 +102,7 @@ private:
 	ev::idle impl;
 	void io_cb(ev::idle &, int) { a_handler(); }
 #else
-	IntrusiveNode<Idle> idle_node;  // None of our impls have idle handlers
+	IntrusiveNode<Idle> idle_node;
 	friend class RunLoop;
 #endif
 };
@@ -122,6 +129,8 @@ private:
 	details::FileDescriptor fd;
 #elif CRAB_IMPL_LIBEV
 	// TODO
+#elif CRAB_IMPL_CF
+	// TODO
 #else
 	// on Windows we can use https://stackoverflow.com/questions/18291284/handle-ctrlc-on-win32
 #endif
@@ -141,7 +150,7 @@ public:
 	std::string to_string() const { return get_address() + ":" + std::to_string(get_port()); }
 	bool is_multicast() const;
 
-#if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL || CRAB_IMPL_LIBEV || CRAB_IMPL_WINDOWS
+#if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL || CRAB_IMPL_LIBEV || CRAB_IMPL_WINDOWS || CRAB_IMPL_CF
 	const sockaddr *impl_get_sockaddr() const { return reinterpret_cast<const sockaddr *>(&addr); }
 	sockaddr *impl_get_sockaddr() { return reinterpret_cast<sockaddr *>(&addr); }
 	int impl_get_sockaddr_length() const;
@@ -154,7 +163,7 @@ private:
 
 private:
 	boost::asio::ip::address addr;
-	uint16_t port = 0;
+	uint16_t port                 = 0;
 #else
 
 #endif
@@ -222,6 +231,13 @@ private:
 	void io_cb_write(ev::io &, int);
 	Timer closed_event;
 #endif
+#elif CRAB_IMPL_CF
+	CFReadStreamRef read_stream   = nullptr;
+	CFWriteStreamRef write_stream = nullptr;
+	bool finish_connect();
+	static void read_cb(CFReadStreamRef, CFStreamEventType, void *);
+	static void write_cb(CFWriteStreamRef, CFStreamEventType, void *);
+	Timer closed_event;
 #else
 	std::unique_ptr<TCPSocketImpl> impl;
 	friend struct TCPSocketImpl;
@@ -261,6 +277,10 @@ private:
 	ev::io io_read;
 	void io_cb_read(ev::io &, int);
 #endif
+#elif CRAB_IMPL_CF
+	CFRunLoopSourceRef socket_source = nullptr;
+	std::deque<int> accepted_sockets;
+	static void accept_cb(CFSocketRef, CFSocketCallBackType, CFDataRef, const void *data, void *info);
 #else
 	std::unique_ptr<TCPAcceptorImpl> impl;
 	friend struct TCPAcceptorImpl;
@@ -290,6 +310,7 @@ private:
 	ev::io io_write;
 	void io_cb_write(ev::io &, int);
 #endif
+#elif CRAB_IMPL_CF
 #else
 //  TODO - implement on other platforms
 //  std::unique_ptr<UDPTransmitterImpl> impl;
@@ -320,6 +341,7 @@ private:
 	ev::io io_read;
 	void io_cb_read(ev::io &, int);
 #endif
+#elif CRAB_IMPL_CF
 #else
 	//  TODO - implement on other platforms
 //  std::unique_ptr<UDPReceiverImpl> impl;
@@ -379,6 +401,7 @@ public:
 	void impl_add_callable_fd(int fd, Callable *callable, bool read, bool write);
 #elif CRAB_IMPL_LIBEV
 	ev::loop_ref &get_impl() { return *impl.get(); }
+#elif CRAB_IMPL_CF
 #else
 	RunLoopImpl *get_impl() const { return impl.get(); }
 #endif
@@ -397,6 +420,7 @@ private:
 #if !CRAB_IMPL_LIBEV
 	IntrusiveList<Idle, &Idle::idle_node> idle_handlers;  // None of our impls have idles
 #endif
+
 #if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL || CRAB_IMPL_WINDOWS
 	details::RunLoopLinks links;
 #endif
@@ -406,6 +430,9 @@ private:
 	details::FileDescriptor wake_fd;
 #endif
 	Callable wake_callable;
+#elif CRAB_IMPL_CF
+	CFRunLoopObserverRef idle_observer = nullptr;
+	static void on_idle_observer(CFRunLoopObserverRef, CFRunLoopActivity activity, void *info);
 #elif CRAB_IMPL_LIBEV
 	// TODO - change back after KITTEN is cured
 	std::unique_ptr<ev::loop_ref> impl;

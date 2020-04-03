@@ -24,9 +24,7 @@
 #undef ERROR
 #undef min
 #undef max
-#elif CRAB_IMPL_LIBEV
-#include <sys/socket.h>
-#elif CRAB_IMPL_EPOLL
+#elif CRAB_IMPL_LIBEV || CRAB_IMPL_EPOLL || CRAB_IMPL_CF
 #include <sys/socket.h>
 #elif CRAB_IMPL_KEVENT
 #include <sys/event.h>
@@ -125,20 +123,6 @@ struct Callable : private Nocopy {
 
 #endif
 
-//#if CRAB_IMPL_LIBEV
-// namespace details {
-// template<typename E> // ev++ has no wrapper with lambda
-// class EC : public E {
-//	explicit EC(Handler && cb):E(RunLoop::current()->get_impl()), a_handler(std::move(cb)) {
-//		this->set<EC<E>, &EC<E>::io_cb>(this);
-//	}
-// private:
-//	Handler a_handler;
-//	void io_cb(E &w, int revents) { a_handler(); }
-//};
-//}
-//#endif
-
 #if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL || CRAB_IMPL_LIBEV
 
 namespace details {
@@ -159,6 +143,12 @@ private:
 void set_nonblocking(int fd);
 
 }  // namespace details
+#elif CRAB_IMPL_CF
+
+namespace details {
+// TODO - Ref holder
+}
+
 #else  // CRAB_IMPL_WINDOWS, CRAB_IMPL_BOOST
 
 struct RunLoopImpl;

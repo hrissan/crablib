@@ -4,7 +4,7 @@
 #include "network_posix.hxx"
 #include "network_win.hxx"
 
-#if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL || CRAB_IMPL_LIBEV || CRAB_IMPL_WINDOWS
+#if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL || CRAB_IMPL_LIBEV || CRAB_IMPL_WINDOWS || CRAB_IMPL_CF
 
 // Surprisngly, some code compiles without changes on all 3 systems
 
@@ -92,6 +92,7 @@ CRAB_INLINE bool Address::is_multicast() const {
 	}
 }
 
+#if !CRAB_IMPL_CF
 CRAB_INLINE std::vector<Address> DNSResolver::sync_resolve(const std::string &host_name,
     uint16_t port,
     bool ipv4,
@@ -124,6 +125,7 @@ CRAB_INLINE std::vector<Address> DNSResolver::sync_resolve(const std::string &ho
 	}
 	return names;
 }
+#endif
 
 }  // namespace crab
 
