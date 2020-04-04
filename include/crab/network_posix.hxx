@@ -228,7 +228,7 @@ CRAB_INLINE void RunLoop::wakeup() {
 }
 
 CRAB_INLINE SignalStop::SignalStop(Handler &&cb)
-    : a_handler([&, cb = std::move(cb)]() {
+    : a_handler([&, cb]() {  // cb = std::move(cb) is C++14, we will keep C++11 compatibility for some time
 	    signalfd_siginfo info{};
 	    while (true) {
 		    // Several signals can be merged, we read all of them
@@ -550,6 +550,11 @@ CRAB_INLINE bool TCPAcceptor::can_accept() {
 }
 
 CRAB_INLINE bool UDPTransmitter::can_write() const { return w_handler.can_write; }
+
+CRAB_INLINE void UDPTransmitter::set_multicast_ttl(int ttl) {
+	details::check(setsockopt(fd.get_value(), IPPROTO_IP, IP_MULTICAST_TTL, &ttl, sizeof(ttl)) >= 0,
+	    "crab::UDPTransmitter::set_multicast_ttl failed");
+}
 
 #if CRAB_IMPL_LIBEV
 CRAB_INLINE void UDPTransmitter::io_cb_write(ev::io &, int) {

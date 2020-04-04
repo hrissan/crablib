@@ -301,6 +301,8 @@ public:
 	// write_datagram will return false if cannot write, but this is too late for clients
 	// who wish to work without buffer and need to prepare data,
 
+	void set_multicast_ttl(int ttl);
+
 private:
 	Callable w_handler;
 

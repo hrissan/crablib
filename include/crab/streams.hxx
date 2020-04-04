@@ -75,6 +75,12 @@ CRAB_INLINE size_t Buffer::write_to(OStream &out, size_t max_count) {
 	return total_count;
 }
 
+CRAB_INLINE bool Buffer::read_enough_data(IStream &in, size_t count) {
+    if (size() < count)
+        read_from(in);
+    return size() >= count;
+}
+
 CRAB_INLINE bool Buffer::peek(uint8_t *val, size_t count) const {
 	// Compiler thinks memcpy can affect "this", local vars greatly help
 	auto rc  = read_count();
