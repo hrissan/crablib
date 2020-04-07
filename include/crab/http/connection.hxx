@@ -283,7 +283,7 @@ CRAB_INLINE void Connection::write(http::ResponseHeader &&resp, BufferOptions bu
 	resp.http_version_minor = request_parser.req.http_version_minor;
 	resp.keep_alive         = request_parser.req.keep_alive;
 
-	invariant(resp.transfer_encoding_chunked || resp.has_content_length(),
+	invariant(resp.is_websocket_upgrade() || resp.transfer_encoding_chunked || resp.has_content_length(),
 	    "Please set either chunked encoding or content_length");
 	body_content_length = resp.content_length;
 	body_position       = 0;
