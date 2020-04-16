@@ -66,7 +66,7 @@ class Buffer : public IFiniteStream, public OStream {
 	size_t write_pos;  // read_pos..read_pos + impl.size
 public:
 	explicit Buffer(size_t si) : impl(si), read_pos(0), write_pos(0) {}
-	size_t capacity()const { return impl.size(); }
+	size_t capacity() const { return impl.size(); }
 	size_t read_some(uint8_t *val, size_t count) override;
 	using IStream::read_some;  // Version for other char types
 	size_t size() const override final {
@@ -115,7 +115,7 @@ public:
 	size_t write_to(OStream &out, size_t max_count) override;  // returns # written
 	using IFiniteStream::write_to;
 
-	bool read_enough_data(IStream &in, size_t count); // returns true, if size() after reading >= count
+	bool read_enough_data(IStream &in, size_t count);  // returns true, if size() after reading >= count
 	bool peek(uint8_t *val, size_t count) const;
 };
 

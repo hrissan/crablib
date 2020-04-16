@@ -135,6 +135,7 @@ namespace http {
 
 CRAB_INLINE Connection::Connection(Handler &&r_handler, Handler &&d_handler)
     : read_buffer(8192)
+    , wm_ping_timer([&]() { on_wm_ping_timer(); })
     , r_handler(std::move(r_handler))
     , d_handler(std::move(d_handler))
     , sock([this]() { sock_handler(); })
@@ -160,6 +161,7 @@ CRAB_INLINE void Connection::accept(TCPAcceptor &acceptor) {
 
 CRAB_INLINE void Connection::close() {
 	state = SHUTDOWN;
+	wm_ping_timer.cancel();
 	read_buffer.clear();
 	sock.close();
 	peer_address = Address();
@@ -235,6 +237,7 @@ CRAB_INLINE void Connection::write(Request &&req) {
 		} else {
 			sock.write_shutdown();
 			state = SHUTDOWN;
+			wm_ping_timer.cancel();
 		}
 	}
 }
@@ -252,6 +255,7 @@ CRAB_INLINE void Connection::write(Response &&resp) {
 		wm_header_parser = MessageChunkParser{};
 		wm_body_parser   = MessageBodyParser{};
 		state            = WEB_MESSAGE_HEADER;
+		wm_ping_timer.once(WM_PING_TIMEOUT_SEC);  // Always server-side
 	}
 }
 
@@ -270,8 +274,13 @@ CRAB_INLINE void Connection::write(WebMessage &&message) {
 
 	sock.write(frame_buffer, frame_buffer_len, BUFFER_ONLY);
 	sock.write(std::move(message.body));
-	if (message.opcode == WebMessage::OPCODE_CLOSE)
+	if (message.opcode == WebMessage::OPCODE_CLOSE) {
 		wm_close_sent = true;
+		wm_ping_timer.cancel();
+	} else {
+		if (!client_side)
+			wm_ping_timer.once(WM_PING_TIMEOUT_SEC);
+	}
 }
 
 CRAB_INLINE void Connection::write(http::ResponseHeader &&resp, BufferOptions buffer_options) {
@@ -355,6 +364,7 @@ CRAB_INLINE void Connection::write_last_chunk() {
 	} else {
 		sock.write_shutdown();
 		state = SHUTDOWN;
+		wm_ping_timer.cancel();
 	}
 }
 
@@ -399,7 +409,17 @@ CRAB_INLINE void Connection::sock_handler() {
 			w_handler(body_position, body_content_length);
 		}
 	}
+	if (!client_side && (state == WEB_MESSAGE_HEADER || state == WEB_MESSAGE_BODY || state == WEB_MESSAGE_READY ||
+	                        state == WEB_UPGRADE_RESPONSE_HEADER)) {
+		wm_ping_timer.once(WM_PING_TIMEOUT_SEC);
+	}
 	advance_state(true);
+}
+
+CRAB_INLINE void Connection::on_wm_ping_timer() {
+	if (sock.get_total_buffer_size() == 0)
+		write(WebMessage{WebMessage::OPCODE_PING, std::string{}});
+	wm_ping_timer.once(WM_PING_TIMEOUT_SEC);
 }
 
 CRAB_INLINE void Connection::advance_state(bool called_from_runloop) {
@@ -489,6 +509,7 @@ CRAB_INLINE void Connection::advance_state(bool called_from_runloop) {
 					}
 					sock.write_shutdown();
 					state = SHUTDOWN;
+					wm_ping_timer.cancel();
 					return;
 				}
 				if (wm_header_parser.req.opcode == WebMessage::OPCODE_PING) {
@@ -513,6 +534,7 @@ CRAB_INLINE void Connection::advance_state(bool called_from_runloop) {
 	} catch (const std::exception &) {
 		sock.write_shutdown();
 		state = SHUTDOWN;
+		wm_ping_timer.cancel();
 	}
 }
 

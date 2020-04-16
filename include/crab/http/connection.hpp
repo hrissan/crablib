@@ -147,6 +147,8 @@ public:
 
 	State get_state() const { return state; }
 
+	enum { WM_PING_TIMEOUT_SEC = 45 };
+	// Slightly less than default TCP keep-alive of 50 sec
 protected:
 	crab::Buffer read_buffer;
 
@@ -160,12 +162,16 @@ protected:
 	std::mt19937 masking_key_random;
 	bool client_side   = false;  // Web Socket encryption is one-sided
 	bool wm_close_sent = false;
+	Timer wm_ping_timer;
+	// Server-side ping required for some NATs to keep port open
+	// TCP keep-alive is set by most browsers, but surprisingly not enough.
 
 	uint64_t body_content_length = 0;  // for WAITING_WRITE_RESPONSE_BODY state, -1 for chunked
 	uint64_t body_position       = 0;  // for WAITING_WRITE_RESPONSE_BODY state
 	StreamHandler w_handler;           // for WAITING_WRITE_RESPONSE_BODY state, -1 for chunked
 
 	void sock_handler();
+	void on_wm_ping_timer();
 	void advance_state(bool called_from_runloop);
 
 	Handler r_handler;
