@@ -68,9 +68,7 @@ CRAB_INLINE Random::Random() {
 	state = (uint64_t(rd()) << 32U) ^ uint64_t(rd());
 }
 
-CRAB_INLINE Random::Random(uint32_t seed) {
-	state = uint64_t(seed) << 32;
-}
+CRAB_INLINE Random::Random(uint32_t seed) { state = uint64_t(seed) << 32; }
 
 CRAB_INLINE uint32_t Random::pcg32_random_r() {
 	uint64_t oldstate = state;
@@ -106,10 +104,15 @@ CRAB_INLINE bdata Random::data(size_t size) {
 CRAB_INLINE std::string Random::printable_string(size_t size) {
 	static const char alphabet[]   = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 	constexpr size_t ALPHABET_SIZE = sizeof(alphabet) - 1;
+	constexpr uint32_t LONG_TAIL   = uint32_t(0x100000000ULL - 0x100000000ULL % ALPHABET_SIZE - 1);
 
 	std::string result(size, '\0');
 	for (size_t i = 0; i != size; ++i) {
-		result[i] = alphabet[pcg32_random_r() % ALPHABET_SIZE];
+		auto value = 0;
+		do {
+			value = pcg32_random_r();
+		} while (value > LONG_TAIL);  // Repeats very rarely, but results in perfect distribution
+		result[i] = alphabet[value % ALPHABET_SIZE];
 	}
 	return result;
 };
