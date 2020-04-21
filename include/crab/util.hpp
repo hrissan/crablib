@@ -1,6 +1,9 @@
 // Copyright (c) 2007-2020, Grigory Buteyko aka Hrissan
 // Licensed under the MIT License. See LICENSE for details.
 
+// *Really* minimal PCG32 code / (c) 2014 M.E. O'Neill / pcg-random.org
+// Licensed under Apache License 2.0 (NO WARRANTY, etc. see website)
+
 #pragma once
 
 #include <cctype>
@@ -9,7 +12,6 @@
 #include <cstring>
 #include <limits>
 #include <memory>
-#include <random>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -109,8 +111,7 @@ inline bool operator!=(const Literal &a, const std::string &b) { return !(a == b
 class Random {
 public:
 	Random();
-	void set_deterministic(uint32_t seed = 0) { mt.seed(seed); }
-	// For tests. Not a constructor, to simplify normal interface (when actual random is required)
+	explicit Random(uint32_t seed);  // For tests. Hopefully, 2^32 test patterns is enough
 
 	void bytes(uint8_t *buffer, size_t size);
 	void bytes(char *buffer, size_t size) { bytes(reinterpret_cast<uint8_t *>(buffer), size); }
@@ -130,11 +131,10 @@ public:
 	}
 
 private:
-	// Intent - do not select 64-bit version on 32-bit platforms
-	using MT = std::conditional<sizeof(void *) >= 8, std::mt19937_64, std::mt19937>::type;
-	using VT = std::conditional<sizeof(void *) >= 8, uint64_t, uint32_t>::type;
-	// Too hard to get right type from MT (it uses uint32_fast natively, which can be larger)
-	MT mt;
+	uint32_t pcg32_random_r();
+
+	uint64_t state = 0;
+	uint64_t inc   = 0;
 };
 
 }  // namespace crab

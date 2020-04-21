@@ -18,12 +18,7 @@ using namespace crab;
 int test_proxy(int num, uint16_t port, uint16_t upstream_port) {
 	RunLoop runloop;
 
-	std::mt19937 rnd;
-	{  // Why no simple one-liner with correct seed length exists? :(
-		std::random_device rd;
-		std::seed_seq seq{rd(), rd(), rd(), rd(), rd(), rd(), rd(), rd()};
-		rnd.seed(seq);
-	}
+	crab::Random rnd;
 
 	std::unique_ptr<Timer> stat_timer;
 	std::unique_ptr<http::WebSocket> rws;
@@ -35,8 +30,7 @@ int test_proxy(int num, uint16_t port, uint16_t upstream_port) {
 	server.r_handler = [&](http::Client *who, http::Request &&request) {
 		if (request.header.path == "/latency") {
 			who->web_socket_upgrade();
-			std::string id =
-			    std::to_string(rnd()) + std::to_string(rnd()) + std::to_string(rnd()) + std::to_string(rnd());
+			std::string id = rnd.printable_string(16);
 
 			connected_sockets.emplace(who, id);
 			connected_sockets_inv.emplace(id, who);

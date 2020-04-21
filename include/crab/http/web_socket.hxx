@@ -3,7 +3,6 @@
 
 #include <algorithm>
 #include <iostream>
-#include <random>
 #include <sstream>
 #include "../crypto/base64.hpp"
 #include "web_socket.hpp"
@@ -13,9 +12,7 @@ namespace crab { namespace http {
 CRAB_INLINE WebSocket::WebSocket(Handler &&r_handler, Handler &&d_handler) {
 	set_handlers(std::move(r_handler), std::move(d_handler));
 
-	std::random_device rd;
-	std::seed_seq sd{rd(), rd(), rd(), rd(), rd(), rd(), rd(), rd()};
-	masking_key_random.seed(sd);
+	masking_key_random = Random{};  // True random now
 }
 
 CRAB_INLINE bool WebSocket::connect(const Address &address, const RequestHeader &rh) {
@@ -31,8 +28,7 @@ CRAB_INLINE bool WebSocket::connect(const Address &address, const RequestHeader 
 	//	std::independent_bits_engine<std::random_device, 8, uint32_t> rde;
 	// uint8_t is not allowed by MSVC
 	uint8_t rdata[16]{};
-	for (size_t i = 0; i != sizeof(rdata); ++i)
-		rdata[i] = masking_key_random();
+	masking_key_random.bytes(rdata, sizeof(rdata));
 	req.header.sec_websocket_key = base64::encode(rdata, sizeof(rdata));
 
 	//	data_to_write.write(rd.data(), rd.size());

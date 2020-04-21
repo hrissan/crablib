@@ -47,7 +47,7 @@ private:
 		total_ticks += ticks;
 		for (; total_ticks >= MICROSECONDS_PER_MESSAGE; total_ticks -= MICROSECONDS_PER_MESSAGE) {
 			seqnum += 1;
-			Msg msg{seqnum, (uint64_t(mt()) << 32U) + mt()};
+			Msg msg{seqnum, rnd.pod<uint64_t>()};
 
 			uint8_t buffer[Msg::size];
 			crab::OMemoryStream os(buffer, Msg::size);
@@ -99,7 +99,7 @@ private:
 	std::chrono::steady_clock::time_point last_tick = std::chrono::steady_clock::now();
 	int64_t total_ticks                             = 0;
 
-	std::mt19937 mt;
+	crab::Random rnd;
 	uint64_t seqnum = 0;
 };
 

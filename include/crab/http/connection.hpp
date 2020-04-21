@@ -4,7 +4,6 @@
 #pragma once
 
 #include <deque>
-#include <random>
 #include "../network.hpp"
 #include "../streams.hpp"
 #include "request_parser.hpp"
@@ -159,8 +158,8 @@ protected:
 	MessageChunkParser wm_header_parser;
 	MessageBodyParser wm_body_parser;  // Single per several chunks
 	std::string sec_websocket_key;
-	std::mt19937 masking_key_random;
-	bool client_side   = false;  // Web Socket encryption is one-sided
+	Random masking_key_random{0};  // Deterministic init for speed, will be randomized if needed
+	bool client_side   = false;    // Web Socket encryption is one-sided
 	bool wm_close_sent = false;
 	Timer wm_ping_timer;
 	// Server-side ping required for some NATs to keep port open

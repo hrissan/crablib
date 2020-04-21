@@ -3,7 +3,6 @@
 
 #include <algorithm>
 #include <iostream>
-#include <random>
 #include <sstream>
 #include "connection.hpp"
 
@@ -266,7 +265,7 @@ CRAB_INLINE void Connection::write(WebMessage &&message) {
 	              state == WEB_UPGRADE_RESPONSE_HEADER,
 	    "Connection unexpected write");
 
-	uint32_t masking_key = client_side ? static_cast<uint32_t>(masking_key_random()) : 0;
+	uint32_t masking_key = client_side ? masking_key_random.pod<uint32_t>() : 0;
 	uint8_t frame_buffer[32];
 	auto frame_buffer_len = MessageChunkParser::write_message_frame(frame_buffer, message, client_side, masking_key);
 	if (client_side)
