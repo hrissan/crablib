@@ -99,7 +99,7 @@ CRAB_INLINE void BufferedTCPSocket::write(std::string &&ss, BufferOptions buffer
 CRAB_INLINE void BufferedTCPSocket::write_shutdown() {
 	if (write_shutdown_asked)
 		return;
-	if (sock.is_open())
+	if (!sock.is_open())
 		return;
 	write_shutdown_asked = true;
 	if (data_to_write.empty())
