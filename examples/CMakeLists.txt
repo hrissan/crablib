@@ -95,6 +95,8 @@ add_executable(http_server_stream_body ${SOURCE_FILES} http_server_stream_body.c
 add_executable(http_server_multi ${SOURCE_FILES} http_server_multi.cpp)
 add_executable(http_server_complex ${SOURCE_FILES} http_server_complex.cpp)
 
+add_executable(client_web_socket ${SOURCE_FILES} client_web_socket.cpp)
+
 add_executable(fair_client ${SOURCE_FILES} fair_client.cpp)
 add_executable(fair_server ${SOURCE_FILES} fair_server.cpp)
 

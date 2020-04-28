@@ -25,6 +25,14 @@ inline void append(bdata &result, const bdata &other) {  // We do this op too of
 }
 
 std::string to_hex(const uint8_t *data, size_t count);
+inline std::string to_hex(const char *data, size_t count) {
+	return to_hex(reinterpret_cast<const u_int8_t *>(data), count);
+}
+#if __cplusplus >= 201703L
+inline std::string to_hex(std::byte *val, size_t count) {
+	return to_hex(reinterpret_cast<const uint8_t *>(val), count);
+}
+#endif
 inline std::string to_hex(const bdata &data) { return to_hex(data.data(), data.size()); }
 
 int from_hex_digit(char sym);
