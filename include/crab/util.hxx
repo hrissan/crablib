@@ -108,7 +108,7 @@ CRAB_INLINE std::string Random::printable_string(size_t size) {
 
 	std::string result(size, '\0');
 	for (size_t i = 0; i != size; ++i) {
-		auto value = 0;
+		uint32_t value = 0;
 		do {
 			value = pcg32_random_r();
 		} while (value > LONG_TAIL);  // Repeats very rarely, but results in perfect distribution
