@@ -202,15 +202,13 @@ CRAB_INLINE void ResponseParser::process_ready_header() {
 		return;  // Empty is NOP in CMS list, like "  ,,keep-alive"
 	// Those comparisons are by size first so very fast
 	if (header.name == Literal{"content-length"}) {
-		if (req.has_content_length())
+		if (req.content_length)
 			throw std::runtime_error("content length specified more than once");
 		try {
 			req.content_length = crab::integer_cast<uint64_t>(header.value);
 		} catch (const std::exception &) {
 			std::throw_with_nested(std::runtime_error("Content length is not a number"));
 		}
-		if (!req.has_content_length())
-			throw std::runtime_error("content length of 2^64-1 is not allowed");
 		return;
 	}
 	if (header.name == Literal{"transfer-encoding"}) {

@@ -18,14 +18,14 @@ private:
 		uint8_t buffer[crab::UDPReceiver::MAX_DATAGRAM_SIZE];
 		while (true) {
 			auto rd = udp_a.read_datagram(buffer, sizeof(buffer));
-			if (!rd.first)
+			if (!rd)
 				break;
-			if (rd.second != Msg::size) {
+			if (*rd != Msg::size) {
 				std::cout << "Wrong message size, skipping" << std::endl;
 				continue;
 			}
 			Msg msg;
-			crab::IMemoryStream is(buffer, rd.second);
+			crab::IMemoryStream is(buffer, *rd);
 			msg.read(&is);
 			std::cout << "Msg with seq=" << msg.seqnum << std::endl;
 		}

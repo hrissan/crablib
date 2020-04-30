@@ -3,6 +3,7 @@
 
 #include <sstream>
 #include "network.hpp"
+#include <sstream>
 
 #if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL || CRAB_IMPL_LIBEV
 
@@ -688,9 +689,9 @@ CRAB_INLINE UDPReceiver::UDPReceiver(const Address &address, Handler &&cb, const
 	fd.swap(tmp);
 }
 
-CRAB_INLINE std::pair<bool, size_t> UDPReceiver::read_datagram(uint8_t *data, size_t count, Address *peer_addr) {
+CRAB_INLINE details::optional<size_t> UDPReceiver::read_datagram(uint8_t *data, size_t count, Address *peer_addr) {
 	if (!fd.is_valid() || !r_handler.can_read)
-		return {false, 0};
+		return {};
 	Address in_addr;
 	socklen_t in_len = sizeof(sockaddr_storage);
 	RunLoop::current()->stats.UDP_RECV_count += 1;
@@ -714,14 +715,14 @@ CRAB_INLINE std::pair<bool, size_t> UDPReceiver::read_datagram(uint8_t *data, si
 			io_read.start(fd.get_value(), ev::READ);
 #endif
 			r_handler.can_read = false;
-			return {false, 0};  // Will fire on_epoll_call in future automatically
+			return {};  // Will fire on_epoll_call in future automatically
 		}
 		if (errno != EMSGSIZE) {
 			// Sometimes (for example during adding/removing network adapters), errors could be returned on Linux
 			// We will ignore all errors here, in hope they will disappear soon
 			// TODO - if we get here, we will not be woke up by epoll any more, so
 			// we need to classify all errors here, like in TCPAcceptor
-			return {false, 0};
+			return {};
 		}
 		// Truncation is not an error, return true so clients continue reading
 		result = count;
@@ -730,7 +731,7 @@ CRAB_INLINE std::pair<bool, size_t> UDPReceiver::read_datagram(uint8_t *data, si
 		*peer_addr = in_addr;
 	}
 	RunLoop::current()->stats.UDP_RECV_size += result;
-	return {true, result};
+	return result;
 }
 
 }  // namespace crab

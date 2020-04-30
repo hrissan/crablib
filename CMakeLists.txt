@@ -6,8 +6,6 @@ project(crablib
 	HOMEPAGE_URL "https://github.com/hrissan/crablib"
 	LANGUAGES C CXX)
 
-set(CMAKE_CXX_STANDARD 11)
-
 if(CRAB_IMPL_LIBEV)
 	message("-DCRAB_IMPL_LIBEV=1")
 	add_definitions(-DCRAB_IMPL_LIBEV=1)
@@ -83,11 +81,6 @@ add_library( crablib::crablib-header-only ALIAS "${PROJECT_NAME}-header-only" )
 
 target_compile_definitions("${PROJECT_NAME}" PUBLIC -DCRAB_COMPILE=1)
 
-target_compile_features ( "${PROJECT_NAME}"
-    PRIVATE  cxx_std_11 )
-target_compile_features ( "${PROJECT_NAME}-header-only"
-    INTERFACE  cxx_std_11 )
-    
 target_include_directories ( "${PROJECT_NAME}"
     PUBLIC  "${CMAKE_CURRENT_SOURCE_DIR}/include"
 )

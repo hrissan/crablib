@@ -137,8 +137,8 @@ CRAB_INLINE void to_string_common(const RequestResponseHeader &req, std::strings
 			ss << "; " << req.content_type_suffix;
 		ss << "\r\n";
 	}
-	if (req.has_content_length()) {
-		ss << "content-length: " << req.content_length << "\r\n";
+	if (req.content_length) {
+		ss << "content-length: " << *req.content_length << "\r\n";
 	}
 	if (req.http_version_major == 1 && req.http_version_minor == 0 && req.keep_alive) {
 		ss << "connection: keep-alive\r\n";

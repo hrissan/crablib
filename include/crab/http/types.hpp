@@ -29,9 +29,8 @@ struct RequestResponseHeader {
 
 	std::vector<Header> headers;  // names are lower-case
 
-	bool keep_alive         = true;
-	uint64_t content_length = std::numeric_limits<uint64_t>::max();
-	bool has_content_length() const { return content_length != std::numeric_limits<uint64_t>::max(); }
+	bool keep_alive = true;
+	details::optional<uint64_t> content_length;
 
 	bool transfer_encoding_chunked = false;
 	std::vector<std::string> transfer_encodings;  // lower-case, other than chunked, identity

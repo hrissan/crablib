@@ -99,7 +99,7 @@ CRAB_INLINE void BufferedTCPSocket::write(std::string &&ss, BufferOptions buffer
 CRAB_INLINE void BufferedTCPSocket::write_shutdown() {
 	if (write_shutdown_asked)
 		return;
-	if (sock.is_open())
+	if (!sock.is_open())
 		return;
 	write_shutdown_asked = true;
 	if (data_to_write.empty())
@@ -291,7 +291,7 @@ CRAB_INLINE void Connection::write(http::ResponseHeader &&resp, BufferOptions bu
 	resp.http_version_minor = request_parser.req.http_version_minor;
 	resp.keep_alive         = request_parser.req.keep_alive;
 
-	invariant(resp.is_websocket_upgrade() || resp.transfer_encoding_chunked || resp.has_content_length(),
+	invariant(resp.is_websocket_upgrade() || resp.transfer_encoding_chunked || resp.content_length,
 	    "Please set either chunked encoding or content_length");
 	body_content_length = resp.content_length;
 	body_position       = 0;
@@ -311,8 +311,8 @@ CRAB_INLINE void Connection::write(const std::byte *val, size_t count, BufferOpt
 
 CRAB_INLINE void Connection::write(const uint8_t *val, size_t count, BufferOptions buffer_options) {
 	invariant(state == WAITING_WRITE_RESPONSE_BODY, "Connection unexpected write");
-	if (body_content_length != std::numeric_limits<uint64_t>::max()) {
-		invariant(body_position + count <= body_content_length, "Overshoot content-length");
+	if (body_content_length) {
+		invariant(body_position + count <= *body_content_length, "Overshoot content-length");
 		body_position += count;
 		sock.write(val, count, buffer_options);
 		write_last_chunk();
@@ -330,8 +330,8 @@ CRAB_INLINE void Connection::write(const uint8_t *val, size_t count, BufferOptio
 
 CRAB_INLINE void Connection::write(std::string &&ss, BufferOptions buffer_options) {
 	invariant(state == WAITING_WRITE_RESPONSE_BODY, "Connection unexpected write");
-	if (body_content_length != std::numeric_limits<uint64_t>::max()) {
-		invariant(body_position + ss.size() <= body_content_length, "Overshoot content-length");
+	if (body_content_length) {
+		invariant(body_position + ss.size() <= *body_content_length, "Overshoot content-length");
 		body_position += ss.size();
 		sock.write(std::move(ss), buffer_options);
 		write_last_chunk();
@@ -349,8 +349,8 @@ CRAB_INLINE void Connection::write(std::string &&ss, BufferOptions buffer_option
 
 CRAB_INLINE void Connection::write_last_chunk() {
 	invariant(state == WAITING_WRITE_RESPONSE_BODY, "Connection unexpected write");
-	if (body_content_length != std::numeric_limits<uint64_t>::max()) {
-		if (body_position != body_content_length)
+	if (body_content_length) {
+		if (body_position != *body_content_length)
 			return;
 		sock.write(std::string{});  // if everything was buffered, flush
 	} else {
@@ -371,15 +371,16 @@ CRAB_INLINE void Connection::write(ResponseHeader &&resp, StreamHandler &&cb) {
 	write(std::move(resp), WRITE);
 	w_handler = std::move(cb);
 	// This interface experimental, so no understanding if Client and Connection be merged
-	while (state == WAITING_WRITE_RESPONSE_BODY && body_position < body_content_length && sock.can_write()) {
+	while (state == WAITING_WRITE_RESPONSE_BODY && (!body_content_length || body_position < *body_content_length) &&
+	       sock.can_write()) {
 		w_handler(body_position, body_content_length);
 	}
 }
 
 CRAB_INLINE size_t Connection::write_some(const uint8_t *val, size_t count) {
 	invariant(state == WAITING_WRITE_RESPONSE_BODY, "Connection unexpected write");
-	if (body_content_length != std::numeric_limits<uint64_t>::max()) {
-		invariant(body_position + count <= body_content_length, "Overshoot content-length");
+	if (body_content_length) {
+		invariant(body_position + count <= *body_content_length, "Overshoot content-length");
 		auto wr = sock.write_some(val, count);
 		body_position += wr;
 		write_last_chunk();
@@ -404,7 +405,8 @@ CRAB_INLINE void Connection::sock_handler() {
 		return;
 	}
 	if (w_handler) {
-		while (state == WAITING_WRITE_RESPONSE_BODY && body_position < body_content_length && sock.can_write()) {
+		while (state == WAITING_WRITE_RESPONSE_BODY &&
+		       (!body_content_length || body_position < *body_content_length) && sock.can_write()) {
 			w_handler(body_position, body_content_length);
 		}
 	}
@@ -472,7 +474,7 @@ CRAB_INLINE void Connection::advance_state(bool called_from_runloop) {
 					continue;
 				if (!response_parser.req.is_websocket_upgrade())
 					throw std::runtime_error("Expecting web upgrade header");
-				if (response_parser.req.has_content_length() || response_parser.req.transfer_encoding_chunked)
+				if (response_parser.req.content_length || response_parser.req.transfer_encoding_chunked)
 					throw std::runtime_error("Web upgrade reponse cannot have body");
 				if (response_parser.req.sec_websocket_accept !=
 				    ResponseHeader::generate_sec_websocket_accept(sec_websocket_key))

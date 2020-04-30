@@ -16,6 +16,65 @@
 #include <string>
 #include <vector>
 
+#if __cplusplus >= 201703L
+#include <optional>
+namespace crab { namespace details {
+template<typename T>
+using optional = std::optional<T>;
+}}  // namespace crab::details
+#else
+// Simplified, only works for value types
+namespace crab { namespace details {
+template<typename T>
+class optional {
+	T impl;
+	bool valid = false;
+
+public:
+	optional() noexcept = default;
+	optional(const optional<T> &other) : impl(other.impl), valid(other.valid) {}
+	optional(optional<T> &&other) : impl(std::move(other.impl)), valid(other.valid) {}
+	optional(const T &other) : impl(other), valid(true) {}
+	optional(T &&other) : impl(std::move(other)), valid(true) {}
+	optional<T> &operator=(const optional<T> &other) {
+		impl  = other.impl;
+		valid = other.valid;
+		return *this;
+	}
+	optional<T> &operator=(optional<T> &&other) {
+		impl  = std::move(other.impl);
+		valid = other.valid;
+		return *this;
+	}
+	optional<T> &operator=(const T &other) {
+		impl  = other;
+		valid = true;
+		return *this;
+	}
+	optional<T> &operator=(T &&other) {
+		impl  = std::move(other);
+		valid = true;
+		return *this;
+	}
+	template<class... Args>
+	T &emplace(Args &&... args) {
+		impl  = T{std::forward<Args>(args)...};
+		valid = true;
+		return impl;
+	}
+	void reset() noexcept { valid = false; }
+	constexpr explicit operator bool() const noexcept { return valid; }
+	constexpr bool has_value() const noexcept { return valid; }
+	T &operator*() { return impl; }
+	const T &operator*() const { return impl; }
+	T *operator->() { return &impl; }
+	const T *operator->() const { return &impl; }
+	T &value() { return !valid ? throw std::bad_cast() : impl; }
+	const T &value() const { return !valid ? throw std::bad_cast() : impl; }
+};
+}}  // namespace crab::details
+#endif
+
 namespace crab {
 
 // uint8_t is our character of choice for all binary reading and writing

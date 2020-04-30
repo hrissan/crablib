@@ -91,7 +91,7 @@ struct BodyParser {
 
 public:
 	BodyParser() = default;
-	BodyParser(uint64_t content_length, bool chunked);
+	BodyParser(details::optional<uint64_t> content_length, bool chunked);
 
 	StringStream body;
 	size_t max_chunk_header_total_length = 256;

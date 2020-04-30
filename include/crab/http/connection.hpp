@@ -78,7 +78,7 @@ class Client;
 
 class Connection : private Nocopy {
 public:
-	using StreamHandler = std::function<void(uint64_t body_position, uint64_t body_length)>;
+	using StreamHandler = std::function<void(uint64_t body_position, details::optional<uint64_t> body_length)>;
 
 	explicit Connection() : Connection(empty_handler, empty_handler) {}
 	explicit Connection(Handler &&r_handler, Handler &&d_handler);
@@ -165,9 +165,9 @@ protected:
 	// Server-side ping required for some NATs to keep port open
 	// TCP keep-alive is set by most browsers, but surprisingly not enough.
 
-	uint64_t body_content_length = 0;  // for WAITING_WRITE_RESPONSE_BODY state, -1 for chunked
-	uint64_t body_position       = 0;  // for WAITING_WRITE_RESPONSE_BODY state
-	StreamHandler w_handler;           // for WAITING_WRITE_RESPONSE_BODY state, -1 for chunked
+	details::optional<uint64_t> body_content_length;  // for WAITING_WRITE_RESPONSE_BODY state, empty for chunked
+	uint64_t body_position = 0;                       // for WAITING_WRITE_RESPONSE_BODY state
+	StreamHandler w_handler;                          // for WAITING_WRITE_RESPONSE_BODY state
 
 	void sock_handler();
 	void on_wm_ping_timer();

@@ -249,15 +249,13 @@ CRAB_INLINE void RequestParser::process_ready_header() {
 		return;  // Empty is NOP in CMS list, like "  ,,keep-alive"
 	// Those comparisons are by size first so very fast
 	if (header.name == Literal{"content-length"}) {
-		if (req.has_content_length())
+		if (req.content_length)
 			throw std::runtime_error("content length specified more than once");
 		try {
 			req.content_length = crab::integer_cast<uint64_t>(header.value);
 		} catch (const std::exception &) {
 			std::throw_with_nested(std::runtime_error("Content length is not a number"));
 		}
-		if (!req.has_content_length())
-			throw std::runtime_error("content length of 2^64-1 is not allowed");
 		return;
 	}
 	if (header.name == Literal{"transfer-encoding"}) {
@@ -325,7 +323,7 @@ CRAB_INLINE void RequestParser::process_ready_header() {
 	req.headers.emplace_back(header);  // Copy is better here
 }
 
-CRAB_INLINE BodyParser::BodyParser(uint64_t content_length, bool chunked) {
+CRAB_INLINE BodyParser::BodyParser(details::optional<uint64_t> content_length, bool chunked) {
 	if (chunked) {
 		// ignore content_length, even if set. Motivation - if client did not use
 		// chunked encoding, will throw in chunk header parser
@@ -333,11 +331,11 @@ CRAB_INLINE BodyParser::BodyParser(uint64_t content_length, bool chunked) {
 		state = CHUNK_SIZE_START;
 		return;
 	}
-	if (content_length != std::numeric_limits<uint64_t>::max()) {
+	if (content_length) {
 		// If content_length not set, we presume request with no body.
 		// Rules about which requests and responses should and should not have body
 		// are complicated.
-		remaining_bytes = content_length;
+		remaining_bytes = *content_length;
 	}
 	state = (remaining_bytes == 0) ? GOOD : CONTENT_LENGTH_BODY;
 }

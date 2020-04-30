@@ -512,8 +512,8 @@ CRAB_INLINE UDPReceiver::UDPReceiver(const Address &address, Handler &&cb, const
 	throw std::runtime_error("UDPReceiver not yet implemented on Windows");
 }
 
-CRAB_INLINE std::pair<bool, size_t> UDPReceiver::read_datagram(uint8_t *data, size_t count, Address *peer_addr) {
-	return {false, 0};
+CRAB_INLINE details::optional<size_t> UDPReceiver::read_datagram(uint8_t *data, size_t count, Address *peer_addr) {
+	return {};
 }
 
 }  // namespace crab
