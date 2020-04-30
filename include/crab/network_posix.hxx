@@ -1,6 +1,7 @@
 // Copyright (c) 2007-2020, Grigory Buteyko aka Hrissan
 // Licensed under the MIT License. See LICENSE for details.
 
+#include <sstream>
 #include "network.hpp"
 
 #if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL || CRAB_IMPL_LIBEV
@@ -475,8 +476,12 @@ CRAB_INLINE TCPAcceptor::TCPAcceptor(const Address &address, Handler &&cb)
 #endif
 	details::setsockopt_1(tmp.get_value(), SOL_SOCKET, SO_REUSEADDR);
 
-	details::check(::bind(tmp.get_value(), address.impl_get_sockaddr(), address.impl_get_sockaddr_length()) >= 0,
-	    "crab::TCPAcceptor bind failed");
+	if (::bind(tmp.get_value(), address.impl_get_sockaddr(), address.impl_get_sockaddr_length()) < 0) {
+		std::stringstream ss;
+		ss << "crab::TCPAcceptor bind failed, errno=" << errno << ", " << strerror(errno)
+		   << ", address=" << address.get_address() << ":" << address.get_port();
+		throw std::runtime_error(ss.str());
+	}
 	details::set_nonblocking(tmp.get_value());
 	details::check(listen(tmp.get_value(), SOMAXCONN) >= 0, "crab::TCPAcceptor listen failed");
 #if CRAB_IMPL_LIBEV
