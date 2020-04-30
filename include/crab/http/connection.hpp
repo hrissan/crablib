@@ -76,18 +76,90 @@ namespace http {
 class Server;
 class Client;
 
-class Connection : private Nocopy {
+class ClientConnection : private Nocopy {
 public:
-	using StreamHandler = std::function<void(uint64_t body_position, details::optional<uint64_t> body_length)>;
-
-	explicit Connection() : Connection(empty_handler, empty_handler) {}
-	explicit Connection(Handler &&r_handler, Handler &&d_handler);
+	explicit ClientConnection() : ClientConnection(empty_handler, empty_handler) {}
+	explicit ClientConnection(Handler &&r_handler, Handler &&d_handler);
 	void set_handlers(Handler &&r_handler, Handler &&d_handler) {
 		this->r_handler = std::move(r_handler);
 		this->d_handler = std::move(d_handler);
 	}
 
-	bool connect(const Address &address);
+	bool connect(const Address &address, const std::string &protocol = "http");                  // or https
+	bool connect(const std::string &host, uint16_t port, const std::string &protocol = "http");  // or https
+
+	void close();
+	bool is_open() const { return dns.is_open() || sock.is_open(); }
+	const std::string &get_protocol() const { return protocol; }
+	const std::string &get_host() const { return host; }
+	uint16_t get_port() const { return port; }
+	const Address &get_peer_address() const { return peer_address; }
+
+	void write(Request &&resp);
+	void write(WebMessage &&);
+	void web_socket_upgrade(const RequestHeader &rh);  // rh must contain at least path, optionally auth info, etc.
+	bool read_next(Response &request);
+	bool read_next(WebMessage &);
+
+	enum State {
+		RESOLVING_HOST,
+		WAITING_WRITE_REQUEST,  // Client side
+		RESPONSE_HEADER,        // Client side
+		RESPONSE_BODY,          // Client side
+		RESPONSE_READY,         // Client side
+
+		WEB_UPGRADE_RESPONSE_HEADER,  // Client side of Web Socket
+		WEB_MESSAGE_HEADER,           // Both side of Web Socket
+		WEB_MESSAGE_BODY,             // Both side of Web Socket
+		WEB_MESSAGE_READY,            // Both side of Web Socket
+		SHUTDOWN                      // Both side of Web Socket
+	};
+
+	// TODO - fix SHUTDOWN logic, add additional state for Connection: close
+
+	State get_state() const { return state; }
+
+protected:
+	crab::Buffer read_buffer;
+
+	RequestParser request_parser;
+	ResponseParser response_parser;
+	BodyParser http_body_parser;
+
+	MessageChunkParser wm_header_parser;
+	MessageBodyParser wm_body_parser;  // Single per several chunks
+	std::string sec_websocket_key;
+	Random rnd;  // for masking_key, dns name selection, web socket secret key
+	bool wm_close_sent = false;
+
+	void dns_handler(const std::vector<Address> &names);
+	void sock_handler();
+	void advance_state(bool called_from_runloop);
+
+	Handler r_handler;
+	Handler d_handler;
+
+	DNSResolver dns;
+	BufferedTCPSocket sock;
+	details::optional<Request> waiting_request;  // We allow sending single request in RESOLVING_HOST state
+
+	State state;
+	std::string protocol, host;
+	uint16_t port = 0;
+	Address peer_address;
+};
+
+class ServerConnection : private Nocopy {
+public:
+	using StreamHandler = std::function<void(uint64_t body_position, details::optional<uint64_t> body_length)>;
+
+	explicit ServerConnection() : ServerConnection(empty_handler, empty_handler) {}
+	explicit ServerConnection(Handler &&r_handler, Handler &&d_handler);
+	void set_handlers(Handler &&r_handler, Handler &&d_handler) {
+		this->r_handler = std::move(r_handler);
+		this->d_handler = std::move(d_handler);
+	}
+
 	void accept(TCPAcceptor &acceptor);
 
 	void close();
@@ -95,10 +167,8 @@ public:
 	const Address &get_peer_address() const { return peer_address; }
 
 	void write(Response &&resp);
-	void write(Request &&resp);
 	void write(WebMessage &&);
-	bool read_next(Request &request);
-	bool read_next(Response &request);
+	bool read_next(Request &req);
 	bool read_next(WebMessage &);
 	void web_socket_upgrade();  // Will throw if not upgradable
 
@@ -130,16 +200,10 @@ public:
 		WAITING_WRITE_RESPONSE_HEADER,  // Server side
 		WAITING_WRITE_RESPONSE_BODY,    // Server side
 
-		WAITING_WRITE_REQUEST,  // Client side
-		RESPONSE_HEADER,        // Client side
-		RESPONSE_BODY,          // Client side
-		RESPONSE_READY,         // Client side
-
-		WEB_UPGRADE_RESPONSE_HEADER,  // Client side of Web Socket
-		WEB_MESSAGE_HEADER,           // Both side of Web Socket
-		WEB_MESSAGE_BODY,             // Both side of Web Socket
-		WEB_MESSAGE_READY,            // Both side of Web Socket
-		SHUTDOWN                      // Both side of Web Socket
+		WEB_MESSAGE_HEADER,  // Both side of Web Socket
+		WEB_MESSAGE_BODY,    // Both side of Web Socket
+		WEB_MESSAGE_READY,   // Both side of Web Socket
+		SHUTDOWN             // Both side of Web Socket
 	};
 
 	// TODO - fix SHUTDOWN logic, add additional state for Connection: close
@@ -152,22 +216,19 @@ protected:
 	crab::Buffer read_buffer;
 
 	RequestParser request_parser;
-	ResponseParser response_parser;
 	BodyParser http_body_parser;
 
 	MessageChunkParser wm_header_parser;
 	MessageBodyParser wm_body_parser;  // Single per several chunks
 	std::string sec_websocket_key;
-	Random masking_key_random{0};  // Deterministic init for speed, will be randomized if needed
-	bool client_side   = false;    // Web Socket encryption is one-sided
 	bool wm_close_sent = false;
 	Timer wm_ping_timer;
 	// Server-side ping required for some NATs to keep port open
 	// TCP keep-alive is set by most browsers, but surprisingly not enough.
 
-	details::optional<uint64_t> body_content_length;  // for WAITING_WRITE_RESPONSE_BODY state, empty for chunked
-	uint64_t body_position = 0;                       // for WAITING_WRITE_RESPONSE_BODY state
-	StreamHandler w_handler;                          // for WAITING_WRITE_RESPONSE_BODY state
+	details::optional<uint64_t> body_content_length = 0;  // for WAITING_WRITE_RESPONSE_BODY state, empty for chunked
+	uint64_t body_position                          = 0;  // for WAITING_WRITE_RESPONSE_BODY state
+	StreamHandler w_handler;                              // for WAITING_WRITE_RESPONSE_BODY state
 
 	void sock_handler();
 	void on_wm_ping_timer();

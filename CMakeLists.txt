@@ -54,6 +54,8 @@ set(SOURCE_FILES
 		include/crab/crypto/base64.hpp
 		include/crab/crypto/sha1.hpp
 
+		include/crab/http/client_request.hpp
+		include/crab/http/client_request.hxx
 		include/crab/http/connection.hpp
 		include/crab/http/connection.hxx
 		include/crab/http/request_parser.hpp
@@ -68,8 +70,6 @@ set(SOURCE_FILES
 		include/crab/http/types.hxx
 		include/crab/http/web_message_parser.hpp
 		include/crab/http/web_message_parser.hxx
-		include/crab/http/web_socket.hpp
-		include/crab/http/web_socket.hxx
 		)
 
 

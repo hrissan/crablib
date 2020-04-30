@@ -21,7 +21,7 @@ int test_proxy(int num, uint16_t port, uint16_t upstream_port) {
 	crab::Random rnd;
 
 	std::unique_ptr<Timer> stat_timer;
-	std::unique_ptr<http::WebSocket> rws;
+	std::unique_ptr<http::ClientConnection> rws;
 
 	std::map<http::Client *, std::string> connected_sockets;
 	std::map<std::string, http::Client *> connected_sockets_inv;
@@ -62,7 +62,7 @@ int test_proxy(int num, uint16_t port, uint16_t upstream_port) {
 	// size_t message_counter = 0;
 	// auto message_start     = std::chrono::high_resolution_clock::now();
 
-	rws.reset(new http::WebSocket(
+	rws.reset(new http::ClientConnection(
 	    [&]() {
 		    http::WebMessage wm;
 		    while (rws->read_next(wm)) {
@@ -88,9 +88,9 @@ int test_proxy(int num, uint16_t port, uint16_t upstream_port) {
 		                  << "test_disconnect" << std::endl; }));
 
 	http::RequestHeader req;
-	req.host = "127.0.0.1";
 	req.path = "/ws";
-	rws->connect(crab::Address("127.0.0.1", upstream_port), req);
+	rws->connect(crab::Address("127.0.0.1", upstream_port));
+	rws->web_socket_upgrade(req);
 
 	stat_timer.reset(new Timer([&]() { runloop.stats.print_records(std::cout); }));
 	stat_timer->once(1);

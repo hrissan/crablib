@@ -148,12 +148,12 @@ int test_client(int num, uint16_t port) {
 	RunLoop runloop;
 
 	std::unique_ptr<Timer> stat_timer;
-	std::unique_ptr<http::WebSocket> rws;
+	std::unique_ptr<http::ClientConnection> rws;
 
 	int message_counter = 0;
 	auto message_start  = std::chrono::high_resolution_clock::now();
 
-	rws.reset(new http::WebSocket(
+	rws.reset(new http::ClientConnection(
 	    [&]() {
 		    http::WebMessage wm;
 		    while (rws->read_next(wm)) {
@@ -175,9 +175,9 @@ int test_client(int num, uint16_t port) {
 		                  << "test_disconnect" << std::endl; }));
 
 	http::RequestHeader req;
-	req.host = "127.0.0.1";
 	req.path = "/ws";
-	rws->connect(crab::Address("127.0.0.1", port), req);
+	rws->connect(crab::Address("127.0.0.1", port));
+	rws->web_socket_upgrade(req);
 
 	stat_timer.reset(new Timer([&]() {
 		message_counter += 1;
@@ -238,6 +238,28 @@ int test_async_calls() {
 
 int main(int argc, char *argv[]) {
 	RunLoop runloop;
+
+	http::ClientRequestSimple simple([&](http::Response &&resp) { std::cout << resp.body << std::endl; },
+	    [&](const std::string &err) { std::cout << "Error! err=" << err << std::endl; });
+	http::Request req;
+	req.header.method = "GET";
+	req.header.host   = "www.google.com";
+	req.header.path   = "/";
+
+	simple.send(std::move(req), 80, "http");
+
+	crab::Timer tim([&] {
+		http::Request req2;
+		req2.header.method = "GET";
+		req2.header.host   = "www.alawar.com";
+		req2.header.path   = "/index.html";
+
+		simple.send(std::move(req2), 80, "http");
+	});
+	tim.once(5);
+
+	runloop.run();
+	return 0;
 
 	Buffer ms(1024);
 	char getstr[] = "GET / HTTP/1.1\r\nConnection: keep-alive\r\n\r\n";

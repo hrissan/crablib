@@ -20,12 +20,12 @@ int test_client(int num, const std::string &host, uint16_t port) {
 	//    Idle idle([](){});
 
 	std::unique_ptr<Timer> stat_timer;
-	std::unique_ptr<http::WebSocket> rws;
+	std::unique_ptr<http::ClientConnection> rws;
 
 	int message_counter = 0;
 	auto message_start  = std::chrono::high_resolution_clock::now();
 
-	rws.reset(new http::WebSocket(
+	rws.reset(new http::ClientConnection(
 	    [&]() {
 		    http::WebMessage wm;
 		    while (rws->read_next(wm)) {
@@ -55,9 +55,9 @@ int test_client(int num, const std::string &host, uint16_t port) {
 		                  << "test_disconnect" << std::endl; }));
 
 	http::RequestHeader req;
-	req.host = host;
 	req.path = "/latency";
-	rws->connect(crab::Address(host, port), req);
+	rws->connect(crab::Address(host, port));
+	rws->web_socket_upgrade(req);
 
 	stat_timer.reset(new Timer([&]() {
 		message_counter += 1;

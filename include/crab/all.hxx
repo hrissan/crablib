@@ -11,6 +11,7 @@
 #include "streams.hxx"
 #include "util.hxx"
 
+#include "http/client_request.hxx"
 #include "http/connection.hxx"
 #include "http/query_parser.hxx"
 #include "http/request_parser.hxx"
@@ -18,4 +19,3 @@
 #include "http/server.hxx"
 #include "http/types.hxx"
 #include "http/web_message_parser.hxx"
-#include "http/web_socket.hxx"

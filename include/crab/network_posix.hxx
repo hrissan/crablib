@@ -3,7 +3,6 @@
 
 #include <sstream>
 #include "network.hpp"
-#include <sstream>
 
 #if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL || CRAB_IMPL_LIBEV
 

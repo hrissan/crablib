@@ -31,19 +31,19 @@ CRAB_INLINE void Client::write(Response &&response) {
 	// https://www.w3.org/Protocols/rfc2616/rfc2616-sec4.html#sec4.4
 	if (response.header.date.empty())
 		response.header.date = Server::get_date();
-	Connection::write(std::move(response));
+	ServerConnection::write(std::move(response));
 }
 
 CRAB_INLINE void Client::write(ResponseHeader &&response) {
 	if (response.date.empty())
 		response.date = Server::get_date();
-	Connection::write(std::move(response));
+	ServerConnection::write(std::move(response));
 }
 
 CRAB_INLINE void Client::write(ResponseHeader &&response, StreamHandler &&w_handler) {
 	if (response.date.empty())
 		response.date = Server::get_date();
-	Connection::write(std::move(response), std::move(w_handler));
+	ServerConnection::write(std::move(response), std::move(w_handler));
 }
 
 CRAB_INLINE Server::Server(const Address &address)
@@ -118,7 +118,7 @@ CRAB_INLINE void Server::on_client_handle_request(Client *who, Request &&request
 		response.header.status = 401;
 		who->write(std::move(response));
 	} catch (const std::exception &ex) {
-		if (who->get_state() != Connection::WAITING_WRITE_RESPONSE_HEADER)
+		if (who->get_state() != ServerConnection::WAITING_WRITE_RESPONSE_HEADER)
 			return;
 		// TODO - hope we do not leak security messages there
 		// TODO - error handler, so that error can be written to log

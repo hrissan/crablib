@@ -26,17 +26,17 @@ public:
 
 class Server;
 
-class Client : protected Connection {  // So the type is opaque for users
+class Client : protected ServerConnection {  // So the type is opaque for users
 public:
-	using Connection::get_peer_address;
+	using ServerConnection::get_peer_address;
 	void write(Response &&response);
 	void write(ResponseHeader &&response);
 	void write(ResponseHeader &&response, StreamHandler &&w_handler);
-	void write(WebMessage &&wm) { Connection::write(std::move(wm)); }
-	using Connection::web_socket_upgrade;
-	using Connection::write;
-	using Connection::write_last_chunk;
-	using Connection::write_some;
+	void write(WebMessage &&wm) { ServerConnection::write(std::move(wm)); }
+	using ServerConnection::web_socket_upgrade;
+	using ServerConnection::write;
+	using ServerConnection::write_last_chunk;
+	using ServerConnection::write_some;
 
 private:
 	friend class Server;

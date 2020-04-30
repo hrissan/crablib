@@ -452,6 +452,7 @@ public:
 	~DNSResolver() { cancel(); }
 
 	void resolve(const std::string &host_name, uint16_t port, bool ipv4, bool ipv6);  // will call handler once
+	bool is_open() const { return resolving; }
 	void cancel();
 
 	static std::vector<Address> sync_resolve(const std::string &host_name, uint16_t port, bool ipv4, bool ipv6);

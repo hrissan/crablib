@@ -191,7 +191,7 @@ private:
 		stat_timer.once(1);
 	}
 	void broadcast_retransmission() {
-		if (http_client.get_state() == http::Connection::WAITING_WRITE_REQUEST && !chunks.empty()) {
+		if (http_client.get_state() == http::ClientConnection::WAITING_WRITE_REQUEST && !chunks.empty()) {
 			MDRequest req;
 			req.begin = messages.back().seqnum + 1;
 			req.end   = chunks.front().front().seqnum;
@@ -254,7 +254,7 @@ private:
 	std::deque<Msg> messages;             // continuous stream, with optional non-empty gap to chunks
 	std::deque<std::vector<Msg>> chunks;  // non-overlapping chunks with non-empty gaps between them
 
-	http::Connection http_client;  // We keep connection connected all the time
+	http::ClientConnection http_client;  // We keep connection connected all the time
 	crab::Timer reconnect_timer;
 
 	std::thread th;

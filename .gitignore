@@ -1,9 +1,13 @@
 build
 build2
 bin
+cmake-build*
+.idea
 examples/build
 examples/build2
 examples/bin
+examples/cmake-build*
+examples/.idea
 
 # Mac specific
 .DS_Store
