@@ -23,37 +23,14 @@ option(CRAB_FUZZ "builds binaries for fuzzing" OFF)
 message("-DCRAB_IMPL_LIBEV=1 builds examples using libev as an implementation")
 option(CRAB_IMPL_LIBEV "builds examples using libev as an implementation" OFF)
 
-if(CRAB_IMPL_LIBEV)
-	message("-DCRAB_IMPL_LIBEV=1")
-	include_directories(/usr/local/include)
-	link_directories(/usr/local/lib)
-	link_libraries(ev)
-	add_definitions(-DCRAB_IMPL_LIBEV=1)
-endif()
-
 message("-DCRAB_IMPL_BOOST=1 builds examples using boost as an implementation")
 option(CRAB_IMPL_BOOST "builds examples using boost as an implementation" OFF)
-
-if(CRAB_IMPL_BOOST)
-	message("-DCRAB_IMPL_BOOST=1")
-	add_definitions(-DCRAB_IMPL_BOOST=1)
-endif()
 
 message("-DCRAB_IMPL_CF=1 builds examples using Core Foundation as an implementation")
 option(CRAB_IMPL_CF "builds examples using Core Foundation as an implementation" OFF)
 
-if(CRAB_IMPL_CF)
-	message("-DCRAB_IMPL_CF=1")
-	add_definitions(-DCRAB_IMPL_CF=1)
-endif()
-
-message("-DCRAB_CRAB_TLS=1 builds example clients with TLS support")
-option(CRAB_TLS "builds example clients with TLS support" OFF)
-
-if(CRAB_TLS)
-	message("-DCRAB_TLS=1")
-	add_definitions(-DCRAB_TLS=1)
-endif()
+message("-DCRAB_TLS=1 builds example clients with TLS support")
+option(CRAB_TLS "builds example clients with TLS support" ON)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/bin")
 

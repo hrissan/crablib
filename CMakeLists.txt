@@ -7,23 +7,27 @@ project(crablib
 	LANGUAGES C CXX)
 
 if(CRAB_IMPL_LIBEV)
-	message("-DCRAB_IMPL_LIBEV=1")
+	message("crablib:CRAB_IMPL_LIBEV=1")
 	add_definitions(-DCRAB_IMPL_LIBEV=1)
+	include_directories(/usr/local/include)
+	link_directories(/usr/local/lib)
+	link_libraries(ev)
 endif()
 
 if(CRAB_IMPL_BOOST)
-	message("-DCRAB_IMPL_BOOST=1")
+	message("crablib:CRAB_IMPL_BOOST=1")
 	message("Boost_INCLUDE_DIRS=${Boost_INCLUDE_DIRS}")
 	add_definitions(-DCRAB_IMPL_BOOST=1)
 endif()
 
 if(CRAB_IMPL_CF)
-	message("-DCRAB_IMPL_CF=1")
+	message("crablib:CRAB_IMPL_CF=1")
 	add_definitions(-DCRAB_IMPL_CF=1)
 endif()
 
-
 if(CRAB_TLS)
+	message("crablib:CRAB_TLS=1")
+	add_definitions(-DCRAB_TLS=1)
 	if(NOT WIN32)
 		link_libraries(ssl crypto)
 	endif()
