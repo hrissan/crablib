@@ -50,7 +50,7 @@ CRAB_INLINE void ClientRequestSimple::on_connection() {
 		return;  // Should not be possible
 	requesting = false;
 	r_handler(std::move(response));
-	timeout_timer.once(10);  // TODO constant
+	timeout_timer.once(keep_connection_timeout_sec);
 }
 
 CRAB_INLINE void ClientRequestSimple::on_timeout_timer() { connection.close(); }

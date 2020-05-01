@@ -47,6 +47,13 @@ if(CRAB_IMPL_CF)
 	add_definitions(-DCRAB_IMPL_CF=1)
 endif()
 
+message("-DCRAB_CRAB_TLS=1 builds example clients with TLS support")
+option(CRAB_TLS "builds example clients with TLS support" OFF)
+
+if(CRAB_TLS)
+	message("-DCRAB_TLS=1")
+	add_definitions(-DCRAB_TLS=1)
+endif()
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/bin")
 

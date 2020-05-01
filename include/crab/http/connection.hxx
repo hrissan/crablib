@@ -141,9 +141,6 @@ CRAB_INLINE ClientConnection::ClientConnection(Handler &&r_handler, Handler &&d_
     , state(SHUTDOWN) {}
 
 CRAB_INLINE bool ClientConnection::connect(const std::string &h, uint16_t p, const std::string &pr) {
-	Address addr;
-	if (Address::parse(addr, h, p))
-		return connect(addr, pr);
 	close();
 	if (pr != Literal{"http"} && pr != Literal{"https"})
 		throw std::runtime_error("ClientConnection unsupported protocol");
@@ -155,16 +152,14 @@ CRAB_INLINE bool ClientConnection::connect(const std::string &h, uint16_t p, con
 	return true;
 }
 
-CRAB_INLINE bool ClientConnection::connect(const Address &address, const std::string &pr) {
+CRAB_INLINE bool ClientConnection::connect(const Address &address) {
 	close();
-	if (pr != Literal{"http"} && pr != Literal{"https"})
-		throw std::runtime_error("ClientConnection unsupported protocol");
 	if (!sock.connect(address))
 		return false;
 	peer_address = address;
 	host         = address.get_address();
 	port         = address.get_port();
-	protocol     = pr;
+	protocol     = "http";
 	state        = WAITING_WRITE_REQUEST;
 	return true;
 }
@@ -272,15 +267,24 @@ CRAB_INLINE void ClientConnection::web_socket_upgrade(const RequestHeader &rh) {
 }
 
 CRAB_INLINE void ClientConnection::dns_handler(const std::vector<Address> &names) {
-	size_t index =
-	    names.empty() ? 0 : rnd.pod<size_t>() % names.size();  // non-zero chance with even single server up
-	if (names.empty() || !sock.connect(names[index])) {
+	if (names.empty()) {
 		close();
 		d_handler();
 		return;
 	}
-	peer_address = names[index];
-	state        = WAITING_WRITE_REQUEST;
+	peer_address = names[rnd.pod<size_t>() % names.size()];  // non-zero chance with even single server up
+	if (protocol == Literal{"http"}) {
+		if (!sock.connect(peer_address)) {
+			close();
+			d_handler();
+		}
+	} else {  // https, check is in connect
+		if (!sock.connect_tls(peer_address, host)) {
+			close();
+			d_handler();
+		}
+	}
+	state = WAITING_WRITE_REQUEST;
 	if (waiting_request)
 		write(std::move(*waiting_request));
 	waiting_request.reset();

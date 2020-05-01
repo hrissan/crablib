@@ -32,11 +32,9 @@ private:
 		KEY,
 		KEY_PERCENT1,
 		KEY_PERCENT2,
-		KEY_PERCENT3,
 		VALUE,
 		VALUE_PERCENT1,
 		VALUE_PERCENT2,
-		VALUE_PERCENT3
 	} state = KEY;
 
 	char percent1_hex_sym = char{};

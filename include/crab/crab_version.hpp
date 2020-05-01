@@ -6,10 +6,11 @@
 #include <string>
 
 // #define CRAB_COMPILE 1 <- Set this in project settings to select compiled version of lib
+// #define CRAB_TLS 1     <- Set this in project settings to add TLS support (via OpenSSL or native platform support)
 
-// #define CRAB_IMPL_LIBEV 1 <- Set this to make crab a wrapper around libev
-// #define CRAB_IMPL_BOOST 1 <- Set this to make crab a wrapper around boost::asio
-// #define CRAB_IMPL_CF 1 <- Set this to make crab a wrapper around CFRunLoop (mostly for iOS)
+// #define CRAB_IMPL_LIBEV 1 <- Set this in project settings to make crab a wrapper around libev
+// #define CRAB_IMPL_BOOST 1 <- Set this in project settings to make crab a wrapper around boost::asio
+// #define CRAB_IMPL_CF 1    <- Set this in project settings to make crab a wrapper around CFRunLoop (mostly for iOS)
 
 // Our selector of low-level implementation
 

@@ -11,6 +11,8 @@
 #include "streams.hxx"
 #include "util.hxx"
 
+#include "crab/http/crab_tls.hxx"
+#include "crab/http/crab_tls_certificates.hxx"
 #include "http/client_request.hxx"
 #include "http/connection.hxx"
 #include "http/query_parser.hxx"

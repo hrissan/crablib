@@ -246,15 +246,17 @@ int main(int argc, char *argv[]) {
 	req.header.host   = "www.google.com";
 	req.header.path   = "/";
 
+	std::cout << "Sending HTTP request" << std::endl;
 	simple.send(std::move(req), 80, "http");
 
 	crab::Timer tim([&] {
 		http::Request req2;
 		req2.header.method = "GET";
-		req2.header.host   = "www.alawar.com";
-		req2.header.path   = "/index.html";
+		req2.header.host   = "letsencrypt.org";
+		req2.header.path   = "/docs/faq/";
 
-		simple.send(std::move(req2), 80, "http");
+		std::cout << "Sending HTTPS request" << std::endl;
+		simple.send(std::move(req2), 443, "https");
 	});
 	tim.once(5);
 

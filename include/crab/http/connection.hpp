@@ -6,6 +6,7 @@
 #include <deque>
 #include "../network.hpp"
 #include "../streams.hpp"
+#include "crab_tls.hpp"
 #include "request_parser.hpp"
 #include "response_parser.hpp"
 #include "types.hpp"
@@ -24,9 +25,8 @@ public:
 	bool is_open() const { return sock.is_open(); }
 
 	bool connect(const Address &address) { return sock.connect(address); }
-	void accept(TCPAcceptor &acceptor, Address *accepted_addr = nullptr) {
-		return sock.accept(acceptor, accepted_addr);
-	}
+	bool connect_tls(const Address &address, const std::string &host) { return sock.connect_tls(address, host); }
+	void accept(TCPAcceptor &acceptor, Address *accepted_addr = nullptr) { sock.accept(acceptor, accepted_addr); }
 
 	size_t read_some(uint8_t *val, size_t count) override;
 	using IStream::read_some;  // Version for other char types
@@ -69,7 +69,7 @@ protected:
 
 	Handler rwd_handler;
 
-	TCPSocket sock;
+	TCPSocketTLS sock;
 };
 
 namespace http {
@@ -85,7 +85,7 @@ public:
 		this->d_handler = std::move(d_handler);
 	}
 
-	bool connect(const Address &address, const std::string &protocol = "http");                  // or https
+	bool connect(const Address &address);                                                        // http-only
 	bool connect(const std::string &host, uint16_t port, const std::string &protocol = "http");  // or https
 
 	void close();

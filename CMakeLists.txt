@@ -22,6 +22,14 @@ if(CRAB_IMPL_CF)
 	add_definitions(-DCRAB_IMPL_CF=1)
 endif()
 
+
+if(CRAB_TLS)
+	if(NOT WIN32)
+		link_libraries(ssl crypto)
+	endif()
+endif()
+
+
 if(MSVC)
     add_definitions(-D_SCL_SECURE_NO_WARNINGS=1 -D_CRT_SECURE_NO_WARNINGS=1) #  -D_WIN32_WINNT=0x0601
     add_compile_options(/we4715) # not all paths return value is error
@@ -58,6 +66,8 @@ set(SOURCE_FILES
 		include/crab/http/client_request.hxx
 		include/crab/http/connection.hpp
 		include/crab/http/connection.hxx
+		include/crab/http/crab_tls.hpp
+		include/crab/http/crab_tls.hxx
 		include/crab/http/request_parser.hpp
 		include/crab/http/request_parser.hxx
 		include/crab/http/query_parser.hpp
