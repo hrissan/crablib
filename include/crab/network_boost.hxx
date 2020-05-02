@@ -80,8 +80,7 @@ CRAB_INLINE void RunLoop::cancel() { impl->io.stop(); }
 
 CRAB_INLINE steady_clock::time_point RunLoop::now() { return impl->now; }
 
-class WatcherImpl {
-public:
+struct WatcherImpl {
 	explicit WatcherImpl(Watcher *owner) : owner(owner) {}
 	Watcher *owner;
 	std::atomic<size_t> pending_calls;
@@ -119,8 +118,7 @@ CRAB_INLINE void Watcher::cancel() {
 		impl.reset(new WatcherImpl(this));
 }
 
-class TimerImpl {
-public:
+struct TimerImpl {
 	explicit TimerImpl(Timer *owner) : owner(owner), timer(RunLoop::current()->get_impl()->io) {}
 	Timer *owner;
 	bool pending_wait = false;
@@ -187,8 +185,7 @@ CRAB_INLINE SignalStop::SignalStop(Handler &&cb) : a_handler(std::move(cb)) {}
 
 CRAB_INLINE SignalStop::~SignalStop() = default;
 
-class TCPSocketImpl {
-public:
+struct TCPSocketImpl {
 	explicit TCPSocketImpl(TCPSocket *owner) : owner(owner), socket(RunLoop::current()->get_impl()->io) {}
 	TCPSocket *owner;
 	bool connected = false;  // TODO - simplify state machine
@@ -344,8 +341,7 @@ CRAB_INLINE void TCPSocket::write_shutdown() {
 		impl->write_shutdown();
 }
 
-class TCPAcceptorImpl {
-public:
+struct TCPAcceptorImpl {
 	TCPAcceptor *owner;
 	explicit TCPAcceptorImpl(TCPAcceptor *owner)
 	    : owner(owner)

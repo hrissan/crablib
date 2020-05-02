@@ -81,7 +81,7 @@ CRAB_INLINE void details::TLSEngine::read_from_socket(IStream *sock) {
 		size_t rd = sock->read_some(buffer, sizeof(buffer));
 		if (rd == 0)
 			break;
-		invariant(BIO_write(bio_in, buffer, rd) == rd, "BIO_write could not consume all data");
+		invariant(BIO_write(bio_in, buffer, rd) == int(rd), "BIO_write could not consume all data");
 	}
 }
 

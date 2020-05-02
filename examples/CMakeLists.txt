@@ -30,7 +30,7 @@ message("-DCRAB_IMPL_CF=1 builds examples using Core Foundation as an implementa
 option(CRAB_IMPL_CF "builds examples using Core Foundation as an implementation" OFF)
 
 message("-DCRAB_TLS=1 builds example clients with TLS support")
-option(CRAB_TLS "builds example clients with TLS support" ON)
+option(CRAB_TLS "builds example clients with TLS support" OFF)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/bin")
 
@@ -54,20 +54,16 @@ if(CRAB_IMPL_BOOST) # Must be before all executables
 	endif()
 endif()
 
-add_subdirectory ( .. EXCLUDE_FROM_ALL ${CMAKE_CURRENT_BINARY_DIR}/crablib)
+add_compile_options(-g -Wall -Wextra -Werror=return-type -Wno-unused-parameter)
+
+add_subdirectory(.. EXCLUDE_FROM_ALL ${CMAKE_CURRENT_BINARY_DIR}/crablib)
 
 link_libraries(crablib::crablib)
 
-find_package (Threads)
-link_libraries (Threads::Threads)
-
 if(MSVC)
+    add_definitions(-D_SCL_SECURE_NO_WARNINGS=1 -D_CRT_SECURE_NO_WARNINGS=1) #  -D_WIN32_WINNT=0x0601
 else()
     add_compile_options(-Wno-noexcept-type)
-endif()
-
-if(APPLE)
-    link_libraries(-dead_strip  "-framework Foundation -framework CFNetwork")
 endif()
 
 add_executable(dns_resolve ${SOURCE_FILES} dns_resolve.cpp)

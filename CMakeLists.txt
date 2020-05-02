@@ -1,45 +1,25 @@
 cmake_minimum_required(VERSION 3.0)
 
+# On mac, if SSL installed via "brew install openssl"
+# Parent project must pass option
+# cmake -DOPENSSL_ROOT_DIR=/usr/local/opt/openssl ..
+
+# CRAB_TLS=1 uses openssl, install it with
+# sudo apt-get install libssl-dev
+# brew install openssl
+
 project(crablib
 	VERSION "0.8.0"
 	DESCRIPTION "Experiments to create cross-platform wrapper for Runloop/Timers/Sockets/ITC with lowest possible overhead on UNIX platforms"
 	HOMEPAGE_URL "https://github.com/hrissan/crablib"
 	LANGUAGES C CXX)
 
-if(CRAB_IMPL_LIBEV)
-	message("crablib:CRAB_IMPL_LIBEV=1")
-	add_definitions(-DCRAB_IMPL_LIBEV=1)
-	include_directories(/usr/local/include)
-	link_directories(/usr/local/lib)
-	link_libraries(ev)
-endif()
-
-if(CRAB_IMPL_BOOST)
-	message("crablib:CRAB_IMPL_BOOST=1")
-	message("Boost_INCLUDE_DIRS=${Boost_INCLUDE_DIRS}")
-	add_definitions(-DCRAB_IMPL_BOOST=1)
-endif()
-
-if(CRAB_IMPL_CF)
-	message("crablib:CRAB_IMPL_CF=1")
-	add_definitions(-DCRAB_IMPL_CF=1)
-endif()
-
-if(CRAB_TLS)
-	message("crablib:CRAB_TLS=1")
-	add_definitions(-DCRAB_TLS=1)
-	if(NOT WIN32)
-		link_libraries(ssl crypto)
-	endif()
-endif()
-
-
 if(MSVC)
+	# TODO - change to target_compile_definitions, otherwise caller will get errors in our headers
     add_definitions(-D_SCL_SECURE_NO_WARNINGS=1 -D_CRT_SECURE_NO_WARNINGS=1) #  -D_WIN32_WINNT=0x0601
     add_compile_options(/we4715) # not all paths return value is error
 else()
     add_compile_options(-Wno-noexcept-type)
-#	add_compile_options(-g -Wall -Wextra -Werror=return-type -Wno-unused-parameter)
 endif()
 
 
@@ -93,14 +73,49 @@ add_library("${PROJECT_NAME}-header-only" INTERFACE)
 add_library( crablib::crablib ALIAS "${PROJECT_NAME}" )
 add_library( crablib::crablib-header-only ALIAS "${PROJECT_NAME}-header-only" )
 
+
+if(CRAB_TLS)
+    message( STATUS "crablib:Crab will support TLS via OpenSSL" )
+	target_compile_definitions("${PROJECT_NAME}" PUBLIC -DCRAB_TLS=1)
+	target_compile_definitions("${PROJECT_NAME}-header-only" INTERFACE -DCRAB_TLS=1)
+
+	set(OPENSSL_USE_STATIC_LIBS YES)
+	find_package(OpenSSL REQUIRED)
+	message(STATUS "Using OpenSSL ${OPENSSL_VERSION}")
+
+	target_include_directories("${PROJECT_NAME}" PUBLIC "${OPENSSL_INCLUDE_DIRS}")
+	target_include_directories("${PROJECT_NAME}-header-only" INTERFACE "${OPENSSL_INCLUDE_DIRS}")
+	target_link_libraries("${PROJECT_NAME}" PUBLIC OpenSSL::SSL OpenSSL::Crypto)
+endif()
+
+
+if(CRAB_IMPL_LIBEV) # Same order as in crab_version.hpp
+	message(STATUS "crablib:Crab will use libev impl")
+	target_compile_definitions("${PROJECT_NAME}" PUBLIC -DCRAB_IMPL_LIBEV=1)
+	target_compile_definitions("${PROJECT_NAME}-header-only" INTERFACE -DCRAB_IMPL_LIBEV=1)
+	target_include_directories("${PROJECT_NAME}" PUBLIC "/usr/local/include")
+	target_include_directories("${PROJECT_NAME}-header-only" INTERFACE "$/usr/local/include")
+	target_link_directories("${PROJECT_NAME}" PUBLIC "/usr/local/lib")
+	target_link_libraries("${PROJECT_NAME}" PUBLIC ev)
+elseif(CRAB_IMPL_BOOST)
+	message(STATUS "crablib:Crab will use boost::asio impl, parent project must have boost already set up - headers, link libraries, etc.")
+	target_compile_definitions("${PROJECT_NAME}" PUBLIC -DCRAB_IMPL_BOOST=1)
+	target_compile_definitions("${PROJECT_NAME}-header-only" INTERFACE -DCRAB_IMPL_BOOST=1)
+elseif(CRAB_IMPL_CF)
+	message(STATUS "crablib:Crab will use Core Foundation impl, will work on Apple platforms only")
+	target_compile_definitions("${PROJECT_NAME}" PUBLIC -DCRAB_IMPL_CF=1)
+	target_compile_definitions("${PROJECT_NAME}-header-only" INTERFACE -DCRAB_IMPL_CF=1)
+    target_link_libraries("${PROJECT_NAME}" PUBLIC -dead_strip  "-framework Foundation -framework CFNetwork")
+    target_link_libraries("${PROJECT_NAME}-header-only" INTERFACE -dead_strip  "-framework Foundation -framework CFNetwork")
+else()
+	message(STATUS "crablib:Crab will use native impl - kevent on OS X, epoll on Linux, Overlapped I/O on Windows")
+endif()
+
 target_compile_definitions("${PROJECT_NAME}" PUBLIC -DCRAB_COMPILE=1)
 
-target_include_directories ( "${PROJECT_NAME}"
-    PUBLIC  "${CMAKE_CURRENT_SOURCE_DIR}/include"
-)
-target_include_directories ( "${PROJECT_NAME}-header-only"
-    INTERFACE  "${CMAKE_CURRENT_SOURCE_DIR}/include"
-)
+target_include_directories("${PROJECT_NAME}" PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_include_directories("${PROJECT_NAME}-header-only" INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
 find_package (Threads)
-target_link_libraries ("${PROJECT_NAME}" Threads::Threads)
+target_link_libraries ("${PROJECT_NAME}" PUBLIC Threads::Threads)
+target_link_libraries ("${PROJECT_NAME}-header-only" INTERFACE Threads::Threads)

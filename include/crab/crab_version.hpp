@@ -17,50 +17,49 @@
 // clang-format off
 
 #if CRAB_IMPL_LIBEV  // Define in CMakeLists to select this impl
+    #define CRAB_IMPL_STRING "libev"
     #include <ev++.h>
 #elif CRAB_IMPL_BOOST  // Define in CMakeLists to select this impl
+    #define CRAB_IMPL_STRING "boost::asio"
     #include <boost/asio.hpp>
     #include <boost/circular_buffer.hpp>
 #elif CRAB_IMPL_CF
+    #define CRAB_IMPL_STRING "Core Foundation"
     #include <CFNetwork/CFNetwork.h>
     #include <CoreFoundation/CoreFoundation.h>
 #elif defined(__MACH__)
     #define CRAB_IMPL_KEVENT 1
+    #define CRAB_IMPL_STRING "kevent"
 #elif defined(__linux__)
     #define CRAB_IMPL_EPOLL 1
+    #define CRAB_IMPL_STRING "epoll"
 #elif defined(_WIN32)
     #define CRAB_IMPL_WINDOWS 1
+    #define CRAB_IMPL_STRING "Overlapped I/O"
 #else
     #error "Sorry, No socket implementation for your platform"
 #endif
 
 // crap-crap-crap
 #if CRAB_COMPILE
+    #define CRAB_COMPILE_STRING ", Compiled"
     #define CRAB_INLINE
 #else
+    #define CRAB_COMPILE_STRING ", Header-Only"
     #define CRAB_INLINE inline
 #endif
 
 #define CRAB_VERSION "0.8.0"
 // Not in cmake, we wish to be easily includable in header-only mode
+#if CRAB_TLS
+#define CRAB_TLS_STRING ", with TLS"
+#else
+#define CRAB_TLS_STRING ""
+#endif
 
 namespace crab {
 
-#if CRAB_IMPL_LIBEV
-	inline std::string version_string() { return CRAB_VERSION " (libev)"; }
-#elif CRAB_IMPL_BOOST
-	inline std::string version_string() { return CRAB_VERSION " (boost::asio)"; }
-#elif CRAB_IMPL_CF
-	inline std::string version_string() { return CRAB_VERSION " (Core Foundation)"; }
-#elif CRAB_IMPL_KEVENT
-	inline std::string version_string() { return CRAB_VERSION " (kevent)"; }
-#elif CRAB_IMPL_EPOLL
-	inline std::string version_string() { return CRAB_VERSION " (epoll)"; }
-#elif CRAB_IMPL_WINDOWS
-	inline std::string version_string() { return CRAB_VERSION " (Overlapped I/O)"; }
-#else
-	#error "Please add appropriate version string here"
-#endif
+inline std::string version_string() { return CRAB_VERSION " (" CRAB_IMPL_STRING ")" CRAB_COMPILE_STRING CRAB_TLS_STRING; }
 
 }  // namespace crab
 
