@@ -243,11 +243,11 @@ int main(int argc, char *argv[]) {
 	    [&](const std::string &err) { std::cout << "Error! err=" << err << std::endl; });
 
 	std::cout << "Sending HTTP request" << std::endl;
-	simple.send_get("http://www.google.com");
+	simple.get("http://www.google.com");
 
 	crab::Timer tim([&] {
 		std::cout << "Sending HTTPS request" << std::endl;
-		simple.send_get("https://letsencrypt.org/docs/faq/");
+		simple.get("https://letsencrypt.org/docs/faq/");
 	});
 	tim.once(5);
 

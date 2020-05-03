@@ -25,9 +25,8 @@ CRAB_INLINE void ClientRequestSimple::send(Request &&request, uint16_t port, con
 	requesting = true;
 }
 
-CRAB_INLINE void ClientRequestSimple::send_get(const std::string &uri_str, Request &&request) {
+CRAB_INLINE void ClientRequestSimple::send(const std::string &uri_str, Request &&request) {
 	URI uri                     = parse_uri(uri_str);
-	request.header.method       = "GET";
 	request.header.host         = uri.host;
 	request.header.path         = uri.path;
 	request.header.query_string = uri.query;
@@ -43,6 +42,11 @@ CRAB_INLINE void ClientRequestSimple::send_get(const std::string &uri_str, Reque
 			throw std::runtime_error("port is empty, while scheme unknown - impossible to guess");
 	}
 	send(std::move(request), integer_cast<uint16_t>(uri.port), uri.scheme);
+}
+
+CRAB_INLINE void ClientRequestSimple::get(const std::string &uri_str, Request &&request) {
+	request.header.method = "GET";
+	send(uri_str, std::move(request));
 }
 
 CRAB_INLINE void ClientRequestSimple::cancel() {

@@ -18,7 +18,12 @@ public:
 	explicit ClientRequestSimple(R_handler &&r_handler, E_handler &&e_handler);
 
 	void send(Request &&request, uint16_t port, const std::string &protocol);
-	void send_get(const std::string &uri_str, Request &&request = Request{});
+
+	// fills request components from uri_str
+	void send(const std::string &uri_str, Request &&request = Request{});
+
+	// fills request components from uri_str, plus sets method to GET
+	void get(const std::string &uri_str, Request &&request = Request{});
 
 	void cancel();  // after cancel you are guaranteed that no handlers will be called
 	bool is_open() const { return requesting; }
