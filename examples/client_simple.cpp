@@ -241,22 +241,13 @@ int main(int argc, char *argv[]) {
 
 	http::ClientRequestSimple simple([&](http::Response &&resp) { std::cout << resp.body << std::endl; },
 	    [&](const std::string &err) { std::cout << "Error! err=" << err << std::endl; });
-	http::Request req;
-	req.header.method = "GET";
-	req.header.host   = "www.google.com";
-	req.header.path   = "/";
 
 	std::cout << "Sending HTTP request" << std::endl;
-	simple.send(std::move(req), 80, "http");
+	simple.send_get("http://www.google.com");
 
 	crab::Timer tim([&] {
-		http::Request req2;
-		req2.header.method = "GET";
-		req2.header.host   = "letsencrypt.org";
-		req2.header.path   = "/docs/faq/";
-
 		std::cout << "Sending HTTPS request" << std::endl;
-		simple.send(std::move(req2), 443, "https");
+		simple.send_get("https://letsencrypt.org/docs/faq/");
 	});
 	tim.once(5);
 

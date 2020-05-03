@@ -64,6 +64,35 @@ CRAB_INLINE bool is_tspecial(int c) {
 	}
 }
 
+CRAB_INLINE bool is_uri_reserved(int c) {
+	if (!is_char(c) || is_ctl(c) || is_sp(c))
+		return true;
+	switch (c) {
+	case '!':
+	case '#':
+	case '$':
+	case '%':
+	case '&':
+	case '\'':
+	case '(':
+	case ')':
+	case '*':
+	case '+':
+	case ',':
+	case '/':
+	case ':':
+	case ';':
+	case '=':
+	case '?':
+	case '@':
+	case '[':
+	case ']':
+		return true;
+	default:
+		return false;
+	}
+}
+
 CRAB_INLINE void trim_right(std::string &str) {
 	// We have no backtracking, so cheat here
 	while (!str.empty() && is_sp(str.back()))
@@ -226,14 +255,12 @@ CRAB_INLINE std::string ResponseHeader::generate_sec_websocket_accept(const std:
 CRAB_INLINE std::unordered_map<std::string, std::string> Request::parse_query_params() const {
 	QueryParser p;
 	p.parse(header.query_string);
-	p.parse_end();
 	if (header.method == Literal{"GET"})  // All other methods support params in body
 		return std::move(p.parsed);
 	// TODO - multipart data
 	if (header.content_type_mime != Literal{"application/x-www-form-urlencoded"})
 		return std::move(p.parsed);
 	p.parse(body);
-	p.parse_end();
 	return std::move(p.parsed);
 }
 
@@ -242,7 +269,6 @@ CRAB_INLINE std::unordered_map<std::string, std::string> Request::parse_cookies(
 	for (const auto &h : header.headers)
 		if (h.name == Literal{"cookie"}) {
 			p.parse(h.value);
-			p.parse_end();
 		}
 	return std::move(p.parsed);
 }

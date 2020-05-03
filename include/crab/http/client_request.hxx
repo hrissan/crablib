@@ -25,6 +25,26 @@ CRAB_INLINE void ClientRequestSimple::send(Request &&request, uint16_t port, con
 	requesting = true;
 }
 
+CRAB_INLINE void ClientRequestSimple::send_get(const std::string &uri_str, Request &&request) {
+	URI uri                     = parse_uri(uri_str);
+	request.header.method       = "GET";
+	request.header.host         = uri.host;
+	request.header.path         = uri.path;
+	request.header.query_string = uri.query;
+	if (!uri.user_info.empty())
+		request.header.basic_authorization =
+		    base64::encode(reinterpret_cast<const uint8_t *>(uri.user_info.data()), uri.user_info.size());
+	if (uri.port.empty()) {
+		if (uri.scheme == Literal{"http"})
+			uri.port = "80";
+		else if (uri.scheme == Literal{"https"})
+			uri.port = "443";
+		else
+			throw std::runtime_error("port is empty, while scheme unknown - impossible to guess");
+	}
+	send(std::move(request), integer_cast<uint16_t>(uri.port), uri.scheme);
+}
+
 CRAB_INLINE void ClientRequestSimple::cancel() {
 	if (!requesting)
 		return;

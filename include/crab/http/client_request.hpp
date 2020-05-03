@@ -18,6 +18,8 @@ public:
 	explicit ClientRequestSimple(R_handler &&r_handler, E_handler &&e_handler);
 
 	void send(Request &&request, uint16_t port, const std::string &protocol);
+	void send_get(const std::string &uri_str, Request &&request = Request{});
+
 	void cancel();  // after cancel you are guaranteed that no handlers will be called
 	bool is_open() const { return requesting; }
 
@@ -40,7 +42,7 @@ class ClientRequestPooled {
 public:
 	struct HostPortProtocol {
 		std::string host;
-		uint8_t port = 0;
+		uint16_t port = 0;
 		std::string protocol;
 
 		bool operator<(const HostPortProtocol &other) const {

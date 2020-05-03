@@ -150,6 +150,54 @@ void test_cookie_parser() {
 	print_params(p4, "cookies p4");
 }
 
+static void test_uri(std::string uri_str, std::string scheme, std::string user_info, std::string host,
+    std::string port, std::string path, std::string query = "") {
+	crab::http::URI uri = crab::http::parse_uri(uri_str);
+	invariant(uri.scheme == scheme && uri.user_info == user_info && uri.host == host && uri.port == port &&
+	              uri.path == path && uri.query == query,
+	    "");
+	std::cout << "<-- " << uri_str << std::endl;
+	std::cout << "--> " << uri.to_string() << std::endl;
+	crab::http::URI uri2 = crab::http::parse_uri(uri.to_string());
+	invariant(uri2.scheme == scheme && uri2.user_info == user_info && uri2.host == host && uri2.port == port &&
+	              uri2.path == path && uri2.query == query,
+	    "");
+}
+
+static void test_bad_uri(std::string uri_str) {
+	try {
+		crab::http::parse_uri(uri_str);
+	} catch (const std::runtime_error &) {
+		std::cout << "bad " << uri_str << std::endl;
+		return;
+	}
+	throw std::logic_error("Bad uri parsed successfully");
+}
+
+void test_uri_parser() {
+	test_uri("http://crab.com/", "http", "", "crab.com", "", "/");
+	test_uri("http://crab.com/chat", "http", "", "crab.com", "", "/chat");
+	test_bad_uri("https://getschwifty.ltd/.././../hello");
+	test_uri("https://getschwifty.ltd/mega/giga/../hello/test/../ok", "https", "", "getschwifty.ltd", "",
+	    "/mega/hello/ok");
+	test_bad_uri("");
+	test_uri(
+	    "http://getschwifty.ltd:8080/test?Fran%C3%A7ois=%D1%82%D0%B5%D1%81%D1%82+123+%D0%BD%D0%B0%D1%84%D0%B8%D0%B3",
+	    "http", "", "getschwifty.ltd", "8080", "/test",
+	    "Fran%C3%A7ois=%D1%82%D0%B5%D1%81%D1%82+123+%D0%BD%D0%B0%D1%84%D0%B8%D0%B3");
+	test_uri("https://192.168.0.1/Fran%C3%A7ois/%D1%82%D0%B5%D1%81%D1%82%1", "https", "", "192.168.0.1", "",
+	    "/François/тест%1");
+	test_uri("https://192.168.0.1:8080/%hello%/world?mega=123", "https", "", "192.168.0.1", "8080", "/%hello%/world",
+	    "mega=123");
+	test_uri("https://test.com:8090", "https", "", "test.com", "8090", "/");
+	test_uri(
+	    "https://https://Fran%C3%A7ois:%D1%82%D0%B5%D1%81%D1%82+123+%D0%BD%D0%B0%D1%84%D0%B8%D0%B3@192.168.0.1:8090",
+	    "https", "", "https", "", "//François:тест+123+нафиг@192.168.0.1:8090");
+	test_uri(
+	    "https://https:Fran%C3%A7ois:%D1%82%D0%B5%D1%81%D1%82+123+%D0%BD%D0%B0%D1%84%D0%B8%D0%B3@192.168.0.1:8090",
+	    "https", "https:François:тест+123+нафиг", "192.168.0.1", "8090", "/");
+}
+
 void message_eq(const Message &msg, const http::ResponseHeader &req, const std::string &body) {
 	invariant(msg.status_code == req.status, "");
 	invariant(msg.body == body, "");
@@ -157,6 +205,7 @@ void message_eq(const Message &msg, const http::ResponseHeader &req, const std::
 }
 
 int main() {
+	test_uri_parser();
 	for (size_t request_count = 0; requests[request_count].name; request_count++) {
 		auto msg = requests[request_count];
 		http::RequestParser req;
