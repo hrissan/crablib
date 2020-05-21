@@ -304,6 +304,16 @@ void benchmark_sets() {
 		int_heap.pop_front();
 		return 1;
 	});
+	benchmark_op(
+	    "OurHeap insert ", el_to_insert, [&](HeapElement *sample) -> size_t { return int_heap.insert(*sample); });
+	benchmark_op(
+	    "OurHeap erase ", el_to_erase, [&](HeapElement *sample) -> size_t { return int_heap.erase(*sample); });
+	benchmark_op("OurHeap pop_back ", el_to_insert, [&](HeapElement *sample) -> size_t {
+		if (int_heap.empty())
+			return 0;
+		int_heap.pop_back();
+		return 1;
+	});
 
 	std::set<uint64_t> test_set;
 	benchmark_op(
