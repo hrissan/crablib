@@ -40,7 +40,7 @@
     #define CRAB_INLINE inline
 #endif
 
-#define CRAB_VERSION "0.8.0"
+#define CRAB_VERSION "0.8.1-dev"
 // Not in cmake, we wish to be easily includable in header-only mode
 
 namespace crab {
