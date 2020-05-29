@@ -129,6 +129,7 @@ public:
 	bdata data(size_t size);
 
 	std::string printable_string(size_t size);
+	double double_value();  // [0..1)
 
 	template<typename T>
 	T pod() {
@@ -137,6 +138,12 @@ public:
 		bytes(reinterpret_cast<uint8_t *>(&result), sizeof(result));
 		return result;
 	}
+
+	// Adapter for C++ std::shuffle, std::uniform_int_distribution, etc.
+	typedef uint32_t result_type;
+	constexpr static uint32_t min() { return std::numeric_limits<uint32_t>::min(); }
+	constexpr static uint32_t max() { return std::numeric_limits<uint32_t>::max(); }
+	uint32_t operator()() { return pcg32_random_r(); }
 
 private:
 	uint32_t pcg32_random_r();
