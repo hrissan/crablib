@@ -153,26 +153,25 @@ int test_client(int num, uint16_t port) {
 	int message_counter = 0;
 	auto message_start  = std::chrono::high_resolution_clock::now();
 
-	rws.reset(new http::ClientConnection(
-	    [&]() {
-		    http::WebMessage wm;
-		    while (rws->read_next(wm)) {
-			    runloop.stats.push_record("OnWebMessage", 0, message_counter);
-			    const auto idea_ms = std::chrono::duration_cast<std::chrono::microseconds>(
-			        std::chrono::high_resolution_clock::now() - message_start);
-			    runloop.stats.print_records(std::cout);
-			    if (wm.is_binary()) {
-				    std::cout << "Client Got Message: <Binary message> time=" << idea_ms.count() << " mks"
-				              << std::endl;
-			    } else {
-				    std::cout << "Client Got Message: " << wm.body << " time=" << idea_ms.count() << " mks"
-				              << std::endl;
-			    }
-			    stat_timer->once(1);
-		    }
-	    },
-	    [&]() { std::cout << std::endl
-		                  << "test_disconnect" << std::endl; }));
+	rws.reset(new http::ClientConnection([&]() {
+		if (!rws->is_open()) {
+			std::cout << std::endl << "test_disconnect" << std::endl;
+			return;
+		}
+		http::WebMessage wm;
+		while (rws->read_next(wm)) {
+			runloop.stats.push_record("OnWebMessage", 0, message_counter);
+			const auto idea_ms = std::chrono::duration_cast<std::chrono::microseconds>(
+			    std::chrono::high_resolution_clock::now() - message_start);
+			runloop.stats.print_records(std::cout);
+			if (wm.is_binary()) {
+				std::cout << "Client Got Message: <Binary message> time=" << idea_ms.count() << " mks" << std::endl;
+			} else {
+				std::cout << "Client Got Message: " << wm.body << " time=" << idea_ms.count() << " mks" << std::endl;
+			}
+			stat_timer->once(1);
+		}
+	}));
 
 	http::RequestHeader req;
 	req.path = "/ws";

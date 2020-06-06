@@ -21,11 +21,11 @@ public:
 	void read(uint8_t *val, size_t count);
 
 	// We do not wish to use void* due to unsafe conversions, we wish all 3 common byte types
-	size_t read_some(char *val, size_t count) { return read_some(reinterpret_cast<uint8_t *>(val), count); }
-	void read(char *val, size_t count) { read(reinterpret_cast<uint8_t *>(val), count); }
+	size_t read_some(char *val, size_t count) { return read_some(uint8_cast(val), count); }
+	void read(char *val, size_t count) { read(uint8_cast(val), count); }
 #if __cplusplus >= 201703L
-	size_t read_some(std::byte *val, size_t count) { return read_some(reinterpret_cast<uint8_t *>(val), count); }
-	void read(std::byte *val, size_t count) { read(reinterpret_cast<uint8_t *>(val), count); }
+	size_t read_some(std::byte *val, size_t count) { return read_some(uint8_cast(val), count); }
+	void read(std::byte *val, size_t count) { read(uint8_cast(val), count); }
 #endif
 };
 
@@ -37,15 +37,11 @@ public:
 	void write_byte(uint8_t val) { write(&val, 1); }  // name prevents dangerous conversions
 
 	// We do not wish to use void* due to unsafe conversions, we wish all 3 common byte types
-	size_t write_some(const char *val, size_t count) {
-		return write_some(reinterpret_cast<const uint8_t *>(val), count);
-	}
-	void write(const char *val, size_t count) { write(reinterpret_cast<const uint8_t *>(val), count); }
+	size_t write_some(const char *val, size_t count) { return write_some(uint8_cast(val), count); }
+	void write(const char *val, size_t count) { write(uint8_cast(val), count); }
 #if __cplusplus >= 201703L
-	size_t write_some(const std::byte *val, size_t count) {
-		return write_some(reinterpret_cast<const uint8_t *>(val), count);
-	}
-	void write(const std::byte *val, size_t count) { write(reinterpret_cast<const uint8_t *>(val), count); }
+	size_t write_some(const std::byte *val, size_t count) { return write_some(uint8_cast(val), count); }
+	void write(const std::byte *val, size_t count) { write(uint8_cast(val), count); }
 #endif
 };
 

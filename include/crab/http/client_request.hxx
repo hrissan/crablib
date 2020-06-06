@@ -11,7 +11,7 @@ namespace crab { namespace http {
 CRAB_INLINE ClientRequestSimple::ClientRequestSimple(R_handler &&r_handler, E_handler &&e_handler)
     : r_handler(std::move(r_handler))
     , e_handler(std::move(e_handler))
-    , connection([this]() { on_connection(); }, [this]() { on_connection_close(); })
+    , connection([this]() { on_connection(); })
     , timeout_timer([this]() { on_timeout_timer(); }) {}
 
 CRAB_INLINE void ClientRequestSimple::send(Request &&request, uint16_t port, const std::string &protocol) {
@@ -31,8 +31,7 @@ CRAB_INLINE void ClientRequestSimple::send(const std::string &uri_str, Request &
 	request.header.path         = uri.path;
 	request.header.query_string = uri.query;
 	if (!uri.user_info.empty())
-		request.header.basic_authorization =
-		    base64::encode(reinterpret_cast<const uint8_t *>(uri.user_info.data()), uri.user_info.size());
+		request.header.basic_authorization = base64::encode(uint8_cast(uri.user_info.data()), uri.user_info.size());
 	if (uri.port.empty()) {
 		if (uri.scheme == Literal{"http"})
 			uri.port = "80";
@@ -67,6 +66,8 @@ CRAB_INLINE void ClientRequestSimple::on_connection_close() {
 }
 
 CRAB_INLINE void ClientRequestSimple::on_connection() {
+	if (!connection.is_open())
+		return on_connection_close();
 	Response response;
 	if (!connection.read_next(response))
 		return;

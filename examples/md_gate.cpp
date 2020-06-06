@@ -108,7 +108,7 @@ public:
 	    , udp_ra(settings.md_gate_udp_ra(), [&]() { broadcast_retransmission(); })
 	    , stat_timer([&]() { on_stat_timer(); })
 	    , ab([&]() { on_fast_queue_changed(); })
-	    , http_client([&]() { on_http_client_data(); }, [&]() { on_http_client_closed(); })
+	    , http_client([&]() { on_http_client_data(); })
 	    , reconnect_timer([&]() { connect(); })
 	    , th(&MDGate::retransmitter_thread, this) {
 		connect();
@@ -205,6 +205,8 @@ private:
 		}
 	}
 	void on_http_client_data() {
+		if (!http_client.is_open())
+			return on_http_client_closed();
 		http::Response response;
 		while (http_client.read_next(response)) {
 			if (response.header.status == 200) {

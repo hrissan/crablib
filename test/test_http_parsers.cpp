@@ -217,11 +217,11 @@ int main() {
 		//		std::ofstream freq("req" + std::to_string(request_count) + ".txt");
 		//		freq.write(msg.raw, pos - msg.raw);
 		http::BodyParser bp{req.req.content_length, req.req.transfer_encoding_chunked};
-		auto pos2 = bp.parse(reinterpret_cast<const uint8_t *>(pos), reinterpret_cast<const uint8_t *>(end));
+		auto pos2 = bp.parse(crab::uint8_cast(pos), crab::uint8_cast(end));
 		if (!bp.is_good())
 			throw std::logic_error("Body failed to parse");
 		message_eq(msg, req.req, bp.body.get_buffer());
-		if (pos2 - reinterpret_cast<const uint8_t *>(pos) == 0)
+		if (pos2 - crab::uint8_cast(pos) == 0)
 			continue;
 		// Code used to create initial corpus for fuzzing
 		//		std::ofstream fbody("req_body" + std::to_string(request_count) + ".txt");
@@ -241,11 +241,11 @@ int main() {
 		//		std::ofstream freq("resp" + std::to_string(request_count) + ".txt");
 		//		freq.write(msg.raw, pos - msg.raw);
 		http::BodyParser bp{req.req.content_length, req.req.transfer_encoding_chunked};
-		auto pos2 = bp.parse(reinterpret_cast<const uint8_t *>(pos), reinterpret_cast<const uint8_t *>(end));
+		auto pos2 = bp.parse(crab::uint8_cast(pos), crab::uint8_cast(end));
 		if (!bp.is_good())
 			throw std::logic_error("Body failed to parse");
 		message_eq(msg, req.req, bp.body.get_buffer());
-		if (pos2 - reinterpret_cast<const uint8_t *>(pos) == 0)
+		if (pos2 - crab::uint8_cast(pos) == 0)
 			continue;
 		// Code used to create initial corpus for fuzzing
 		//		std::ofstream fbody("resp_body" + std::to_string(request_count) + ".txt");

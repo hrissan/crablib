@@ -79,18 +79,26 @@ namespace crab {
 
 // uint8_t is our character of choice for all binary reading and writing
 typedef std::vector<uint8_t> bdata;
+
+// C++ lacks common byte type, funs below are safe and shorten common code
+// We do not use void *, because that silently allows very unsafe conversions (like passing &std::string)
+inline uint8_t *uint8_cast(uint8_t *val) { return val; }
+inline const uint8_t *uint8_cast(const uint8_t *val) { return val; }
+inline uint8_t *uint8_cast(char *val) { return reinterpret_cast<uint8_t *>(val); }
+inline const uint8_t *uint8_cast(const char *val) { return reinterpret_cast<const uint8_t *>(val); }
+#if __cplusplus >= 201703L
+inline uint8_t *uint8_cast(std::byte *val) { return reinterpret_cast<uint8_t *>(val); }
+inline const uint8_t *uint8_cast(const std::byte *val) { return reinterpret_cast<const uint8_t *>(val); }
+#endif
+
 inline void append(bdata &result, const bdata &other) {  // We do this op too often
 	result.insert(result.end(), other.begin(), other.end());
 }
 
 std::string to_hex(const uint8_t *data, size_t count);
-inline std::string to_hex(const char *data, size_t count) {
-	return to_hex(reinterpret_cast<const u_int8_t *>(data), count);
-}
+inline std::string to_hex(const char *data, size_t count) { return to_hex(uint8_cast(data), count); }
 #if __cplusplus >= 201703L
-inline std::string to_hex(std::byte *val, size_t count) {
-	return to_hex(reinterpret_cast<const uint8_t *>(val), count);
-}
+inline std::string to_hex(std::byte *val, size_t count) { return to_hex(uint8_cast(val), count); }
 #endif
 inline std::string to_hex(const bdata &data) { return to_hex(data.data(), data.size()); }
 
@@ -181,9 +189,9 @@ public:
 	explicit Random(uint32_t seed);  // For tests. Hopefully, 2^32 test patterns is enough
 
 	void bytes(uint8_t *buffer, size_t size);
-	void bytes(char *buffer, size_t size) { bytes(reinterpret_cast<uint8_t *>(buffer), size); }
+	void bytes(char *buffer, size_t size) { bytes(uint8_cast(buffer), size); }
 #if __cplusplus >= 201703L
-	void bytes(std::byte *buffer, size_t size) { bytes(reinterpret_cast<uint8_t *>(buffer), size); }
+	void bytes(std::byte *buffer, size_t size) { bytes(uint8_cast(buffer), size); }
 #endif
 	bdata data(size_t size);
 

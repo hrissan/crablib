@@ -62,30 +62,31 @@ int test_proxy(int num, uint16_t port, uint16_t upstream_port) {
 	// size_t message_counter = 0;
 	// auto message_start     = std::chrono::high_resolution_clock::now();
 
-	rws.reset(new http::ClientConnection(
-	    [&]() {
-		    http::WebMessage wm;
-		    while (rws->read_next(wm)) {
-			    LatencyMessage lm;
-			    std::string id2;
-			    if (!lm.parse(wm.body, &id2))
-				    continue;
-			    auto it = connected_sockets_inv.find(id2);
-			    if (it == connected_sockets_inv.end())
-				    continue;
-			    lm.id.clear();
-			    lm.add_lat("proxy_recv_upstrean", std::chrono::steady_clock::now());
-			    //                    std::cout << lm.save() << std::endl;
+	rws.reset(new http::ClientConnection([&]() {
+		if (!rws->is_open()) {
+			std::cout << std::endl << "test_disconnect" << std::endl;
+			return;
+		}
+		http::WebMessage wm;
+		while (rws->read_next(wm)) {
+			LatencyMessage lm;
+			std::string id2;
+			if (!lm.parse(wm.body, &id2))
+				continue;
+			auto it = connected_sockets_inv.find(id2);
+			if (it == connected_sockets_inv.end())
+				continue;
+			lm.id.clear();
+			lm.add_lat("proxy_recv_upstrean", std::chrono::steady_clock::now());
+			//                    std::cout << lm.save() << std::endl;
 
-			    http::WebMessage reply;
-			    reply.opcode = http::WebMessage::OPCODE_TEXT;
-			    reply.body   = lm.save();
-			    it->second->write(std::move(reply));
-			    runloop.stats.print_records(std::cout);
-		    }
-	    },
-	    [&]() { std::cout << std::endl
-		                  << "test_disconnect" << std::endl; }));
+			http::WebMessage reply;
+			reply.opcode = http::WebMessage::OPCODE_TEXT;
+			reply.body   = lm.save();
+			it->second->write(std::move(reply));
+			runloop.stats.print_records(std::cout);
+		}
+	}));
 
 	http::RequestHeader req;
 	req.path = "/ws";

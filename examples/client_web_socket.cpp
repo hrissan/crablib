@@ -13,7 +13,7 @@ using namespace crab;
 class ClientWebSocketApp {
 public:
 	ClientWebSocketApp(const std::string &host, uint16_t port)
-	    : ws([&]() { on_ws_data(); }, [&]() { on_ws_closed(); })
+	    : ws([&]() { on_ws_data(); })
 	    , reconnect_timer([&]() { connect(); })
 	    , send_timer([&]() { send_message(); })
 	    , host(host)
@@ -23,6 +23,8 @@ public:
 
 private:
 	void on_ws_data() {
+		if (!ws.is_open())
+			return on_ws_closed();
 		http::WebMessage wm;
 		while (ws.read_next(wm)) {
 			if (wm.is_binary()) {

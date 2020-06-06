@@ -33,28 +33,30 @@ public:
 
 	// Efficient direct-to-socket interface
 	size_t write_some(const uint8_t *val, size_t count);
-	size_t write_some(const char *val, size_t count) {
-		return write_some(reinterpret_cast<const uint8_t *>(val), count);
-	}
+	size_t write_some(const char *val, size_t count) { return write_some(uint8_cast(val), count); }
 #if __cplusplus >= 201703L
-	size_t write_some(const std::byte *val, size_t count) {
-		return write_some(reinterpret_cast<const uint8_t *>(val), count);
-	}
+	size_t write_some(const std::byte *val, size_t count) { return write_some(uint8_cast(val), count); }
 #endif
 	bool can_write() const { return total_buffer_size == 0 && sock.can_write(); }
 
 	// Write into socket, all data that did not fit are store in a buffer and sent later
-	void write(const uint8_t *val, size_t count, BufferOptions buffer_options = WRITE);
-	void write(const char *val, size_t count, BufferOptions buffer_options = WRITE);
+	void write(const uint8_t *val, size_t count, BufferOptions bo = WRITE);
+	void buffer(const uint8_t *val, size_t count);
+	void write(const char *val, size_t count, BufferOptions bo = WRITE) { write(uint8_cast(val), count, bo); }
+	void buffer(const char *val, size_t count) { buffer(uint8_cast(val), count); }
 #if __cplusplus >= 201703L
-	void write(const std::byte *val, size_t count, BufferOptions buffer_options = WRITE);
+	void write(const std::byte *val, size_t count, BufferOptions bo = WRITE) { write(uint8_cast(val), count, bo); }
+	void buffer(const std::byte *val, size_t count) { buffer(uint8_cast(val), count); }
 #endif
 
-	void write(std::string &&ss, BufferOptions buffer_options = WRITE);
+	void write(std::string &&ss, BufferOptions bo = WRITE);
+	void buffer(std::string &&ss);
 
 	void write_shutdown();
 
 	size_t get_total_buffer_size() const { return total_buffer_size; }
+
+	enum { WM_SHUTDOWN_TIMEOUT_SEC = 15 };
 
 protected:
 	std::deque<StringStream> data_to_write;
@@ -63,13 +65,12 @@ protected:
 
 	void write();
 	void sock_handler();
-	void buffer(const uint8_t *val, size_t count);
-	void buffer(const char *val, size_t count);
-	void buffer(std::string &&ss);
+	void shutdown_timer_handler();
 
 	Handler rwd_handler;
 
 	TCPSocketTLS sock;
+	Timer shutdown_timer;
 };
 
 namespace http {
@@ -78,12 +79,9 @@ class Client;
 
 class ClientConnection : private Nocopy {
 public:
-	explicit ClientConnection() : ClientConnection(empty_handler, empty_handler) {}
-	explicit ClientConnection(Handler &&r_handler, Handler &&d_handler);
-	void set_handlers(Handler &&r_handler, Handler &&d_handler) {
-		this->r_handler = std::move(r_handler);
-		this->d_handler = std::move(d_handler);
-	}
+	explicit ClientConnection() : ClientConnection(empty_handler) {}
+	explicit ClientConnection(Handler &&rwd_handler);
+	void set_handlers(Handler &&rwd_handler) { this->rwd_handler = std::move(rwd_handler); }
 
 	bool connect(const Address &address);                                                        // http-only
 	bool connect(const std::string &host, uint16_t port, const std::string &protocol = "http");  // or https
@@ -122,7 +120,6 @@ public:
 protected:
 	crab::Buffer read_buffer;
 
-	RequestParser request_parser;
 	ResponseParser response_parser;
 	BodyParser http_body_parser;
 
@@ -136,8 +133,7 @@ protected:
 	void sock_handler();
 	void advance_state(bool called_from_runloop);
 
-	Handler r_handler;
-	Handler d_handler;
+	Handler rwd_handler;
 
 	DNSResolver dns;
 	BufferedTCPSocket sock;
@@ -172,25 +168,22 @@ public:
 	bool read_next(WebMessage &);
 	void web_socket_upgrade();  // Will throw if not upgradable
 
-	void write(ResponseHeader &&resp, BufferOptions buffer_options = WRITE);  // Write header now, body later
-	void write(const uint8_t *val, size_t count, BufferOptions buffer_options = WRITE);  // Write body chunk
-	void write(const char *val, size_t count, BufferOptions buffer_options = WRITE);     // Write body chunk
+	void write(ResponseHeader &&resp, BufferOptions bo = WRITE);  // Write header now, body later
+
+	void write(const uint8_t *val, size_t count, BufferOptions bo = WRITE);  // Write body chunk
+	void write(const char *val, size_t count, BufferOptions bo = WRITE) { write(uint8_cast(val), count, bo); }
 #if __cplusplus >= 201703L
-	void write(const std::byte *val, size_t count, BufferOptions buffer_options = WRITE);
+	void write(const std::byte *val, size_t count, BufferOptions bo = WRITE) { write(uint8_cast(val), count, bo); }
 #endif
-	void write(std::string &&ss, BufferOptions buffer_options = WRITE);  // Write body chunk
-	void write_last_chunk();                                             // for chunk encoding, finishes body
+	void write(std::string &&ss, BufferOptions bo = WRITE);  // Write body chunk
+	void write_last_chunk();                                 // for chunk encoding, finishes body
 
 	// Experimental, efficient direct-to-socket unbuffered interface
 	void write(ResponseHeader &&resp, StreamHandler &&w_handler);  // Call when can_write in socket buffer
 	size_t write_some(const uint8_t *val, size_t count);           // Write into socket buffer
-	size_t write_some(const char *val, size_t count) {
-		return write_some(reinterpret_cast<const uint8_t *>(val), count);
-	}
+	size_t write_some(const char *val, size_t count) { return write_some(uint8_cast(val), count); }
 #if __cplusplus >= 201703L
-	size_t write_some(const std::byte *val, size_t count) {
-		return write_some(reinterpret_cast<const uint8_t *>(val), count);
-	}
+	size_t write_some(const std::byte *val, size_t count) { return write_some(uint8_cast(val), count); }
 #endif
 
 	enum State {
