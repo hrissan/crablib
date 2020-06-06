@@ -188,7 +188,8 @@ CRAB_INLINE CookieParser::State CookieParser::consume(char input) {
 			return KEY_WS_BEFORE;
 		if (input == ';')
 			return KEY_WS_BEFORE;
-		// note: fallthru to KEY
+		// note: fallthru to KEY. Next line is understood by GCC
+		// Fall through
 	case KEY:
 		if (input == ';') {
 			persist_pair();
@@ -201,7 +202,8 @@ CRAB_INLINE CookieParser::State CookieParser::consume(char input) {
 	case VALUE_WS_BEFORE:
 		if (is_sp(input))
 			return VALUE_WS_BEFORE;
-		// note: fallthru to VALUE
+		// note: fallthru to VALUE. Next line is understood by GCC
+		// Fall through
 	case VALUE:
 		if (input == ';') {
 			persist_pair();

@@ -318,7 +318,8 @@ CRAB_INLINE void ClientConnection::advance_state(bool called_from_runloop) {
 				    BodyParser{response_parser.req.content_length, response_parser.req.transfer_encoding_chunked};
 				response_parser.req.transfer_encoding_chunked = false;  // Hide from clients
 				state                                         = RESPONSE_BODY;
-			// Fall through (to correctly handle zero-length body)
+				// Fall through (to correctly handle zero-length body). Next line is understood by GCC
+				// Fall through
 			case RESPONSE_BODY:
 				http_body_parser.parse(read_buffer);
 				if (!http_body_parser.is_good())
@@ -348,7 +349,8 @@ CRAB_INLINE void ClientConnection::advance_state(bool called_from_runloop) {
 					continue;
 				wm_body_parser.add_chunk(wm_header_parser.req);
 				state = WEB_MESSAGE_BODY;
-			// Fall through (to correctly handle zero-length body)
+				// Fall through (to correctly handle zero-length body). Next line is understood by GCC
+				// Fall through
 			case WEB_MESSAGE_BODY:
 				wm_body_parser.parse(read_buffer);
 				if (!wm_body_parser.is_good())
@@ -650,7 +652,8 @@ CRAB_INLINE void ServerConnection::advance_state(bool called_from_runloop) {
 				    BodyParser{request_parser.req.content_length, request_parser.req.transfer_encoding_chunked};
 				request_parser.req.transfer_encoding_chunked = false;  // Hide from clients
 				state                                        = REQUEST_BODY;
-				// Fall through (to correctly handle zero-length body)
+				// Fall through (to correctly handle zero-length body). Next line is understood by GCC
+				// Fall through
 			case REQUEST_BODY:
 				http_body_parser.parse(read_buffer);
 				if (!http_body_parser.is_good())
@@ -667,7 +670,8 @@ CRAB_INLINE void ServerConnection::advance_state(bool called_from_runloop) {
 					throw std::runtime_error("Web Socket Client must use masking");
 				wm_body_parser.add_chunk(wm_header_parser.req);
 				state = WEB_MESSAGE_BODY;
-				// Fall through (to correctly handle zero-length body)
+				// Fall through (to correctly handle zero-length body). Next line is understood by GCC
+				// Fall through
 			case WEB_MESSAGE_BODY:
 				wm_body_parser.parse(read_buffer);
 				if (!wm_body_parser.is_good())

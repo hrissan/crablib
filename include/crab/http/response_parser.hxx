@@ -103,7 +103,8 @@ CRAB_INLINE ResponseParser::State ResponseParser::consume(char input) {
 	case STATUS_TEXT_START:
 		if (is_sp(input))
 			return STATUS_TEXT_START;
-		// Fall Throught
+		// Next line is understood by GCC
+		// Fall through
 	case STATUS_TEXT:
 		if (input == '\r')
 			return STATUS_LINE_LF;
@@ -154,7 +155,8 @@ CRAB_INLINE ResponseParser::State ResponseParser::consume(char input) {
 			header.name.push_back(std::tolower(input));
 			return HEADER_NAME;
 		}
-		// Fall Throught
+		// Next line is understood by GCC
+		// Fall through
 	case HEADER_COLON:
 		if (is_sp(input))
 			return HEADER_COLON;
@@ -166,7 +168,8 @@ CRAB_INLINE ResponseParser::State ResponseParser::consume(char input) {
 	case SPACE_BEFORE_HEADER_VALUE:
 		if (is_sp(input))
 			return SPACE_BEFORE_HEADER_VALUE;
-		// Fall Throught
+		// Next line is understood by GCC
+		// Fall through
 	case HEADER_VALUE:
 		if (input == '\r') {
 			return HEADER_LF;
