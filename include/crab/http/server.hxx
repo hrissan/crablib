@@ -32,19 +32,30 @@ CRAB_INLINE void Client::write(Response &&response) {
 	if (response.header.date.empty())
 		response.header.date = Server::get_date();
 	ServerConnection::write(std::move(response));
+	d_handler = {};
 }
 
 CRAB_INLINE void Client::write(ResponseHeader &&response) {
 	if (response.date.empty())
 		response.date = Server::get_date();
 	ServerConnection::write(std::move(response));
+	d_handler = {};
 }
 
 CRAB_INLINE void Client::write(ResponseHeader &&response, StreamHandler &&w_handler) {
 	if (response.date.empty())
 		response.date = Server::get_date();
 	ServerConnection::write(std::move(response), std::move(w_handler));
+	d_handler = {};
 }
+
+CRAB_INLINE void Client::web_socket_upgrade(W_handler &&wcb, Handler &&dcb) {
+	ServerConnection::web_socket_upgrade();
+	w_handler = std::move(wcb);
+	d_handler = std::move(dcb);
+}
+
+CRAB_INLINE void Client::start_long_poll(Handler &&dcb) { d_handler = std::move(dcb); }
 
 CRAB_INLINE Server::Server(const Address &address)
     : r_handler(details::empty_r_handler)
@@ -75,6 +86,8 @@ CRAB_INLINE const std::string &Server::get_date() {
 
 CRAB_INLINE void Server::on_client_handler(std::list<Client>::iterator it) {
 	Client *who = &*it;
+	if (!who->is_open())
+		return on_client_disconnected(it);
 	WebMessage message;
 	Request request;
 	while (true) {
@@ -91,7 +104,7 @@ CRAB_INLINE void Server::accept_all() {
 	while (la_socket.can_accept()) {  // && clients.size() < max_incoming_connections &&
 		clients.emplace_back();
 		auto it = --clients.end();
-		it->set_handlers([this, it]() { on_client_handler(it); }, [this, it]() { on_client_disconnected(it); });
+		it->set_handlers([this, it]() { on_client_handler(it); });
 		it->accept(la_socket);
 		//        std::cout << "HTTP Client accepted=" << cid << " addr=" << (*it)->get_peer_address() << std::endl;
 	}
@@ -99,6 +112,8 @@ CRAB_INLINE void Server::accept_all() {
 
 CRAB_INLINE void Server::on_client_disconnected(std::list<Client>::iterator it) {
 	Client *who = &*it;
+	if (who->d_handler)
+		who->d_handler();
 	clients.erase(it);
 	d_handler(who);
 }
@@ -107,37 +122,33 @@ CRAB_INLINE void Server::on_client_disconnected(std::list<Client>::iterator it) 
 // save_for_longpoll(), and if they do not, 404 response will be sent
 
 CRAB_INLINE void Server::on_client_handle_request(Client *who, Request &&request) {
-	Response response;
 	try {
 		if (r_handler)
 			r_handler(who, std::move(request));
 	} catch (const ErrorAuthorization &ex) {
-		// std::cout << "HTTP unauthorized request" << std::endl;
+		Response response;
 		response.header.headers.push_back(
 		    {"WWW-Authenticate", "Basic realm=\"" + ex.realm + "\", charset=\"UTF-8\""});
 		response.header.status = 401;
 		who->write(std::move(response));
+		return;
 	} catch (const std::exception &ex) {
-		if (who->get_state() != ServerConnection::WAITING_WRITE_RESPONSE_HEADER)
-			return;
-		// TODO - hope we do not leak security messages there
-		// TODO - error handler, so that error can be written to log
-		response.header.status = 422;
-		response.set_body(ex.what());
-		who->write(std::move(response));
+		if (who->get_state() == ServerConnection::WAITING_WRITE_RESPONSE_HEADER) {
+			// TODO - hope we do not leak security messages there
+			// TODO - error handler, so that error can be written to log
+			who->write(Response::simple_text(422, ex.what()));
+		}
+		return;
 	}
-	//	if (result) {
-	//		if (response.header.status == 404 && !response.header.has_content_length()) {
-	//			response.header.set_content_type("text/html", "charset=utf-8");
-	//			response.set_body("<html><body>404 Not Found</body></html>");
-	//		}
-	//		who->write(std::move(response));
-	//	}
+	if (who->get_state() == ServerConnection::WAITING_WRITE_RESPONSE_HEADER)
+		throw std::logic_error("r_handler must either write response, call start_long_poll or web_socket_upgrade");
 }
 
 CRAB_INLINE void Server::on_client_handle_message(Client *who, WebMessage &&message) {
 	try {
-		if (w_handler)
+		if (who->w_handler)
+			who->w_handler(std::move(message));
+		else if (w_handler)
 			w_handler(who, std::move(message));
 	} catch (const std::exception &ex) {
 		std::cout << "HTTP socket request leads to throw/catch, what=" << ex.what() << std::endl;
@@ -145,5 +156,4 @@ CRAB_INLINE void Server::on_client_handle_message(Client *who, WebMessage &&mess
 		// TODO - hope we do not leak security messages there
 	}
 }
-
 }}  // namespace crab::http

@@ -140,7 +140,7 @@ CRAB_INLINE void RequestResponseHeader::set_content_type(const std::string &mime
 
 CRAB_INLINE bool RequestHeader::is_websocket_upgrade() const {
 	return method == "GET" && connection_upgrade && upgrade_websocket && !sec_websocket_key.empty() &&
-	       sec_websocket_version == "13";
+	       sec_websocket_version == "13" && keep_alive;
 }
 
 CRAB_INLINE void RequestHeader::set_uri(const std::string &uri) {

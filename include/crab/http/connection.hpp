@@ -37,7 +37,7 @@ public:
 #if __cplusplus >= 201703L
 	size_t write_some(const std::byte *val, size_t count) { return write_some(uint8_cast(val), count); }
 #endif
-	bool can_write() const { return total_buffer_size == 0 && sock.can_write(); }
+	bool can_write() const { return total_data_to_write == 0 && sock.can_write(); }
 
 	// Write into socket, all data that did not fit are store in a buffer and sent later
 	void write(const uint8_t *val, size_t count, BufferOptions bo = WRITE);
@@ -54,14 +54,14 @@ public:
 
 	void write_shutdown();
 
-	size_t get_total_buffer_size() const { return total_buffer_size; }
+	size_t get_total_buffer_size() const { return total_data_to_write; }
 
 	enum { WM_SHUTDOWN_TIMEOUT_SEC = 15 };
 
 protected:
 	std::deque<StringStream> data_to_write;
-	size_t total_buffer_size  = 0;
-	bool write_shutdown_asked = false;
+	size_t total_data_to_write = 0;
+	bool write_shutdown_asked  = false;
 
 	void write();
 	void sock_handler();
@@ -109,13 +109,12 @@ public:
 		WEB_UPGRADE_RESPONSE_HEADER,  // Client side of Web Socket
 		WEB_MESSAGE_HEADER,           // Both side of Web Socket
 		WEB_MESSAGE_BODY,             // Both side of Web Socket
-		WEB_MESSAGE_READY,            // Both side of Web Socket
-		SHUTDOWN                      // Both side of Web Socket
+		WEB_MESSAGE_READY             // Both side of Web Socket
 	};
 
-	// TODO - fix SHUTDOWN logic, add additional state for Connection: close
-
 	State get_state() const { return state; }
+
+	size_t get_total_buffer_size() const { return sock.get_total_buffer_size(); }
 
 protected:
 	crab::Buffer read_buffer;
@@ -127,7 +126,6 @@ protected:
 	MessageBodyParser wm_body_parser;  // Single per several chunks
 	std::string sec_websocket_key;
 	Random rnd;  // for masking_key, dns name selection, web socket secret key
-	bool wm_close_sent = false;
 
 	void dns_handler(const std::vector<Address> &names);
 	void sock_handler();
@@ -149,12 +147,9 @@ class ServerConnection : private Nocopy {
 public:
 	using StreamHandler = std::function<void(uint64_t body_position, details::optional<uint64_t> body_length)>;
 
-	explicit ServerConnection() : ServerConnection(empty_handler, empty_handler) {}
-	explicit ServerConnection(Handler &&r_handler, Handler &&d_handler);
-	void set_handlers(Handler &&r_handler, Handler &&d_handler) {
-		this->r_handler = std::move(r_handler);
-		this->d_handler = std::move(d_handler);
-	}
+	explicit ServerConnection() : ServerConnection(empty_handler) {}
+	explicit ServerConnection(Handler &&rwd_handler);
+	void set_handlers(Handler &&rwd_handler) { this->rwd_handler = std::move(rwd_handler); }
 
 	void accept(TCPAcceptor &acceptor);
 
@@ -195,13 +190,14 @@ public:
 
 		WEB_MESSAGE_HEADER,  // Both side of Web Socket
 		WEB_MESSAGE_BODY,    // Both side of Web Socket
-		WEB_MESSAGE_READY,   // Both side of Web Socket
-		SHUTDOWN             // Both side of Web Socket
+		WEB_MESSAGE_READY    // Both side of Web Socket
 	};
 
 	// TODO - fix SHUTDOWN logic, add additional state for Connection: close
 
 	State get_state() const { return state; }
+
+	size_t get_total_buffer_size() const { return sock.get_total_buffer_size(); }
 
 	enum { WM_PING_TIMEOUT_SEC = 45 };
 	// Slightly less than default TCP keep-alive of 50 sec
@@ -213,11 +209,9 @@ protected:
 
 	MessageChunkParser wm_header_parser;
 	MessageBodyParser wm_body_parser;  // Single per several chunks
-	std::string sec_websocket_key;
-	bool wm_close_sent = false;
 	Timer wm_ping_timer;
 	// Server-side ping required for some NATs to keep port open
-	// TCP keep-alive is set by most browsers, but surprisingly not enough.
+	// TCP keep-alive is set by most browsers, but surprisingly it is not enough.
 
 	details::optional<uint64_t> body_content_length = 0;  // for WAITING_WRITE_RESPONSE_BODY state, empty for chunked
 	uint64_t body_position                          = 0;  // for WAITING_WRITE_RESPONSE_BODY state
@@ -227,8 +221,7 @@ protected:
 	void on_wm_ping_timer();
 	void advance_state(bool called_from_runloop);
 
-	Handler r_handler;
-	Handler d_handler;
+	Handler rwd_handler;
 
 	BufferedTCPSocket sock;
 

@@ -74,7 +74,7 @@ CRAB_INLINE MessageChunkParser::State MessageChunkParser::consume(uint8_t input)
 }
 
 CRAB_INLINE size_t MessageChunkParser::write_message_frame(
-    uint8_t buffer[32], const WebMessage &message, bool mask, uint32_t masking_key) {
+    uint8_t buffer[MESSAGE_FRAME_BUFFER_SIZE], const WebMessage &message, bool mask, uint32_t masking_key) {
 	if (message.opcode == 0 || !WebMessage::is_good_opcode(message.opcode))
 		throw std::logic_error("Invalid web message opcode " + std::to_string(message.opcode));
 	uint8_t *ptr    = buffer;
@@ -94,12 +94,13 @@ CRAB_INLINE size_t MessageChunkParser::write_message_frame(
 	if (mask)
 		for (size_t i = 4; i-- > 0;)
 			*ptr++ = masking_key >> i * 8;
+	invariant(ptr - buffer <= MESSAGE_FRAME_BUFFER_SIZE, "Message frame buffer overflow");
 	return ptr - buffer;
 }
 
 CRAB_INLINE std::string MessageChunkParser::write_message_frame(
     const WebMessage &message, bool mask, uint32_t masking_key) {
-	uint8_t buffer[32];
+	uint8_t buffer[MESSAGE_FRAME_BUFFER_SIZE];
 	size_t buffer_len = write_message_frame(buffer, message, mask, masking_key);
 
 	return std::string(reinterpret_cast<const char *>(buffer), buffer_len);

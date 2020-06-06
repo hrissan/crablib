@@ -12,15 +12,8 @@ class ServerLongPollApp {
 public:
 	explicit ServerLongPollApp(uint16_t port) : server(port), timer([&]() { on_timer(); }) {
 		server.r_handler = [&](http::Client *who, http::Request &&request) {
-			waiting_clients.emplace(who, ticks_counter + 5);
-			waiting_clients_inv.emplace(ticks_counter + 5, who);
-		};
-		server.d_handler = [&](http::Client *who) {
-			auto wit = waiting_clients.find(who);
-			if (wit == waiting_clients.end())
-				return;
-			waiting_clients_inv.erase(wit->second);
-			waiting_clients.erase(wit);
+			auto res = waiting_clients_inv.emplace(ticks_counter + 5, who);
+			who->start_long_poll([this, res]() { waiting_clients_inv.erase(res); });
 		};
 		timer.once(1);
 	}
@@ -33,7 +26,6 @@ private:
 		while (!waiting_clients_inv.empty() && waiting_clients_inv.begin()->first <= ticks_counter) {
 			auto who = waiting_clients_inv.begin()->second;
 			waiting_clients_inv.erase(waiting_clients_inv.begin());
-			waiting_clients.erase(who);
 
 			http::Response response;
 			response.header.status = 200;
@@ -45,8 +37,7 @@ private:
 	http::Server server;
 	crab::Timer timer;
 	size_t ticks_counter = 0;
-	std::map<http::Client *, size_t> waiting_clients;
-	std::map<size_t, http::Client *> waiting_clients_inv;
+	std::multimap<size_t, http::Client *> waiting_clients_inv;
 };
 
 int main(int argc, char *argv[]) {

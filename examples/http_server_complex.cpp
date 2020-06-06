@@ -47,8 +47,19 @@ public:
 		server.r_handler = [&](http::Client *who, http::Request &&request) {
 			req_counter += 1;
 			if (request.header.path == "/ws") {
-				who->web_socket_upgrade();
-				connected_sockets.insert(who);
+				connected_sockets.push_back(who);
+				auto it = --connected_sockets.end();
+				who->web_socket_upgrade(
+				    [who](http::WebMessage &&message) {
+					    //		std::cout << "Server Got Message: " << message.body << std::endl;
+					    if (message.is_binary()) {  // Echo binary messages back AS IS
+						    who->write(std::move(message));
+					    } else {
+						    who->write(http::WebMessage("Echo from Crab: " + message.body));
+					    }
+					    crab::RunLoop::current()->stats.print_records(std::cout);
+				    },
+				    [this, it]() { connected_sockets.erase(it); });
 				who->write(http::WebMessage("Server-initiated on connect message!"));
 				return;
 			}
@@ -66,16 +77,6 @@ public:
 				return;
 			}
 			who->write(http::Response::simple_html(404));
-		};
-		server.d_handler = [&](http::Client *who) { connected_sockets.erase(who); };
-		server.w_handler = [&](http::Client *who, http::WebMessage &&message) {
-			//		std::cout << "Server Got Message: " << message.body << std::endl;
-			if (message.is_binary()) {  // Echo binary messages back AS IS
-				who->write(std::move(message));
-			} else {
-				who->write(http::WebMessage("Echo from Crab: " + message.body));
-			}
-			crab::RunLoop::current()->stats.print_records(std::cout);
 		};
 		stat_timer.once(1);
 	}
@@ -96,7 +97,7 @@ private:
 	http::Server server;
 	crab::Timer stat_timer;
 	size_t req_counter = 0;
-	std::set<http::Client *> connected_sockets;
+	std::list<http::Client *> connected_sockets;
 };
 
 int main(int argc, char *argv[]) {

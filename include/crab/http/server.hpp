@@ -28,17 +28,23 @@ class Server;
 
 class Client : protected ServerConnection {  // So the type is opaque for users
 public:
+	typedef std::function<void(WebMessage &&)> W_handler;
+
 	using ServerConnection::get_peer_address;
 	void write(Response &&response);
 	void write(ResponseHeader &&response);
 	void write(ResponseHeader &&response, StreamHandler &&w_handler);
 	void write(WebMessage &&wm) { ServerConnection::write(std::move(wm)); }
-	using ServerConnection::web_socket_upgrade;
 	using ServerConnection::write;
 	using ServerConnection::write_last_chunk;
 	using ServerConnection::write_some;
 
+	void web_socket_upgrade(W_handler &&wcb, Handler &&dcb);
+	void start_long_poll(Handler &&dcb);
+
 private:
+	W_handler w_handler;
+	Handler d_handler;
 	friend class Server;
 };
 

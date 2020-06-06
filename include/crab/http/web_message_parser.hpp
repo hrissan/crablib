@@ -32,7 +32,9 @@ public:
 	void parse(Buffer &buf);
 
 	static std::string write_message_frame(const WebMessage &message, bool mask, uint32_t masking_key);
-	static size_t write_message_frame(uint8_t buffer[32], const WebMessage &message, bool mask, uint32_t masking_key);
+	enum { MESSAGE_FRAME_BUFFER_SIZE = 16 };  // According to spec, actual max size should be 14
+	static size_t write_message_frame(
+	    uint8_t buffer[MESSAGE_FRAME_BUFFER_SIZE], const WebMessage &message, bool mask, uint32_t masking_key);
 	static void mask_data(size_t masking_shift, char *data, size_t size, uint32_t masking_key);
 
 private:
@@ -57,10 +59,6 @@ public:
 
 	bool is_good() const { return state == GOOD; }
 	void parse(Buffer &buf);
-
-	static std::string write_message_frame(const WebMessage &message, bool mask, uint32_t masking_key);
-	static size_t write_message_frame(uint8_t buffer[32], const WebMessage &message, bool mask, uint32_t masking_key);
-	static void mask_data(size_t masking_shift, char *data, size_t size, uint32_t masking_key);
 
 private:
 	enum State { BODY, GOOD } state = GOOD;

@@ -15,7 +15,7 @@ CRAB_INLINE BufferedTCPSocket::BufferedTCPSocket(Handler &&rwd_handler)
 
 CRAB_INLINE void BufferedTCPSocket::close() {
 	data_to_write.clear();
-	total_buffer_size    = 0;
+	total_data_to_write  = 0;
 	write_shutdown_asked = false;
 	sock.close();
 	shutdown_timer.cancel();
@@ -36,8 +36,8 @@ CRAB_INLINE size_t BufferedTCPSocket::write_some(const uint8_t *val, size_t coun
 CRAB_INLINE void BufferedTCPSocket::buffer(const uint8_t *val, size_t count) {
 	if (!sock.is_open() || write_shutdown_asked || count == 0)
 		return;
-	total_buffer_size += count;
-	if (!data_to_write.empty() && data_to_write.size() < 1024)
+	total_data_to_write += count;
+	if (!data_to_write.empty() && data_to_write.back().size() < 1024 && count < 1024)  // TODO - constant
 		data_to_write.back().write(val, count);
 	else
 		data_to_write.emplace_back(std::string(reinterpret_cast<const char *>(val), count));
@@ -46,8 +46,8 @@ CRAB_INLINE void BufferedTCPSocket::buffer(const uint8_t *val, size_t count) {
 CRAB_INLINE void BufferedTCPSocket::buffer(std::string &&ss) {
 	if (!sock.is_open() || write_shutdown_asked || ss.empty())
 		return;
-	total_buffer_size += ss.size();
-	if (!data_to_write.empty() && data_to_write.size() < 1024)
+	total_data_to_write += ss.size();
+	if (!data_to_write.empty() && data_to_write.back().size() < 1024 && ss.size() < 1024)  // TODO - constant
 		data_to_write.back().write(ss.data(), ss.size());
 	else
 		data_to_write.emplace_back(std::move(ss));
@@ -86,7 +86,7 @@ CRAB_INLINE void BufferedTCPSocket::write_shutdown() {
 CRAB_INLINE void BufferedTCPSocket::write() {
 	bool was_empty = data_to_write.empty();
 	while (!data_to_write.empty()) {
-		total_buffer_size -= data_to_write.front().write_to(sock);
+		total_data_to_write -= data_to_write.front().write_to(sock);
 		if (!data_to_write.front().empty())
 			break;
 		data_to_write.pop_front();
@@ -101,16 +101,14 @@ CRAB_INLINE void BufferedTCPSocket::sock_handler() {
 	if (sock.is_open()) {
 		write();
 		if (write_shutdown_asked && data_to_write.empty()) {
-			// Now after FIN send, we consume and discard a bit of received data.
+			// Now after FIN sent, we consume and discard a bit of received data.
 			// We cannot loop here, because client can send gigabytes of data instead of FIN.
-			// If client sends FIN, connection will be closed gracefully, if not, RST in shutdown_timer_handler
+			// If client sends FIN, connection will close gracefully, if not, RST in shutdown_timer_handler
 			uint8_t buffer[4096];  // Uninitialized
 			sock.read_some(buffer, sizeof(buffer));
 		}
 	} else {
-		data_to_write.clear();
-		write_shutdown_asked = false;
-		total_buffer_size    = 0;
+		close();
 	}
 	rwd_handler();
 }
@@ -127,7 +125,7 @@ CRAB_INLINE ClientConnection::ClientConnection(Handler &&rwd_handler)
     , rwd_handler(std::move(rwd_handler))
     , dns([this](const std::vector<Address> &names) { dns_handler(names); })
     , sock([this]() { sock_handler(); })
-    , state(SHUTDOWN) {}
+    , state(RESOLVING_HOST) {}  // Never compared in closed state
 
 CRAB_INLINE bool ClientConnection::connect(const std::string &h, uint16_t p, const std::string &pr) {
 	close();
@@ -154,7 +152,7 @@ CRAB_INLINE bool ClientConnection::connect(const Address &address) {
 }
 
 CRAB_INLINE void ClientConnection::close() {
-	state = SHUTDOWN;
+	state = RESOLVING_HOST;
 	read_buffer.clear();
 	dns.cancel();
 	waiting_request.reset();
@@ -188,7 +186,7 @@ CRAB_INLINE bool ClientConnection::read_next(WebMessage &message) {
 }
 
 CRAB_INLINE void ClientConnection::write(Request &&req) {
-	if (state == SHUTDOWN)
+	if (!is_open())
 		return;  // This NOP simplifies state machines of connection users
 	if (state == RESOLVING_HOST) {
 		invariant(!waiting_request, "Duplicate write RESOLVING_HOST state");
@@ -204,37 +202,32 @@ CRAB_INLINE void ClientConnection::write(Request &&req) {
 	sock.buffer(req.header.to_string());
 	sock.write(std::move(req.body));
 
+	response_parser = ResponseParser{};
 	if (req.header.is_websocket_upgrade()) {
-		response_parser   = ResponseParser{};
 		state             = WEB_UPGRADE_RESPONSE_HEADER;
 		sec_websocket_key = req.header.sec_websocket_key;
 	} else {
-		if (req.header.keep_alive) {
-			response_parser = ResponseParser{};
-			state           = RESPONSE_HEADER;
-		} else {
-			sock.write_shutdown();
-			state = SHUTDOWN;
-		}
+		state = RESPONSE_HEADER;
 	}
 }
 
 CRAB_INLINE void ClientConnection::write(WebMessage &&message) {
-	if (state == SHUTDOWN)
+	if (!is_open())
 		return;  // This NOP simplifies state machines of connection users
 	invariant(state == WEB_MESSAGE_HEADER || state == WEB_MESSAGE_BODY || state == WEB_MESSAGE_READY ||
 	              state == WEB_UPGRADE_RESPONSE_HEADER,
 	    "Connection unexpected write");
 
 	uint32_t masking_key = rnd.pod<uint32_t>();
-	uint8_t frame_buffer[32];
+	uint8_t frame_buffer[MessageChunkParser::MESSAGE_FRAME_BUFFER_SIZE];  // Uninitialized
 	auto frame_buffer_len = MessageChunkParser::write_message_frame(frame_buffer, message, true, masking_key);
 	MessageChunkParser::mask_data(0, &message.body[0], message.body.size(), masking_key);
 
 	sock.buffer(frame_buffer, frame_buffer_len);
 	sock.write(std::move(message.body));
 	if (message.opcode == WebMessage::OPCODE_CLOSE) {
-		wm_close_sent = true;
+		// We will not attempt to read response. Client logic should not depend on it.
+		sock.write_shutdown();
 	}
 }
 
@@ -353,11 +346,7 @@ CRAB_INLINE void ClientConnection::advance_state(bool called_from_runloop) {
 				if (wm_header_parser.req.opcode == WebMessage::OPCODE_CLOSE) {
 					WebMessage nop;
 					invariant(read_next(nop), "WebSocket read_next OPCODE_CLOSE did no succeed");
-					if (!wm_close_sent) {
-						write(std::move(nop));  // We echo reason back
-					}
-					sock.write_shutdown();
-					state = SHUTDOWN;
+					write(std::move(nop));  // We echo reason back. sock.shutdown will happen inside write()
 					return;
 				}
 				if (wm_header_parser.req.opcode == WebMessage::OPCODE_PING) {
@@ -380,18 +369,18 @@ CRAB_INLINE void ClientConnection::advance_state(bool called_from_runloop) {
 			}
 		}
 	} catch (const std::exception &) {
-		sock.write_shutdown();
-		state = SHUTDOWN;
+		close();
+		if (called_from_runloop)
+			rwd_handler();
 	}
 }
 
-CRAB_INLINE ServerConnection::ServerConnection(Handler &&r_handler, Handler &&d_handler)
+CRAB_INLINE ServerConnection::ServerConnection(Handler &&rwd_handler)
     : read_buffer(8192)
     , wm_ping_timer([&]() { on_wm_ping_timer(); })
-    , r_handler(std::move(r_handler))
-    , d_handler(std::move(d_handler))
+    , rwd_handler(std::move(rwd_handler))
     , sock([this]() { sock_handler(); })
-    , state(SHUTDOWN) {}
+    , state(REQUEST_HEADER) {}
 
 CRAB_INLINE void ServerConnection::accept(TCPAcceptor &acceptor) {
 	close();
@@ -401,7 +390,7 @@ CRAB_INLINE void ServerConnection::accept(TCPAcceptor &acceptor) {
 }
 
 CRAB_INLINE void ServerConnection::close() {
-	state = SHUTDOWN;
+	state = REQUEST_HEADER;
 	wm_ping_timer.cancel();
 	read_buffer.clear();
 	sock.close();
@@ -448,14 +437,15 @@ CRAB_INLINE void ServerConnection::web_socket_upgrade() {
 }
 
 CRAB_INLINE void ServerConnection::write(Response &&resp) {
-	if (state == SHUTDOWN)
+	if (!is_open())
 		return;  // This NOP simplifies state machines of connection users
 	const bool is_websocket_upgrade      = resp.header.is_websocket_upgrade();
 	const bool transfer_encoding_chunked = resp.header.transfer_encoding_chunked;
 	write(std::move(resp.header), BUFFER_ONLY);
 	write(std::move(resp.body), BUFFER_ONLY);
 	if (transfer_encoding_chunked)
-		write_last_chunk();      // Otherwise, state is already switched into RECEIVE_HEADER
+		write_last_chunk();  // Otherwise, state is already switched into RECEIVE_HEADER
+	// shutdown is already written during switch to RECEIVE_HEADER
 	if (is_websocket_upgrade) {  // TODO - better logic here
 		wm_header_parser = MessageChunkParser{};
 		wm_body_parser   = MessageBodyParser{};
@@ -465,27 +455,27 @@ CRAB_INLINE void ServerConnection::write(Response &&resp) {
 }
 
 CRAB_INLINE void ServerConnection::write(WebMessage &&message) {
-	if (state == SHUTDOWN)
+	if (!is_open())
 		return;  // This NOP simplifies state machines of connection users
 	invariant(state == WEB_MESSAGE_HEADER || state == WEB_MESSAGE_BODY || state == WEB_MESSAGE_READY,
 	    "Connection unexpected write");
 
 	uint32_t masking_key = 0;
-	uint8_t frame_buffer[32];
+	uint8_t frame_buffer[MessageChunkParser::MESSAGE_FRAME_BUFFER_SIZE];  // Uninitialized
 	auto frame_buffer_len = MessageChunkParser::write_message_frame(frame_buffer, message, false, masking_key);
 
 	sock.buffer(frame_buffer, frame_buffer_len);
 	sock.write(std::move(message.body));
 	if (message.opcode == WebMessage::OPCODE_CLOSE) {
-		wm_close_sent = true;
 		wm_ping_timer.cancel();
+		sock.write_shutdown();
 	} else {
 		wm_ping_timer.once(WM_PING_TIMEOUT_SEC);
 	}
 }
 
 CRAB_INLINE void ServerConnection::write(http::ResponseHeader &&resp, BufferOptions buffer_options) {
-	if (state == SHUTDOWN)
+	if (!is_open())
 		return;  // This NOP simplifies state machines of connection users
 	invariant(state == WAITING_WRITE_RESPONSE_HEADER, "Connection unexpected write");
 
@@ -548,14 +538,11 @@ CRAB_INLINE void ServerConnection::write_last_chunk() {
 	} else {
 		sock.write(std::string{"0\r\n\r\n"});
 	}
-	w_handler = StreamHandler{};
-	if (request_parser.req.keep_alive) {  // We sent it in our response header
-		request_parser = RequestParser{};
-		state          = REQUEST_HEADER;
-	} else {
+	w_handler      = StreamHandler{};
+	request_parser = RequestParser{};
+	state          = REQUEST_HEADER;
+	if (!request_parser.req.keep_alive) {  // We sent it in our response header
 		sock.write_shutdown();
-		state = SHUTDOWN;
-		wm_ping_timer.cancel();
 	}
 }
 
@@ -593,7 +580,7 @@ CRAB_INLINE size_t ServerConnection::write_some(const uint8_t *val, size_t count
 CRAB_INLINE void ServerConnection::sock_handler() {
 	if (!sock.is_open()) {
 		close();
-		d_handler();
+		rwd_handler();
 		return;
 	}
 	if (w_handler) {
@@ -639,7 +626,7 @@ CRAB_INLINE void ServerConnection::advance_state(bool called_from_runloop) {
 					continue;
 				state = REQUEST_READY;
 				if (called_from_runloop)
-					r_handler();
+					rwd_handler();
 				return;
 			case WEB_MESSAGE_HEADER:
 				wm_header_parser.parse(read_buffer);
@@ -664,12 +651,7 @@ CRAB_INLINE void ServerConnection::advance_state(bool called_from_runloop) {
 				if (wm_header_parser.req.opcode == WebMessage::OPCODE_CLOSE) {
 					WebMessage nop;
 					invariant(read_next(nop), "WebSocket read_next OPCODE_CLOSE did no succeed");
-					if (!wm_close_sent) {
-						write(std::move(nop));  // We echo reason back
-					}
-					sock.write_shutdown();
-					state = SHUTDOWN;
-					wm_ping_timer.cancel();
+					write(std::move(nop));  // We echo reason back. sock.shutdown will happen inside write()
 					return;
 				}
 				if (wm_header_parser.req.opcode == WebMessage::OPCODE_PING) {
@@ -685,16 +667,16 @@ CRAB_INLINE void ServerConnection::advance_state(bool called_from_runloop) {
 					continue;
 				}
 				if (called_from_runloop)
-					r_handler();
+					rwd_handler();
 				return;
 			default:  // waiting write, closing, etc
 				return;
 			}
 		}
 	} catch (const std::exception &) {
-		sock.write_shutdown();
-		state = SHUTDOWN;
-		wm_ping_timer.cancel();
+		close();
+		if (called_from_runloop)
+			rwd_handler();
 	}
 }
 
