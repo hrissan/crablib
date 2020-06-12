@@ -221,7 +221,7 @@ The plans are to tweak HTTP server interface to allow both request body and resp
 
 HTTP server is currently very good for long-polling, if you choose to delay response, you just save `Client *` to your data structure, then either client disconnects and you remove it from your data structure in 'd_handler', or you become ready to send a response and you just do it. (See `http_server_longpoll.cpp` in examples).
 
-WebSockets are very recent experimental implementation, and currently not being used in any production environment. 
+WebSockets are very recent experimental implementation, and have limited experience of being used in production environment. 
 
 # exceptions in callbacks - redesign in progress
 
@@ -250,4 +250,6 @@ Probably, an example of asynchronous file reader should be added to examples.
 Secrets were accidentally committed.
 
 So repository had to be wiped, then added again.
+
+Early versions of crab were hosted on google code and, before that existed, on svn planet.
 

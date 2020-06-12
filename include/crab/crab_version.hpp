@@ -49,7 +49,7 @@
     #define CRAB_INLINE inline
 #endif
 
-#define CRAB_VERSION "0.8.0"
+#define CRAB_VERSION "0.8.1-new_http_connection"
 // Not in cmake, we wish to be easily includable in header-only mode
 #if CRAB_TLS
 #define CRAB_TLS_STRING ", with TLS"

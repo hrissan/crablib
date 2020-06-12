@@ -63,12 +63,13 @@ CRAB_INLINE std::string invariant_violated(const char *expr, const char *file, i
 
 CRAB_INLINE Random::Random() {
 	std::random_device rd;
+	std::uniform_int_distribution<uint32_t> dist;  // random_device has unspecified min and max
 
-	inc   = (uint64_t(rd()) << 32U) ^ uint64_t(rd());
-	state = (uint64_t(rd()) << 32U) ^ uint64_t(rd());
+	inc   = (uint64_t(dist(rd)) << 32U) ^ dist(rd);
+	state = (uint64_t(dist(rd)) << 32U) ^ dist(rd);
 }
 
-CRAB_INLINE Random::Random(uint32_t seed) { state = uint64_t(seed) << 32; }
+CRAB_INLINE Random::Random(uint32_t seed) { state = uint64_t(seed) << 32U; }
 
 CRAB_INLINE uint32_t Random::pcg32_random_r() {
 	uint64_t oldstate = state;
@@ -116,5 +117,10 @@ CRAB_INLINE std::string Random::printable_string(size_t size) {
 	}
 	return result;
 };
+
+CRAB_INLINE double Random::double_value() {
+	auto hipart = uint64_t(pcg32_random_r()) << 31U;  // leave top bit zero for faster ldexp() on some platforms
+	return ldexp(hipart ^ pcg32_random_r(), -63);
+}
 
 }  // namespace crab

@@ -21,6 +21,8 @@ namespace crab {
 
 // This is max heap (like in std::), so if less is used, front will be largest element
 
+// pop_back() is faster (O(1)) than pop_front() (O(ln(N))), reverse predicate to use latter in time-critical coded
+
 class IntrusiveHeapIndex : public Nocopy {
 public:
 	bool in_heap() const { return heap_index != 0; }
@@ -37,7 +39,16 @@ public:
 	void reserve(size_t count) { storage.reserve(count + 1); }
 	bool empty() const { return storage.size() == 1; }
 
-	T &front() { return *at(1); }
+	T &front() {
+		if (health_checks && (storage.size() <= 1 || (at(1)->*Index).heap_index != 1))
+			throw std::logic_error("Heap Index corrupted at front()");
+		return *at(1);
+	}
+	T &back() {
+		if (health_checks && (storage.size() <= 1 || (storage.back()->*Index).heap_index != storage.size() - 1))
+			throw std::logic_error("Heap Index corrupted at back()");
+		return *storage.back();
+	}
 
 	bool insert(T &node) {
 		if ((node.*Index).heap_index != 0)
@@ -51,12 +62,12 @@ public:
 		size_t ind = (node.*Index).heap_index;
 		if (ind == 0)
 			return 0;
-		(node.*Index).heap_index = 0;
 		if (health_checks && ind >= storage.size())
-			throw std::logic_error("Heap Index corrupted 1");
+			throw std::logic_error("Heap Index corrupted at erase() 1");
 		if (health_checks && at(ind) != &node)
-			throw std::logic_error("Heap Index corrupted 2");
-		at(ind) = storage.back();
+			throw std::logic_error("Heap Index corrupted at erase() 2");
+		(node.*Index).heap_index = 0;
+		at(ind)                  = storage.back();
 		storage.pop_back();
 		if (ind < storage.size())
 			adjust(ind);
@@ -66,14 +77,24 @@ public:
 	void pop_front() {
 		size_t ind = (at(1)->*Index).heap_index;
 		if (health_checks && ind != 1)
-			throw std::logic_error("Heap Index corrupted 3");
-		(at(1)->*Index).heap_index = 0;
+			throw std::logic_error("Heap Index corrupted at pop_front() 1");
 		if (health_checks && 1 >= storage.size())
-			throw std::logic_error("Heap Index corrupted 4");
-		at(1) = storage.back();
+			throw std::logic_error("Heap Index corrupted at pop_front() 2");
+		(at(1)->*Index).heap_index = 0;
+		at(1)                      = storage.back();
 		storage.pop_back();
 		if (1 < storage.size())
 			movedown(1);
+		check_heap();
+	}
+	void pop_back() {
+		if (health_checks && storage.size() < 1)
+			throw std::logic_error("Heap Index corrupted at pop_back() 1");
+		size_t ind = (storage.back()->*Index).heap_index;
+		if (health_checks && ind != storage.size() - 1)
+			throw std::logic_error("Heap Index corrupted at pop_back() 2");
+		(storage.back()->*Index).heap_index = 0;
+		storage.pop_back();
 		check_heap();
 	}
 

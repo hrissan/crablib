@@ -1,8 +1,10 @@
 // Copyright (c) 2007-2020, Grigory Buteyko aka Hrissan
 // Licensed under the MIT License. See LICENSE for details.
 
+#include <algorithm>
 #include <array>
 #include <chrono>
+#include <crab/util.hpp>
 #include <iomanip>
 #include <iostream>
 #include <limits>
@@ -125,6 +127,23 @@ void long_tail(uint32_t ma, uint32_t TAIL) {
 }
 
 int main() {
+	crab::Random rnd;
+	std::vector<int> vec{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+	std::shuffle(vec.begin(), vec.end(), rnd);
+	std::uniform_int_distribution<int> dist(0, 19);
+	std::uniform_real_distribution<double> dist2;
+	for (auto v : vec)
+		std::cout << v << " ";
+	std::cout << std::endl;
+	for (size_t i = 0; i != 20; ++i)
+		std::cout << rnd.double_value() << " ";
+	std::cout << std::endl;
+	for (size_t i = 0; i != 20; ++i)
+		std::cout << dist(rnd) << " ";
+	std::cout << std::endl;
+	for (size_t i = 0; i != 20; ++i)
+		std::cout << dist2(rnd) << " ";
+	std::cout << std::endl;
 	long_tail(std::numeric_limits<uint32_t>::max(), 62 * 62 * 62 * 62 * 62);
 	long_tail(std::numeric_limits<uint32_t>::max(), 0x80000000U);
 	long_tail(std::numeric_limits<uint32_t>::max(), 2);
