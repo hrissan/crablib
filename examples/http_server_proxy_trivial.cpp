@@ -13,28 +13,24 @@ public:
 	explicit ServerProxyTrivial(uint16_t port) : server(port) {
 		server.r_handler = [&](http::Client *who, http::Request &&request) {
 			waiting_requests.emplace_back();
-			auto it = --waiting_requests.end();
-			waiting_counters.emplace_back(++next_counter);
-			auto wit = --waiting_counters.end();
+			auto it      = --waiting_requests.end();
+			auto counter = ++next_counter;
 			it->set_handlers(
-			    [this, who, it, wit](http::Response &&resp) {
-				    std::cout << "Success " << *wit << std::endl;
+			    [this, who, it, counter](http::Response &&resp) {
+				    std::cout << "Success " << counter << std::endl;
 				    who->write(std::move(resp));
-				    waiting_counters.erase(wit);
 				    waiting_requests.erase(it);
 			    },
-			    [this, who, it, wit](std::string &&err) {
-				    std::cout << "Error " << *wit << std::endl;
+			    [this, who, it, counter](std::string &&err) {
+				    std::cout << "Error " << counter << std::endl;
 				    who->write(http::Response::simple_text(503, std::move(err)));
-				    waiting_counters.erase(wit);
 				    waiting_requests.erase(it);
 			    });
-			std::cout << "Sending request " << *wit << std::endl;
+			std::cout << "Sending request " << counter << std::endl;
 			request.header.host = "www.alawar.com";
 			it->send(std::move(request), 443, "https");
-			who->start_long_poll([this, it, wit]() {
-				std::cout << "Disconnect " << *wit << std::endl;
-				waiting_counters.erase(wit);
+			who->start_long_poll([this, it, counter]() {
+				std::cout << "Disconnect " << counter << std::endl;
 				waiting_requests.erase(it);
 			});
 		};
@@ -43,7 +39,6 @@ public:
 private:
 	http::Server server;
 	int next_counter = 0;
-	std::list<int> waiting_counters;
 	std::list<http::ClientRequestSimple> waiting_requests;
 };
 

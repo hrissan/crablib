@@ -168,12 +168,7 @@ CRAB_INLINE bool ClientConnection::read_next(Response &req) {
 		return false;
 	req.body   = http_body_parser.body.clear();
 	req.header = std::move(response_parser.req);
-	//	if (req.header.transfer_encoding_chunked) {
-	// Hide from clients
-	//        req.header.transfer_encoding_chunked = false;
-	//        req.header.content_length = req.body.size();
-	//	}
-	state = WAITING_WRITE_REQUEST;
+	state      = WAITING_WRITE_REQUEST;
 	advance_state(false);
 	return true;
 }
