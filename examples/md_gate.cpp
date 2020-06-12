@@ -263,6 +263,8 @@ private:
 };
 
 int main(int argc, char *argv[]) {
+	std::cout << "crablib version " << crab::version_string() << std::endl;
+
 	std::cout
 	    << "This gate connects to running instance of md_tcp_source, and broadcasts data via UDP, with support of retransmission requests via HTTP"
 	    << std::endl;

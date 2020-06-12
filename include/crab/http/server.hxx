@@ -161,7 +161,7 @@ CRAB_INLINE void Server::on_client_handle_request(Client *who, Request &&request
 		}
 		return;
 	}
-	if (who->get_state() == ServerConnection::WAITING_WRITE_RESPONSE_HEADER)
+	if (who->get_state() == ServerConnection::WAITING_WRITE_RESPONSE_HEADER && !who->d_handler)
 		throw std::logic_error("r_handler must either write response, call start_long_poll or web_socket_upgrade");
 }
 

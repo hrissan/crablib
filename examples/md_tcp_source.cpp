@@ -216,6 +216,8 @@ private:
 };
 
 int main(int argc, char *argv[]) {
+	std::cout << "crablib version " << crab::version_string() << std::endl;
+
 	std::cout
 	    << "This server generates stream of 'financial messages' and makes it available via TCP (transmissions, low latency) and HTTP (retransmissions)"
 	    << std::endl;

@@ -15,7 +15,9 @@ public:
 	typedef std::function<void(Response &&)> R_handler;
 	typedef std::function<void(std::string &&)> E_handler;
 
+	ClientRequestSimple();
 	explicit ClientRequestSimple(R_handler &&r_handler, E_handler &&e_handler);
+	void set_handlers(R_handler &&r_h, E_handler &&e_h);
 
 	void send(Request &&request, uint16_t port, const std::string &protocol);
 

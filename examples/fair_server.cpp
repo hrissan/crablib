@@ -164,6 +164,8 @@ private:
 };
 
 int main(int argc, char *argv[]) {
+	std::cout << "crablib version " << crab::version_string() << std::endl;
+
 	std::cout << "This server responds to requests from bunch of fair_client via TCP in fair manner -" << std::endl;
 	std::cout << "    clients who send batches are served in round-robin fashion, while those" << std::endl;
 	std::cout << "    who send single requests are served immediately" << std::endl;

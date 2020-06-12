@@ -134,6 +134,8 @@ int test_parsing() {
 }
 
 int main(int argc, char *argv[]) {
+	std::cout << "crablib version " << crab::version_string() << std::endl;
+
 	if (argc == 2 && std::string(argv[1]) == "--watcher")
 		return test_watcher();
 	if (argc != 3) {

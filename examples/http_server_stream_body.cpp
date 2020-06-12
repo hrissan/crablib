@@ -85,6 +85,8 @@ private:
 };
 
 int main(int argc, char *argv[]) {
+	std::cout << "crablib version " << crab::version_string() << std::endl;
+
 	std::cout << "This server slowly streams long body to clients" << std::endl;
 	crab::RunLoop runloop;
 

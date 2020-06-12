@@ -100,4 +100,8 @@ int test_proxy(int num, uint16_t port, uint16_t upstream_port) {
 	return 1;
 }
 
-int main(int argc, char *argv[]) { return test_proxy(0, 7000, 7001); }
+int main(int argc, char *argv[]) {
+	std::cout << "crablib version " << crab::version_string() << std::endl;
+
+	return test_proxy(0, 7000, 7001);
+}

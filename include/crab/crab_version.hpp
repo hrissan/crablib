@@ -42,24 +42,27 @@
 
 // crap-crap-crap
 #if CRAB_COMPILE
-    #define CRAB_COMPILE_STRING ", Compiled"
+    #define CRAB_COMPILE_STRING "Compiled"
     #define CRAB_INLINE
 #else
-    #define CRAB_COMPILE_STRING ", Header-Only"
+    #define CRAB_COMPILE_STRING "Header-Only"
     #define CRAB_INLINE inline
 #endif
 
-#define CRAB_VERSION "0.8.1-new_http_connection"
+#define CRAB_BRANCH " (branch new_http_connection)"
+// No tricks, we wish to be easily includable in header-only mode
+
+#define CRAB_VERSION "0.8.1"
 // Not in cmake, we wish to be easily includable in header-only mode
 #if CRAB_TLS
-#define CRAB_TLS_STRING ", with TLS"
+#define CRAB_TLS_STRING "with TLS"
 #else
-#define CRAB_TLS_STRING ""
+#define CRAB_TLS_STRING "no TLS"
 #endif
 
 namespace crab {
 
-inline std::string version_string() { return CRAB_VERSION " (" CRAB_IMPL_STRING ")" CRAB_COMPILE_STRING CRAB_TLS_STRING; }
+inline std::string version_string() { return CRAB_VERSION ", " CRAB_IMPL_STRING ", " CRAB_COMPILE_STRING ", " CRAB_TLS_STRING CRAB_BRANCH; }
 
 }  // namespace crab
 

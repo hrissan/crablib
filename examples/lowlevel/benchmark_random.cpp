@@ -4,7 +4,7 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
-#include <crab/util.hpp>
+#include <crab/crab.hpp>
 #include <iomanip>
 #include <iostream>
 #include <limits>

@@ -101,6 +101,8 @@ private:
 };
 
 int main(int argc, char *argv[]) {
+	std::cout << "crablib version " << crab::version_string() << std::endl;
+
 	std::cout << "This server has echo web-socket responder built-in. Open '/' in browser to play" << std::endl;
 	crab::RunLoop runloop;
 

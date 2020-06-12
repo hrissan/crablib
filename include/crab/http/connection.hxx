@@ -168,7 +168,12 @@ CRAB_INLINE bool ClientConnection::read_next(Response &req) {
 		return false;
 	req.body   = http_body_parser.body.clear();
 	req.header = std::move(response_parser.req);
-	state      = WAITING_WRITE_REQUEST;
+	//	if (req.header.transfer_encoding_chunked) {
+	// Hide from clients
+	//        req.header.transfer_encoding_chunked = false;
+	//        req.header.content_length = req.body.size();
+	//	}
+	state = WAITING_WRITE_REQUEST;
 	advance_state(false);
 	return true;
 }
@@ -298,8 +303,7 @@ CRAB_INLINE void ClientConnection::advance_state(bool called_from_runloop) {
 					throw std::runtime_error("Unexpected web upgrade header");
 				http_body_parser =
 				    BodyParser{response_parser.req.content_length, response_parser.req.transfer_encoding_chunked};
-				response_parser.req.transfer_encoding_chunked = false;  // Hide from clients
-				state                                         = RESPONSE_BODY;
+				state = RESPONSE_BODY;
 				// Fall through (to correctly handle zero-length body). Next line is understood by GCC
 				// Fall through
 			case RESPONSE_BODY:

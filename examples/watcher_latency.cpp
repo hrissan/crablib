@@ -50,6 +50,8 @@ private:
 };
 
 int main(int argc, char *argv[]) {
+	std::cout << "crablib version " << crab::version_string() << std::endl;
+
 	crab::RunLoop runloop;
 	TestAsyncCallsApp app;
 	std::unique_ptr<crab::Idle> idle;

@@ -59,6 +59,8 @@ int test_http(size_t num, uint16_t port) {
 }
 
 int main(int argc, char *argv[]) {
+	std::cout << "crablib version " << crab::version_string() << std::endl;
+
 	if (argc != 2) {
 		std::cout << "Usage: server <port>" << std::endl;
 		return 0;

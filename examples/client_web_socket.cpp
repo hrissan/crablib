@@ -64,6 +64,8 @@ private:
 };
 
 int main(int argc, char *argv[]) {
+	std::cout << "crablib version " << crab::version_string() << std::endl;
+
 	std::cout << "This client send web socket request to http_server_complex" << std::endl;
 	if (argc < 3) {
 		std::cout << "Usage: client_web_socket host <port>" << std::endl;

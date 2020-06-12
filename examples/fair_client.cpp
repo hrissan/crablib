@@ -103,6 +103,8 @@ private:
 };
 
 int main(int argc, char *argv[]) {
+	std::cout << "crablib version " << crab::version_string() << std::endl;
+
 	std::cout
 	    << "This client send requests (1 byte) via TCP to fair_server and measures latency of responses (16 bytes)"
 	    << std::endl;

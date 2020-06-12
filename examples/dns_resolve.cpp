@@ -6,6 +6,8 @@
 #include <crab/crab.hpp>
 
 int main(int argc, char *argv[]) {
+	std::cout << "crablib version " << crab::version_string() << std::endl;
+
 	crab::RunLoop runloop;
 
 	crab::DNSResolver res([](const std::vector<crab::Address> &result) {

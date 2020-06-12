@@ -41,6 +41,8 @@ private:
 };
 
 int main(int argc, char *argv[]) {
+	std::cout << "crablib version " << crab::version_string() << std::endl;
+
 	std::cout << "This server responds to requests approximately after 5 seconds" << std::endl;
 	crab::RunLoop runloop;
 

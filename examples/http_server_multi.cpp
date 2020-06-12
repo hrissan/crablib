@@ -25,6 +25,8 @@ int test_http(size_t num, uint16_t port) {
 }
 
 int main(int argc, char *argv[]) {
+	std::cout << "crablib version " << crab::version_string() << std::endl;
+
 	auto th_count = std::thread::hardware_concurrency();
 	std::cout << "This server uses " << th_count
 	          << " threads, your system must support binding several TCP acceptors to the same port" << std::endl;

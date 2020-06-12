@@ -56,9 +56,13 @@ endif()
 
 add_compile_options(-g -Wall -Wextra -Werror=return-type -Wno-unused-parameter)
 
+#add_compile_options(-fno-omit-frame-pointer -fsanitize=address,undefined)
+#link_libraries(-fno-omit-frame-pointer -fsanitize=address,undefined)
+
 add_subdirectory(.. EXCLUDE_FROM_ALL ${CMAKE_CURRENT_BINARY_DIR}/crablib)
 
 link_libraries(crablib::crablib)
+#link_libraries(crablib::crablib-header-only)
 
 if(MSVC)
     add_definitions(-D_SCL_SECURE_NO_WARNINGS=1 -D_CRT_SECURE_NO_WARNINGS=1) #  -D_WIN32_WINNT=0x0601
@@ -71,6 +75,7 @@ add_executable(watcher_latency ${SOURCE_FILES} watcher_latency.cpp)
 
 add_executable(http_server_simple ${SOURCE_FILES} http_server_simple.cpp)
 add_executable(http_server_longpoll ${SOURCE_FILES} http_server_longpoll.cpp)
+add_executable(http_server_proxy_trivial ${SOURCE_FILES} http_server_proxy_trivial.cpp)
 add_executable(http_server_stream_body ${SOURCE_FILES} http_server_stream_body.cpp)
 add_executable(http_server_multi ${SOURCE_FILES} http_server_multi.cpp)
 add_executable(http_server_complex ${SOURCE_FILES} http_server_complex.cpp)

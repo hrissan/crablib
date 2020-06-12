@@ -36,6 +36,8 @@ private:
 };
 
 int main(int argc, char *argv[]) {
+	std::cout << "crablib version " << crab::version_string() << std::endl;
+
 	std::cout << "This client listens to financial messages via UDP multicast and requests retransmits via TCP"
 	          << std::endl;
 	crab::RunLoop runloop;

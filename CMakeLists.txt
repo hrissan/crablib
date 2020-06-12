@@ -85,9 +85,9 @@ if(CRAB_TLS)
 
 	target_include_directories("${PROJECT_NAME}" PUBLIC "${OPENSSL_INCLUDE_DIRS}")
 	target_include_directories("${PROJECT_NAME}-header-only" INTERFACE "${OPENSSL_INCLUDE_DIRS}")
-	target_link_libraries("${PROJECT_NAME}" PUBLIC OpenSSL::SSL OpenSSL::Crypto)
+	target_link_libraries("${PROJECT_NAME}" PUBLIC OpenSSL::SSL OpenSSL::Crypto ${CMAKE_DL_LIBS})
+	target_link_libraries("${PROJECT_NAME}-header-only" INTERFACE OpenSSL::SSL OpenSSL::Crypto ${CMAKE_DL_LIBS})
 endif()
-
 
 if(CRAB_IMPL_LIBEV) # Same order as in crab_version.hpp
 	message(STATUS "crablib:Crab will use libev impl")
