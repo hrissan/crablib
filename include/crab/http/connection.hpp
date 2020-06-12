@@ -19,7 +19,7 @@ enum BufferOptions { WRITE, BUFFER_ONLY };
 class BufferedTCPSocket : public IStream, private Nocopy {
 public:
 	explicit BufferedTCPSocket(Handler &&rwd_handler);
-	void set_handler(Handler &&rwd_handler) { this->rwd_handler = std::move(rwd_handler); }
+	void set_handler(Handler &&cb) { rwd_handler = std::move(cb); }
 
 	void close();  // after close you are guaranteed that no handlers will be called
 	bool is_open() const { return sock.is_open(); }
@@ -81,7 +81,7 @@ class ClientConnection : private Nocopy {
 public:
 	explicit ClientConnection() : ClientConnection(empty_handler) {}
 	explicit ClientConnection(Handler &&rwd_handler);
-	void set_handlers(Handler &&rwd_handler) { this->rwd_handler = std::move(rwd_handler); }
+	void set_handler(Handler &&cb) { rwd_handler = std::move(cb); }
 
 	bool connect(const Address &address);                                                        // http-only
 	bool connect(const std::string &host, uint16_t port, const std::string &protocol = "http");  // or https
@@ -122,7 +122,7 @@ protected:
 	ResponseParser response_parser;
 	BodyParser http_body_parser;
 
-	MessageChunkParser wm_header_parser;
+	MessageHeaderParser wm_header_parser;
 	MessageBodyParser wm_body_parser;  // Single per several chunks
 	std::string sec_websocket_key;
 	Random rnd;  // for masking_key, dns name selection, web socket secret key
@@ -145,11 +145,9 @@ protected:
 
 class ServerConnection : private Nocopy {
 public:
-	using StreamHandler = std::function<void(uint64_t body_position, details::optional<uint64_t> body_length)>;
-
 	explicit ServerConnection() : ServerConnection(empty_handler) {}
 	explicit ServerConnection(Handler &&rwd_handler);
-	void set_handlers(Handler &&rwd_handler) { this->rwd_handler = std::move(rwd_handler); }
+	void set_handler(Handler &&cb) { rwd_handler = std::move(cb); }
 
 	void accept(TCPAcceptor &acceptor);
 
@@ -173,14 +171,6 @@ public:
 	void write(std::string &&ss, BufferOptions bo = WRITE);  // Write body chunk
 	void write_last_chunk();                                 // for chunk encoding, finishes body
 
-	// Experimental, efficient direct-to-socket unbuffered interface
-	void write(ResponseHeader &&resp, StreamHandler &&w_handler);  // Call when can_write in socket buffer
-	size_t write_some(const uint8_t *val, size_t count);           // Write into socket buffer
-	size_t write_some(const char *val, size_t count) { return write_some(uint8_cast(val), count); }
-#if __cplusplus >= 201703L
-	size_t write_some(const std::byte *val, size_t count) { return write_some(uint8_cast(val), count); }
-#endif
-
 	enum State {
 		REQUEST_HEADER,                 // Server side
 		REQUEST_BODY,                   // Server side
@@ -197,25 +187,25 @@ public:
 
 	State get_state() const { return state; }
 
+	bool can_write() const { return sock.get_total_buffer_size() == 0; }
 	size_t get_total_buffer_size() const { return sock.get_total_buffer_size(); }
 
 	enum { WM_PING_TIMEOUT_SEC = 45 };
 	// Slightly less than default TCP keep-alive of 50 sec
+
 protected:
 	crab::Buffer read_buffer;
 
 	RequestParser request_parser;
 	BodyParser http_body_parser;
 
-	MessageChunkParser wm_header_parser;
+	MessageHeaderParser wm_header_parser;
 	MessageBodyParser wm_body_parser;  // Single per several chunks
 	Timer wm_ping_timer;
 	// Server-side ping required for some NATs to keep port open
 	// TCP keep-alive is set by most browsers, but surprisingly it is not enough.
 
-	details::optional<uint64_t> body_content_length = 0;  // for WAITING_WRITE_RESPONSE_BODY state, empty for chunked
-	uint64_t body_position                          = 0;  // for WAITING_WRITE_RESPONSE_BODY state
-	StreamHandler w_handler;                              // for WAITING_WRITE_RESPONSE_BODY state
+	details::optional<uint64_t> remaining_body_content_length;  // empty for chunked
 
 	void sock_handler();
 	void on_wm_ping_timer();

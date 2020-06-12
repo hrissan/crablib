@@ -13,13 +13,13 @@
 
 namespace crab { namespace http {
 
-class MessageChunkParser {
+class MessageHeaderParser {
 public:
-	explicit MessageChunkParser(int previous_opcode = 0) : previous_opcode(previous_opcode) {}
+	explicit MessageHeaderParser(int previous_opcode = 0) : previous_opcode(previous_opcode) {}
 	// We pass 0 for first chunk, req.opcode is filled with actual opcode
 	// We pass req.opcode for subsequent chunks, req.opcode will be filled with it
 
-	WebMessageChunk req;
+	WebMessageHeader req;
 
 	template<typename InputIterator>
 	InputIterator parse(InputIterator begin, InputIterator end) {
@@ -31,10 +31,9 @@ public:
 	bool is_good() const { return state == GOOD; }
 	void parse(Buffer &buf);
 
-	static std::string write_message_frame(const WebMessage &message, bool mask, uint32_t masking_key);
 	enum { MESSAGE_FRAME_BUFFER_SIZE = 16 };  // According to spec, actual max size should be 14
-	static size_t write_message_frame(
-	    uint8_t buffer[MESSAGE_FRAME_BUFFER_SIZE], const WebMessage &message, bool mask, uint32_t masking_key);
+	static size_t write_message_frame(uint8_t buffer[MESSAGE_FRAME_BUFFER_SIZE], const WebMessage &message,
+	    details::optional<uint32_t> masking_key);
 	static void mask_data(size_t masking_shift, char *data, size_t size, uint32_t masking_key);
 
 private:
@@ -49,7 +48,7 @@ class MessageBodyParser {
 public:
 	StringStream body;
 
-	void add_chunk(const WebMessageChunk &chunk);
+	void add_chunk(const WebMessageHeader &chunk);
 
 	const uint8_t *parse(const uint8_t *begin, const uint8_t *end) {
 		while (begin != end && state != GOOD)

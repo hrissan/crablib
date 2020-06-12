@@ -131,7 +131,6 @@ if(CRAB_FUZZ)
 endif()
 
 # Examples below are of very low quality and must be rewritten
-add_executable(client_simple ${SOURCE_FILES} client_simple.cpp)
 add_executable(gate_client_simple ${SOURCE_FILES} gate_client_simple.cpp)
 add_executable(gate_server_simple ${SOURCE_FILES} gate_server_simple.cpp)
 add_executable(gate_proxy_simple ${SOURCE_FILES} gate_proxy_simple.cpp)

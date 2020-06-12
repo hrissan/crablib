@@ -28,23 +28,34 @@ class Server;
 
 class Client : protected ServerConnection {  // So the type is opaque for users
 public:
-	typedef std::function<void(WebMessage &&)> W_handler;
+	using W_handler = std::function<void(WebMessage &&)>;
 
 	using ServerConnection::get_peer_address;
-	void write(Response &&response);
-	void write(ResponseHeader &&response);
-	void write(ResponseHeader &&response, StreamHandler &&w_handler);
+	void write(Response &&);
 	void write(WebMessage &&wm) { ServerConnection::write(std::move(wm)); }
-	using ServerConnection::write;
+
+	void write(const uint8_t *val, size_t count, BufferOptions bo = WRITE);  // Write body chunk
+	void write(const char *val, size_t count, BufferOptions bo = WRITE) { write(uint8_cast(val), count, bo); }
+#if __cplusplus >= 201703L
+	void write(const std::byte *val, size_t count, BufferOptions bo = WRITE) { write(uint8_cast(val), count, bo); }
+#endif
+	void write(std::string &&ss, BufferOptions bo = WRITE);  // Write body chunk
+	void write_last_chunk();                                 // for chunk encoding, finishes body
+
+	using ServerConnection::can_write;
 	using ServerConnection::write_last_chunk;
-	using ServerConnection::write_some;
 
 	void web_socket_upgrade(W_handler &&wcb, Handler &&dcb);
 	void start_long_poll(Handler &&dcb);
+	void start_write_stream(ResponseHeader &&response, Handler &&scb, Handler &&dcb = empty_handler);
+
+	uint64_t get_body_position() const { return body_position; }
 
 private:
 	W_handler w_handler;
 	Handler d_handler;
+	Handler s_handler;
+	uint64_t body_position = 0;
 	friend class Server;
 };
 

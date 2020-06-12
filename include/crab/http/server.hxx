@@ -35,17 +35,27 @@ CRAB_INLINE void Client::write(Response &&response) {
 	d_handler = {};
 }
 
-CRAB_INLINE void Client::write(ResponseHeader &&response) {
-	if (response.date.empty())
-		response.date = Server::get_date();
-	ServerConnection::write(std::move(response));
-	d_handler = {};
+CRAB_INLINE void Client::write(const uint8_t *val, size_t count, BufferOptions buffer_options) {
+	ServerConnection::write(val, count, buffer_options);
+	body_position += count;
+	if (get_state() != ServerConnection::WAITING_WRITE_RESPONSE_BODY) {
+		s_handler = {};
+		d_handler = {};
+	}
 }
 
-CRAB_INLINE void Client::write(ResponseHeader &&response, StreamHandler &&w_handler) {
-	if (response.date.empty())
-		response.date = Server::get_date();
-	ServerConnection::write(std::move(response), std::move(w_handler));
+CRAB_INLINE void Client::write(std::string &&ss, BufferOptions buffer_options) {
+	ServerConnection::write(std::move(ss), buffer_options);
+	body_position += ss.size();
+	if (get_state() != ServerConnection::WAITING_WRITE_RESPONSE_BODY) {
+		s_handler = {};
+		d_handler = {};
+	}
+}
+
+CRAB_INLINE void Client::write_last_chunk() {
+	ServerConnection::write_last_chunk();
+	s_handler = {};
 	d_handler = {};
 }
 
@@ -56,6 +66,15 @@ CRAB_INLINE void Client::web_socket_upgrade(W_handler &&wcb, Handler &&dcb) {
 }
 
 CRAB_INLINE void Client::start_long_poll(Handler &&dcb) { d_handler = std::move(dcb); }
+
+CRAB_INLINE void Client::start_write_stream(ResponseHeader &&response, Handler &&scb, Handler &&dcb) {
+	if (response.date.empty())
+		response.date = Server::get_date();
+	ServerConnection::write(std::move(response));
+	s_handler     = std::move(scb);
+	d_handler     = std::move(dcb);
+	body_position = 0;
+}
 
 CRAB_INLINE Server::Server(const Address &address)
     : r_handler(details::empty_r_handler)
@@ -90,6 +109,8 @@ CRAB_INLINE void Server::on_client_handler(std::list<Client>::iterator it) {
 		return on_client_disconnected(it);
 	WebMessage message;
 	Request request;
+	if (who->s_handler)
+		who->s_handler();
 	while (true) {
 		if (who->read_next(message)) {
 			on_client_handle_message(who, std::move(message));
@@ -104,7 +125,7 @@ CRAB_INLINE void Server::accept_all() {
 	while (la_socket.can_accept()) {  // && clients.size() < max_incoming_connections &&
 		clients.emplace_back();
 		auto it = --clients.end();
-		it->set_handlers([this, it]() { on_client_handler(it); });
+		it->set_handler([this, it]() { on_client_handler(it); });
 		it->accept(la_socket);
 		//        std::cout << "HTTP Client accepted=" << cid << " addr=" << (*it)->get_peer_address() << std::endl;
 	}

@@ -29,7 +29,27 @@ int test_proxy(int num, uint16_t port, uint16_t upstream_port) {
 
 	server.r_handler = [&](http::Client *who, http::Request &&request) {
 		if (request.header.path == "/latency") {
-			who->web_socket_upgrade();
+			who->web_socket_upgrade(
+			    [&, who](http::WebMessage &&message) {
+				    LatencyMessage lm;
+				    if (!lm.parse(message.body))
+					    return;
+				    auto it = connected_sockets.find(who);
+				    if (it == connected_sockets.end())
+					    return;
+				    lm.add_lat("proxy_recv_client", std::chrono::steady_clock::now());
+				    //        std::cout << lm.save(&it->second) << std::endl;
+				    rws->write(http::WebMessage(lm.save(&it->second)));
+
+				    runloop.stats.print_records(std::cout);
+			    },
+			    [&]() {
+				    auto it = connected_sockets.find(who);
+				    if (it == connected_sockets.end())
+					    return;
+				    connected_sockets_inv.erase(it->second);
+				    connected_sockets.erase(it);
+			    });
 			std::string id = rnd.printable_string(16);
 
 			connected_sockets.emplace(who, id);
@@ -37,26 +57,6 @@ int test_proxy(int num, uint16_t port, uint16_t upstream_port) {
 			return;
 		}
 		who->write(http::Response::simple_html(404));
-	};
-	server.d_handler = [&](http::Client *who) {
-		auto it = connected_sockets.find(who);
-		if (it == connected_sockets.end())
-			return;
-		connected_sockets_inv.erase(it->second);
-		connected_sockets.erase(it);
-	};
-	server.w_handler = [&](http::Client *who, http::WebMessage &&message) {
-		LatencyMessage lm;
-		if (!lm.parse(message.body))
-			return;
-		auto it = connected_sockets.find(who);
-		if (it == connected_sockets.end())
-			return;
-		lm.add_lat("proxy_recv_client", std::chrono::steady_clock::now());
-		//        std::cout << lm.save(&it->second) << std::endl;
-		rws->write(http::WebMessage(lm.save(&it->second)));
-
-		runloop.stats.print_records(std::cout);
 	};
 
 	// size_t message_counter = 0;

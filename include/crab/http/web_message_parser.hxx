@@ -11,12 +11,12 @@
 
 namespace crab { namespace http {
 
-CRAB_INLINE void MessageChunkParser::parse(Buffer &buf) {
+CRAB_INLINE void MessageHeaderParser::parse(Buffer &buf) {
 	auto ptr = parse(buf.read_ptr(), buf.read_ptr() + buf.read_count());
 	buf.did_read(ptr - buf.read_ptr());
 }
 
-CRAB_INLINE MessageChunkParser::State MessageChunkParser::consume(uint8_t input) {
+CRAB_INLINE MessageHeaderParser::State MessageHeaderParser::consume(uint8_t input) {
 	switch (state) {
 	case MESSAGE_BYTE_0:
 		if (input & 0x70)
@@ -73,43 +73,35 @@ CRAB_INLINE MessageChunkParser::State MessageChunkParser::consume(uint8_t input)
 	}
 }
 
-CRAB_INLINE size_t MessageChunkParser::write_message_frame(
-    uint8_t buffer[MESSAGE_FRAME_BUFFER_SIZE], const WebMessage &message, bool mask, uint32_t masking_key) {
+CRAB_INLINE size_t MessageHeaderParser::write_message_frame(uint8_t buffer[MESSAGE_FRAME_BUFFER_SIZE],
+    const WebMessage &message, crab::details::optional<uint32_t> masking_key) {
 	if (message.opcode == 0 || !WebMessage::is_good_opcode(message.opcode))
 		throw std::logic_error("Invalid web message opcode " + std::to_string(message.opcode));
 	uint8_t *ptr    = buffer;
 	*ptr++          = 0x80 | message.opcode;
 	size_t rem_size = message.body.size();
 	if (rem_size < 126) {
-		*ptr++ = static_cast<uint8_t>(rem_size | (mask ? 0x80 : 0));
+		*ptr++ = static_cast<uint8_t>(rem_size | (masking_key ? 0x80 : 0));
 	} else if (rem_size < 65536) {
-		*ptr++ = 126 | (mask ? 0x80 : 0);
+		*ptr++ = 126 | (masking_key ? 0x80 : 0);
 		for (size_t i = 2; i-- > 0;)
 			*ptr++ = static_cast<uint8_t>(rem_size >> i * 8);
 	} else {
-		*ptr++ = 127 | (mask ? 0x80 : 0);
+		*ptr++ = 127 | (masking_key ? 0x80 : 0);
 		for (size_t i = 8; i-- > 0;)
 			*ptr++ = static_cast<uint8_t>(rem_size >> i * 8);
 	}
-	if (mask)
+	if (masking_key)
 		for (size_t i = 4; i-- > 0;)
-			*ptr++ = masking_key >> i * 8;
+			*ptr++ = *masking_key >> i * 8;
 	invariant(ptr - buffer <= MESSAGE_FRAME_BUFFER_SIZE, "Message frame buffer overflow");
 	return ptr - buffer;
-}
-
-CRAB_INLINE std::string MessageChunkParser::write_message_frame(
-    const WebMessage &message, bool mask, uint32_t masking_key) {
-	uint8_t buffer[MESSAGE_FRAME_BUFFER_SIZE];
-	size_t buffer_len = write_message_frame(buffer, message, mask, masking_key);
-
-	return std::string(reinterpret_cast<const char *>(buffer), buffer_len);
 }
 
 // TODO - help compiler by splitting into start, mid, finish
 // start will advance data and rotate masking_key until aligned with uint64_t
 
-CRAB_INLINE void MessageChunkParser::mask_data(size_t masking_shift, char *data, size_t size, uint32_t masking_key) {
+CRAB_INLINE void MessageHeaderParser::mask_data(size_t masking_shift, char *data, size_t size, uint32_t masking_key) {
 	auto x2 = rol(masking_key, 8 + 8 * masking_shift);
 	for (size_t i = 0; i != size; ++i) {
 		data[i] ^= x2;
@@ -122,7 +114,7 @@ CRAB_INLINE void MessageBodyParser::parse(Buffer &buf) {
 	buf.did_read(ptr - buf.read_ptr());
 }
 
-CRAB_INLINE void MessageBodyParser::add_chunk(const WebMessageChunk &chunk) {
+CRAB_INLINE void MessageBodyParser::add_chunk(const WebMessageHeader &chunk) {
 	remaining_bytes += chunk.payload_len;
 	if (chunk.fin && chunk.payload_len < 1024 * 1024)  // Good optimization for common single-fragment messages
 		body.get_buffer().reserve(body.get_buffer().size() + static_cast<size_t>(chunk.payload_len));
@@ -138,7 +130,7 @@ CRAB_INLINE const uint8_t *MessageBodyParser::consume(const uint8_t *begin, cons
 
 		if (masking_key) {
 			auto &buf = body.get_buffer();
-			MessageChunkParser::mask_data(masking_shift, &buf[buf.size() - wr], wr, masking_key);
+			MessageHeaderParser::mask_data(masking_shift, &buf[buf.size() - wr], wr, masking_key);
 			masking_shift += wr;
 		}
 

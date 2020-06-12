@@ -64,7 +64,7 @@ struct RequestHeader : public RequestResponseHeader {
 	std::string to_string() const;
 };
 
-struct WebMessageChunk {
+struct WebMessageHeader {
 	bool fin             = false;
 	bool mask            = false;
 	int opcode           = 0;
@@ -89,7 +89,7 @@ struct WebMessage {
 	bool is_binary() const { return opcode == OPCODE_BINARY; }
 	bool is_text() const { return opcode == OPCODE_TEXT; }
 	WebMessage() = default;
-	WebMessage(std::string body) : opcode(OPCODE_TEXT), body(std::move(body)) {}
+	explicit WebMessage(std::string body) : opcode(OPCODE_TEXT), body(std::move(body)) {}
 	WebMessage(int opcode, std::string body) : opcode(opcode), body(std::move(body)) {}
 };
 

@@ -13,44 +13,49 @@ public:
 		server.r_handler = [&](http::Client *who, http::Request &&request) {
 			if (request.header.path == "/chat") {
 				std::cout << "Streaming client added" << std::endl;
-				waiting_clients.emplace(who);
+				waiting_clients.push_back(who);
+				auto it = --waiting_clients.end();
 				http::ResponseHeader header;
 				header.status                    = 200;
 				header.transfer_encoding_chunked = true;
 				header.set_content_type("text/html", "charset=utf-8");
-				who->write(std::move(header), crab::BUFFER_ONLY);
-				who->write(body_so_far.c_str(), body_so_far.size());
+				who->start_write_stream(std::move(header), []() {},
+				    [this, it]() {
+					    std::cout << "Streaming clinet disconnected" << std::endl;
+					    waiting_clients.erase(it);
+				    });
+				who->write(body_so_far.data(), body_so_far.size());
 				return;
 			}
 			if (request.header.path == "/download") {
+				uint64_t len = 1 * 1000 * 1000 * 1000;
 				http::ResponseHeader header;
 				header.status         = 200;
-				header.content_length = 1 * 1000 * 1000 * 1000;
+				header.content_length = len;
 				header.set_content_type("application/octet-stream", "");
-				who->write(std::move(header), [who](uint64_t pos, crab::details::optional<uint64_t> len) {
-					char buffer[65536]{};
-					auto to_write = static_cast<size_t>(std::min<uint64_t>(*len - pos, sizeof(buffer)));
-					auto wr       = who->write_some(buffer, to_write);
-					if (wr != to_write) {
-						std::cout << "Downloader buffer full, will continue writing later" << std::endl;
-					}
-					if (wr + pos == *len) {
-						std::cout << "Downloader finished" << std::endl;
-					}
-				});
+				who->start_write_stream(std::move(header), [this, who, len]() { write_stream_data(who, len); });
+				write_stream_data(who, len);
 				return;
 			}
 			who->write(http::Response::simple_html(404));
-		};
-		server.d_handler = [&](http::Client *who) {
-			if (waiting_clients.erase(who))
-				std::cout << "Streaming client disconnected" << std::endl;
 		};
 		start_session();
 		timer.once(1);
 	}
 
 private:
+	void write_stream_data(http::Client *who, uint64_t len) {
+		char buffer[65536]{};
+		while (who->can_write() && who->get_body_position() != len) {
+			auto to_write = static_cast<size_t>(std::min<uint64_t>(len - who->get_body_position(), sizeof(buffer)));
+			who->write(buffer, to_write);
+		}
+		if (who->get_body_position() == len) {
+			std::cout << "Downloader finished" << std::endl;
+		} else {
+			std::cout << "Downloader buffer full, will continue writing later" << std::endl;
+		}
+	}
 	void start_session() {
 		for (auto who : waiting_clients) {
 			who->write(std::string{"</body></html>"});
@@ -75,7 +80,7 @@ private:
 	http::Server server;
 	crab::Timer timer;
 	size_t ticks_counter = 0;
-	std::set<http::Client *> waiting_clients;
+	std::list<http::Client *> waiting_clients;
 	std::string body_so_far;
 };
 
