@@ -259,11 +259,13 @@ CRAB_INLINE void ClientConnection::dns_handler(const std::vector<Address> &names
 		if (!sock.connect(peer_address)) {
 			close();
 			rwd_handler();
+			return;
 		}
 	} else {  // https, check is in connect
 		if (!sock.connect_tls(peer_address, host)) {
 			close();
 			rwd_handler();
+			return;
 		}
 	}
 	state = WAITING_WRITE_REQUEST;
@@ -556,6 +558,9 @@ CRAB_INLINE void ServerConnection::sock_handler() {
 	}
 	if (state == WAITING_WRITE_RESPONSE_BODY) {
 		rwd_handler();  // So body streaming will work
+		// This follows usual async pull socket pattern, when after finishing writing body client will
+		// call read_next, which will call advance_state, and so on
+		return;
 	}
 	if (state == WEB_MESSAGE_HEADER || state == WEB_MESSAGE_BODY || state == WEB_MESSAGE_READY) {
 		wm_ping_timer.once(WM_PING_TIMEOUT_SEC);

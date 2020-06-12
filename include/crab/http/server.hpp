@@ -65,11 +65,6 @@ public:
 	// if you did not write response and exception is thrown, 422 will be returned
 	// if you did not write full response and no exception is thrown, you are expected
 	// to remember who and later call Client::write() to finish serving request
-	typedef std::function<void(Client *who)> D_handler;
-	// remove remembered client/websocket. Do not do anything with who, except using as an opaque key
-
-	typedef std::function<void(Client *who, WebMessage &&)> W_handler;
-	// only messages with opcodes text and binary are sent to handler, other processed automatically
 
 	explicit Server(const Address &address);
 	explicit Server(uint16_t port) : Server(Address("0.0.0.0", port)) {}
@@ -80,8 +75,6 @@ public:
 	static const std::string &get_date();
 
 	R_handler r_handler;  // Request
-	D_handler d_handler;  // Disconnect
-	W_handler w_handler;  // Web Message
 private:
 	struct TimeCache {
 		std::chrono::system_clock::time_point cached_time_point{};

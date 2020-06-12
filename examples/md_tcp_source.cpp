@@ -126,15 +126,8 @@ public:
 			// If client requests range which is not available yet, we add them to long-poll
 			// waiting_clients_inv is sorted by req.end so once sequence number reaches begin(),
 			// we can send response to that waiting client
-			waiting_clients.emplace(who, req.end);
-			waiting_clients_inv.emplace(req.end, std::make_pair(req, who));
-		};
-		server.d_handler = [&](http::Client *who) {
-			auto wit = waiting_clients.find(who);
-			if (wit == waiting_clients.end())
-				return;
-			waiting_clients_inv.erase(wit->second);
-			waiting_clients.erase(wit);
+			auto res = waiting_clients_inv.emplace(req.end, std::make_pair(req, who));
+			who->start_long_poll([this, res]() { waiting_clients_inv.erase(res); });
 		};
 	}
 
@@ -161,7 +154,6 @@ private:
 			auto who = waiting_clients_inv.begin()->second.second;
 			auto req = waiting_clients_inv.begin()->second.first;
 			waiting_clients_inv.erase(waiting_clients_inv.begin());
-			waiting_clients.erase(who);
 
 			http::Response response;
 			create_response(response, req.begin, req.end);
@@ -205,8 +197,7 @@ private:
 	std::deque<Msg> messages;  // In real system, messages will be stored in some DB
 
 	http::Server server;
-	std::map<http::Client *, uint64_t> waiting_clients;
-	std::map<uint64_t, std::pair<MDRequest, http::Client *>> waiting_clients_inv;
+	std::multimap<uint64_t, std::pair<MDRequest, http::Client *>> waiting_clients_inv;
 
 	crab::Watcher ab;            // Signals about changes in fast_queue
 	std::mutex mutex;            // Protects fast_queue

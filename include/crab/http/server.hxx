@@ -22,8 +22,6 @@ namespace crab { namespace http {
 
 namespace details {
 CRAB_INLINE void empty_r_handler(Client *, Request &&) {}
-CRAB_INLINE void empty_d_handler(Client *) {}
-CRAB_INLINE void empty_w_handler(Client *, WebMessage &&) {}
 }  // namespace details
 
 CRAB_INLINE void Client::write(Response &&response) {
@@ -77,10 +75,7 @@ CRAB_INLINE void Client::start_write_stream(ResponseHeader &&response, Handler &
 }
 
 CRAB_INLINE Server::Server(const Address &address)
-    : r_handler(details::empty_r_handler)
-    , d_handler(details::empty_d_handler)
-    , w_handler(details::empty_w_handler)
-    , la_socket{address, std::bind(&Server::accept_all, this)} {}
+    : r_handler(details::empty_r_handler), la_socket{address, std::bind(&Server::accept_all, this)} {}
 
 CRAB_INLINE Server::~Server() = default;  // we use incomplete types
 
@@ -136,7 +131,6 @@ CRAB_INLINE void Server::on_client_disconnected(std::list<Client>::iterator it) 
 	if (who->d_handler)
 		who->d_handler();
 	clients.erase(it);
-	d_handler(who);
 }
 
 // Big TODO - reverse r_handler logic, so that user must explicitly call
@@ -169,8 +163,6 @@ CRAB_INLINE void Server::on_client_handle_message(Client *who, WebMessage &&mess
 	try {
 		if (who->w_handler)
 			who->w_handler(std::move(message));
-		else if (w_handler)
-			w_handler(who, std::move(message));
 	} catch (const std::exception &ex) {
 		std::cout << "HTTP socket request leads to throw/catch, what=" << ex.what() << std::endl;
 		who->write(WebMessage(WebMessage::OPCODE_CLOSE, ex.what()));
