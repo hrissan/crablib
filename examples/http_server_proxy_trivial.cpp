@@ -29,7 +29,7 @@ public:
 			std::cout << "Sending request " << counter << std::endl;
 			request.header.host = "www.alawar.com";
 			it->send(std::move(request), 443, "https");
-			who->start_long_poll([this, it, counter]() {
+			who->postpone_response([this, it, counter]() {
 				std::cout << "Disconnect " << counter << std::endl;
 				waiting_requests.erase(it);
 			});
@@ -60,7 +60,7 @@ public:
 			std::cout << "Sending request " << counter << std::endl;
 			request.header.host = "www.alawar.com";
 			req->send(std::move(request), 443, "https");
-			who->start_long_poll([req, counter]() {  // Owns req
+			who->postpone_response([req, counter]() {  // Owns req
 				std::cout << "Disconnect " << counter << std::endl;
 			});
 		};

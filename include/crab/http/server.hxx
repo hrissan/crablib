@@ -59,7 +59,7 @@ CRAB_INLINE void Client::web_socket_upgrade(W_handler &&wcb, Handler &&dcb) {
 	d_handler = std::move(dcb);
 }
 
-CRAB_INLINE void Client::start_long_poll(Handler &&dcb) { d_handler = std::move(dcb); }
+CRAB_INLINE void Client::postpone_response(Handler &&dcb) { d_handler = std::move(dcb); }
 
 CRAB_INLINE void Client::start_write_stream(ResponseHeader &&response, Handler &&scb, Handler &&dcb) {
 	if (response.date.empty())
@@ -68,6 +68,7 @@ CRAB_INLINE void Client::start_write_stream(ResponseHeader &&response, Handler &
 	s_handler     = std::move(scb);
 	d_handler     = std::move(dcb);
 	body_position = 0;
+	s_handler();  // Some data might are ready, so we call handler immediately. TODO - investigate consequences
 }
 
 CRAB_INLINE Server::Server(const Address &address) : la_socket{address, std::bind(&Server::accept_all, this)} {}
@@ -151,7 +152,7 @@ CRAB_INLINE void Server::on_client_handle_request(Client *who, Request &&request
 		return;
 	}
 	if (who->get_state() == ServerConnection::WAITING_WRITE_RESPONSE_HEADER && !who->d_handler)
-		throw std::logic_error("r_handler must either write response, call start_long_poll or web_socket_upgrade");
+		throw std::logic_error("r_handler must either write response, call postpone_response or web_socket_upgrade");
 }
 
 CRAB_INLINE void Server::on_client_handle_message(Client *who, WebMessage &&message) {

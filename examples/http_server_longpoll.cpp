@@ -13,7 +13,7 @@ public:
 	explicit ServerLongPollApp(uint16_t port) : server(port), timer([&]() { on_timer(); }) {
 		server.r_handler = [&](http::Client *who, http::Request &&request) {
 			auto res = waiting_clients_inv.emplace(ticks_counter + 5, who);
-			who->start_long_poll([this, res]() { waiting_clients_inv.erase(res); });
+			who->postpone_response([this, res]() { waiting_clients_inv.erase(res); });
 		};
 		timer.once(1);
 	}

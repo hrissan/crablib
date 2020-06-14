@@ -127,7 +127,7 @@ public:
 			// waiting_clients_inv is sorted by req.end so once sequence number reaches begin(),
 			// we can send response to that waiting client
 			auto res = waiting_clients_inv.emplace(req.end, std::make_pair(req, who));
-			who->start_long_poll([this, res]() { waiting_clients_inv.erase(res); });
+			who->postpone_response([this, res]() { waiting_clients_inv.erase(res); });
 		};
 	}
 

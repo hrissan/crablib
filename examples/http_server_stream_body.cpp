@@ -34,7 +34,6 @@ public:
 				header.content_length = len;
 				header.set_content_type("application/octet-stream", "");
 				who->start_write_stream(std::move(header), [this, who, len]() { write_stream_data(who, len); });
-				write_stream_data(who, len);
 				return;
 			}
 			who->write(http::Response::simple_html(404));

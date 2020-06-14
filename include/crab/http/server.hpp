@@ -46,7 +46,7 @@ public:
 	using ServerConnection::write_last_chunk;
 
 	void web_socket_upgrade(W_handler &&wcb, Handler &&dcb);
-	void start_long_poll(Handler &&dcb);
+	void postpone_response(Handler &&dcb);
 	void start_write_stream(ResponseHeader &&response, Handler &&scb, Handler &&dcb = empty_handler);
 
 	uint64_t get_body_position() const { return body_position; }
