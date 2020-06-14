@@ -254,7 +254,7 @@ CRAB_INLINE void RequestParser::process_ready_header() {
 		if (req.content_length)
 			throw std::runtime_error("content length specified more than once");
 		try {
-			req.content_length = crab::integer_cast<uint64_t>(header.value);
+			req.content_length = integer_cast<uint64_t>(header.value);
 		} catch (const std::exception &) {
 			std::throw_with_nested(std::runtime_error("Content length is not a number"));
 		}

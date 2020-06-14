@@ -20,10 +20,6 @@
 
 namespace crab { namespace http {
 
-namespace details {
-CRAB_INLINE void empty_r_handler(Client *, Request &&) {}
-}  // namespace details
-
 CRAB_INLINE void Client::write(Response &&response) {
 	// HTTP message length design is utter crap, we should conform better...
 	// https://www.w3.org/Protocols/rfc2616/rfc2616-sec4.html#sec4.4
@@ -74,8 +70,7 @@ CRAB_INLINE void Client::start_write_stream(ResponseHeader &&response, Handler &
 	body_position = 0;
 }
 
-CRAB_INLINE Server::Server(const Address &address)
-    : r_handler(details::empty_r_handler), la_socket{address, std::bind(&Server::accept_all, this)} {}
+CRAB_INLINE Server::Server(const Address &address) : la_socket{address, std::bind(&Server::accept_all, this)} {}
 
 CRAB_INLINE Server::~Server() = default;  // we use incomplete types
 

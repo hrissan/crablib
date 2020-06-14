@@ -73,8 +73,8 @@ CRAB_INLINE MessageHeaderParser::State MessageHeaderParser::consume(uint8_t inpu
 	}
 }
 
-CRAB_INLINE size_t MessageHeaderParser::write_message_frame(uint8_t buffer[MESSAGE_FRAME_BUFFER_SIZE],
-    const WebMessage &message, crab::details::optional<uint32_t> masking_key) {
+CRAB_INLINE size_t MessageHeaderParser::write_message_frame(
+    uint8_t buffer[MESSAGE_FRAME_BUFFER_SIZE], const WebMessage &message, details::optional<uint32_t> masking_key) {
 	if (message.opcode == 0 || !WebMessage::is_good_opcode(message.opcode))
 		throw std::logic_error("Invalid web message opcode " + std::to_string(message.opcode));
 	uint8_t *ptr    = buffer;

@@ -232,7 +232,7 @@ CRAB_INLINE void ClientConnection::write(WebMessage &&message) {
 }
 
 CRAB_INLINE void ClientConnection::web_socket_upgrade(const RequestHeader &rh) {
-	http::Request req;
+	Request req;
 	req.header                       = rh;
 	req.header.http_version_major    = 1;
 	req.header.http_version_minor    = 1;
@@ -474,7 +474,7 @@ CRAB_INLINE void ServerConnection::write(WebMessage &&message) {
 	}
 }
 
-CRAB_INLINE void ServerConnection::write(http::ResponseHeader &&resp, BufferOptions buffer_options) {
+CRAB_INLINE void ServerConnection::write(ResponseHeader &&resp, BufferOptions buffer_options) {
 	if (!is_open())
 		return;  // This NOP simplifies state machines of connection users
 	invariant(state == WAITING_WRITE_RESPONSE_HEADER, "Connection unexpected write");

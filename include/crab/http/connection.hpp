@@ -117,7 +117,7 @@ public:
 	size_t get_total_buffer_size() const { return sock.get_total_buffer_size(); }
 
 protected:
-	crab::Buffer read_buffer;
+	Buffer read_buffer;
 
 	ResponseParser response_parser;
 	BodyParser http_body_parser;
@@ -194,7 +194,7 @@ public:
 	// Slightly less than default TCP keep-alive of 50 sec
 
 protected:
-	crab::Buffer read_buffer;
+	Buffer read_buffer;
 
 	RequestParser request_parser;
 	BodyParser http_body_parser;

@@ -12,7 +12,55 @@
 #include "../crypto/sha1.hpp"
 #include "types.hpp"
 
-namespace crab { namespace http {
+namespace crab {
+
+namespace details {
+
+CRAB_INLINE void to_string_common(const http::RequestResponseHeader &req, std::stringstream &ss) {
+	if (!req.content_type_mime.empty()) {
+		ss << "content-type: " << req.content_type_mime;
+		if (!req.content_type_suffix.empty())
+			ss << "; " << req.content_type_suffix;
+		ss << "\r\n";
+	}
+	if (req.content_length) {
+		ss << "content-length: " << *req.content_length << "\r\n";
+	}
+	if (req.http_version_major == 1 && req.http_version_minor == 0 && req.keep_alive) {
+		ss << "connection: keep-alive\r\n";
+	} else if (req.http_version_major == 1 && req.http_version_minor == 1 && !req.keep_alive) {
+		ss << "connection: close\r\n";
+	} else if (req.connection_upgrade && req.upgrade_websocket) {
+		ss << "connection: upgrade\r\n";
+		ss << "upgrade: websocket\r\n";
+	}
+	if (!req.transfer_encodings.empty() || req.transfer_encoding_chunked) {
+		ss << "transfer-encoding:";
+		size_t pos = 0;
+		for (const auto &te : req.transfer_encodings)
+			ss << (pos++ ? ", " : " ") << te;
+		if (req.transfer_encoding_chunked)
+			ss << (pos++ ? ", chunked" : " chunked");
+		ss << "\r\n";
+	}
+	for (auto &&h : req.headers)
+		ss << h.name << ": " << h.value << "\r\n";
+}
+
+CRAB_INLINE std::string simple_response(int status, const char *pf, const std::string *body, const char *sf) {
+	std::stringstream ss;
+	ss << pf;
+	if (body)
+		ss << *body;
+	else
+		ss << status << " " << http::status_to_string(status);
+	ss << sf;
+	return ss.str();
+}
+
+}  // namespace details
+
+namespace http {
 
 CRAB_INLINE const std::string &status_to_string(int status) {
 	struct smapping {
@@ -157,52 +205,6 @@ CRAB_INLINE std::string RequestHeader::get_uri() const {
 	return query_string.empty() ? query_string : path + "?" + query_string;
 }
 
-namespace details {
-
-CRAB_INLINE void to_string_common(const RequestResponseHeader &req, std::stringstream &ss) {
-	if (!req.content_type_mime.empty()) {
-		ss << "content-type: " << req.content_type_mime;
-		if (!req.content_type_suffix.empty())
-			ss << "; " << req.content_type_suffix;
-		ss << "\r\n";
-	}
-	if (req.content_length) {
-		ss << "content-length: " << *req.content_length << "\r\n";
-	}
-	if (req.http_version_major == 1 && req.http_version_minor == 0 && req.keep_alive) {
-		ss << "connection: keep-alive\r\n";
-	} else if (req.http_version_major == 1 && req.http_version_minor == 1 && !req.keep_alive) {
-		ss << "connection: close\r\n";
-	} else if (req.connection_upgrade && req.upgrade_websocket) {
-		ss << "connection: upgrade\r\n";
-		ss << "upgrade: websocket\r\n";
-	}
-	if (!req.transfer_encodings.empty() || req.transfer_encoding_chunked) {
-		ss << "transfer-encoding:";
-		size_t pos = 0;
-		for (const auto &te : req.transfer_encodings)
-			ss << (pos++ ? ", " : " ") << te;
-		if (req.transfer_encoding_chunked)
-			ss << (pos++ ? ", chunked" : " chunked");
-		ss << "\r\n";
-	}
-	for (auto &&h : req.headers)
-		ss << h.name << ": " << h.value << "\r\n";
-}
-
-CRAB_INLINE std::string simple_response(int status, const char *pf, const std::string *body, const char *sf) {
-	std::stringstream ss;
-	ss << pf;
-	if (body)
-		ss << *body;
-	else
-		ss << status << " " << status_to_string(status);
-	ss << sf;
-	return ss.str();
-}
-
-}  // namespace details
-
 CRAB_INLINE std::string RequestHeader::to_string() const {
 	std::stringstream ss;
 	ss << method << " " << path;  // TODO - uri-encode path
@@ -302,4 +304,5 @@ CRAB_INLINE Response Response::simple_text(int status) {
 	return simple(status, "text/plain; charset=utf-8", details::simple_response(status, "", nullptr, ""));
 }
 
-}}  // namespace crab::http
+}  // namespace http
+}  // namespace crab
