@@ -21,8 +21,6 @@ namespace crab {
 
 // This is max heap (like in std::), so if less is used, front will be largest element
 
-// pop_back() is faster (O(1)) than pop_front() (O(ln(N))), reverse predicate to use latter in time-critical coded
-
 class IntrusiveHeapIndex : public Nocopy {
 public:
 	bool in_heap() const { return heap_index != 0; }
@@ -43,11 +41,6 @@ public:
 		if (health_checks && (storage.size() <= 1 || (at(1)->*Index).heap_index != 1))
 			throw std::logic_error("Heap Index corrupted at front()");
 		return *at(1);
-	}
-	T &back() {
-		if (health_checks && (storage.size() <= 1 || (storage.back()->*Index).heap_index != storage.size() - 1))
-			throw std::logic_error("Heap Index corrupted at back()");
-		return *storage.back();
 	}
 
 	bool insert(T &node) {
@@ -85,16 +78,6 @@ public:
 		storage.pop_back();
 		if (1 < storage.size())
 			movedown(1);
-		check_heap();
-	}
-	void pop_back() {
-		if (health_checks && storage.size() < 1)
-			throw std::logic_error("Heap Index corrupted at pop_back() 1");
-		size_t ind = (storage.back()->*Index).heap_index;
-		if (health_checks && ind != storage.size() - 1)
-			throw std::logic_error("Heap Index corrupted at pop_back() 2");
-		(storage.back()->*Index).heap_index = 0;
-		storage.pop_back();
 		check_heap();
 	}
 

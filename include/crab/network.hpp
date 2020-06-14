@@ -36,8 +36,8 @@ private:
 	Handler a_handler;
 
 #if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL || CRAB_IMPL_WINDOWS
-	struct HeapPred {  // we use max heap, because pop_back() is faster than pop_front()
-		bool operator()(const Timer &a, const Timer &b) { return a.fire_time < b.fire_time; }
+	struct HeapPred {
+		bool operator()(const Timer &a, const Timer &b) { return a.fire_time > b.fire_time; }
 	};
 	IntrusiveHeapIndex heap_index;
 	steady_clock::time_point fire_time;  // Part of heap invariant, must not change, while timer is set

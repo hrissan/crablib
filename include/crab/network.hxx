@@ -87,9 +87,9 @@ CRAB_INLINE bool RunLoopLinks::process_timer(int &timeout_ms) {
 	if (active_timers.empty())
 		return false;
 	while (true) {
-		Timer &timer = active_timers.back();
+		Timer &timer = active_timers.front();
 		if (timer.fire_time <= now) {
-			active_timers.pop_back();
+			active_timers.pop_front();
 			if (timer.moved_fire_time > now) {  // Timer was moved far enough without rescheduling
 				timer.fire_time = timer.moved_fire_time;
 				active_timers.insert(timer);
