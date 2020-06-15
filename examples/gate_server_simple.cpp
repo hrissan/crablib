@@ -24,20 +24,23 @@ int test_http(size_t num, uint16_t port) {
 		if (request.header.path == "/latency") {
 			connected_sockets.push_back(who);
 			auto it = --connected_sockets.end();
-			who->web_socket_upgrade(
-			    [who](http::WebMessage &&message) {
-				    //		std::cout << "Server Got Message: " << message.body << std::endl;
-				    LatencyMessage lm;
-				    if (message.is_binary() || !lm.parse(message.body)) {
-					    who->write(http::WebMessage::close_message(
-					        "Error, expecting Latency Message", http::WebMessage::CLOSE_STATUS_ERROR));
-					    return;
-				    }
-				    lm.add_lat("server", std::chrono::steady_clock::now());
-				    std::cout << lm.save() << std::endl;
-				    who->write(http::WebMessage(lm.save()));
-			    },
-			    [&connected_sockets, it]() { connected_sockets.erase(it); });
+			who->web_socket_upgrade([&connected_sockets, it, who](http::WebMessage &&message) {
+				if (message.is_close()) {
+					std::cout << "Server Got Close Message: " << message.body << std::endl;
+					connected_sockets.erase(it);
+					return;
+				}
+				std::cout << "Server Got Message: " << message.body << std::endl;
+				LatencyMessage lm;
+				if (message.is_binary() || !lm.parse(message.body)) {
+					who->write(http::WebMessage{http::WebMessageOpcode::CLOSE, "Error, expecting Latency Message",
+					    http::WebMessage::CLOSE_STATUS_ERROR});
+					return;
+				}
+				lm.add_lat("server", std::chrono::steady_clock::now());
+				std::cout << lm.save() << std::endl;
+				who->write(http::WebMessage(lm.save()));
+			});
 			return;
 		}
 		who->write(http::Response::simple_html(404));

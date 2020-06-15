@@ -28,33 +28,45 @@ class Server;
 
 class Client : protected ServerConnection {  // So the type is opaque for users
 public:
-	using W_handler = std::function<void(WebMessage &&)>;
+	using WS_handler = std::function<void(WebMessage &&)>;
 
 	using ServerConnection::get_peer_address;
-	void write(Response &&);
-	void write(WebMessage &&wm) { ServerConnection::write(std::move(wm)); }
 
-	void write(const uint8_t *val, size_t count, BufferOptions bo = WRITE);  // Write body chunk
+	// You can either postpone response (do not forget to write later)
+	void postpone_response(Handler &&dcb);
+
+	// Upgrade to web socket
+	void web_socket_upgrade(WS_handler &&cb);
+
+	// write the whole response
+	void write(Response &&);
+	void write(WebMessage &&wm);
+
+	// start streaming response (scb will be called in socket-like fashion on all events)
+	void start_write_stream(ResponseHeader &&response, Handler &&scb);
+	void start_write_stream(WebMessageOpcode opcode, Handler &&scb);
+
+	// when streaming, check if space in write buffer available, is connection closed and get write position
+	using ServerConnection::can_write;
+	using ServerConnection::is_open;
+	uint64_t get_body_position() const { return body_position; }
+
+	// when streaming, write data
+	void write(const uint8_t *val, size_t count, BufferOptions bo = WRITE);
 	void write(const char *val, size_t count, BufferOptions bo = WRITE) { write(uint8_cast(val), count, bo); }
 #if __cplusplus >= 201703L
 	void write(const std::byte *val, size_t count, BufferOptions bo = WRITE) { write(uint8_cast(val), count, bo); }
 #endif
-	void write(std::string &&ss, BufferOptions bo = WRITE);  // Write body chunk
-	void write_last_chunk(BufferOptions bo = WRITE);         // for chunk encoding, finishes body
+	void write(std::string &&ss, BufferOptions bo = WRITE);
 
-	using ServerConnection::can_write;
-
-	void web_socket_upgrade(W_handler &&wcb, Handler &&dcb);
-	void postpone_response(Handler &&dcb);
-	void start_write_stream(ResponseHeader &&response, Handler &&scb, Handler &&dcb = empty_handler);
-	void start_write_stream(WebMessageOpcode opcode, Handler &&scb);
-
-	uint64_t get_body_position() const { return body_position; }
+	// finish streaming (should not be used if ResponseHeader contains Content-Length)
+	void write_last_chunk(BufferOptions bo = WRITE);
 
 private:
-	W_handler w_handler;
+	WS_handler ws_handler;
 	Handler d_handler;
-	Handler s_handler;
+	Handler rwd_handler;
+
 	uint64_t body_position = 0;
 	friend class Server;
 };

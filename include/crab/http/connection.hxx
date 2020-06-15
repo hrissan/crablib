@@ -8,6 +8,23 @@
 
 namespace crab {
 
+namespace details {
+
+CRAB_INLINE std::string web_message_create_close_body(const std::string &reason, uint16_t close_code) {
+	std::string result;
+	if (reason.empty() && close_code == http::WebMessage::CLOSE_STATUS_NO_CODE)
+		return result;
+	if (close_code < 1000)  // Spec is silent on what to do in this case
+		close_code = 1000;
+	result.reserve(2 + reason.size());
+	result.push_back(static_cast<char>(close_code >> 8));
+	result.push_back(static_cast<char>(close_code & 0xFF));
+	result += reason;
+	return result;
+}
+
+}  // namespace details
+
 CRAB_INLINE BufferedTCPSocket::BufferedTCPSocket(Handler &&rwd_handler)
     : rwd_handler(std::move(rwd_handler))
     , sock([this]() { sock_handler(); })
@@ -169,7 +186,7 @@ CRAB_INLINE bool ClientConnection::read_next(Response &req) {
 	req.body   = http_body_parser.body.clear();
 	req.header = std::move(response_parser.req);
 	state      = WAITING_WRITE_REQUEST;
-	advance_state(false);
+	advance_state();
 	return true;
 }
 
@@ -180,7 +197,7 @@ CRAB_INLINE bool ClientConnection::read_next(WebMessage &message) {
 	web_message.reset();
 	wm_header_parser = WebMessageHeaderParser{};
 	state            = WEB_MESSAGE_HEADER;
-	advance_state(false);
+	advance_state();
 	return true;
 }
 
@@ -224,6 +241,8 @@ CRAB_INLINE void ClientConnection::write(WebMessage &&message) {
 	} else {
 		// Control messages can be sent between frames of ordinary messages
 		// https://tools.ietf.org/html/rfc6455#section-5.5
+		if (message.opcode == WebMessageOpcode::CLOSE)
+			message.body = details::web_message_create_close_body(message.body, message.close_code);
 		// We truncate body instead of throw, because it can be generated from (for example) exception text. It would
 		// be unwise to expect users to get so deep into procotol details
 		if (message.body.size() > 125)
@@ -290,17 +309,18 @@ CRAB_INLINE void ClientConnection::sock_handler() {
 		rwd_handler();
 		return;
 	}
-	advance_state(true);
+	if (advance_state())
+		rwd_handler();
 }
 
-CRAB_INLINE void ClientConnection::advance_state(bool called_from_runloop) {
+CRAB_INLINE bool ClientConnection::advance_state() {
 	// do not process new request if data waiting to be sent
 	if (sock.get_total_buffer_size() != 0)
-		return;
+		return false;
 	try {
 		while (true) {
 			if (read_buffer.empty() && read_buffer.read_from(sock) == 0)
-				return;
+				return false;
 			switch (state) {
 			case RESPONSE_HEADER:
 				response_parser.parse(read_buffer);
@@ -318,9 +338,7 @@ CRAB_INLINE void ClientConnection::advance_state(bool called_from_runloop) {
 				if (!http_body_parser.is_good())
 					continue;
 				state = RESPONSE_READY;
-				if (called_from_runloop)
-					rwd_handler();
-				return;
+				return true;
 			case WEB_UPGRADE_RESPONSE_HEADER:
 				response_parser.parse(read_buffer);
 				if (!response_parser.is_good())
@@ -349,13 +367,6 @@ CRAB_INLINE void ClientConnection::advance_state(bool called_from_runloop) {
 				if (!wm_body_parser.is_good())
 					continue;
 				// Control frames are allowed between message fragments
-				if (wm_header_parser.opcode == static_cast<int>(WebMessageOpcode::CLOSE)) {
-					WebMessage nop(WebMessageOpcode::CLOSE, wm_body_parser.body.clear());
-					wm_header_parser = WebMessageHeaderParser{};
-					state            = WEB_MESSAGE_HEADER;
-					write(std::move(nop));  // We echo reason back. sock.shutdown will happen inside write()
-					return;
-				}
 				if (wm_header_parser.opcode == static_cast<int>(WebMessageOpcode::PING)) {
 					WebMessage nop(WebMessageOpcode::PONG, wm_body_parser.body.clear());
 					wm_header_parser = WebMessageHeaderParser{};
@@ -367,6 +378,18 @@ CRAB_INLINE void ClientConnection::advance_state(bool called_from_runloop) {
 					wm_header_parser = WebMessageHeaderParser{};
 					state            = WEB_MESSAGE_HEADER;
 					continue;
+				}
+				if (wm_header_parser.opcode == static_cast<int>(WebMessageOpcode::CLOSE)) {
+					auto body = wm_body_parser.body.clear();
+					web_message.emplace(WebMessageOpcode::CLOSE);
+					if (body.size() >= 2) {
+						web_message->close_code = (uint8_cast(body.data())[0] << 8) + uint8_cast(body.data())[1];
+						web_message->body       = body.substr(2);
+						if (!is_valid_utf8(web_message->body))
+							web_message->body.clear();  // No way to tell user about such an error
+					}
+					state = WEB_MESSAGE_READY;
+					return true;
 				}
 				if (!web_message) {
 					if (wm_header_parser.opcode == 0)
@@ -383,18 +406,24 @@ CRAB_INLINE void ClientConnection::advance_state(bool called_from_runloop) {
 					state            = WEB_MESSAGE_HEADER;
 					continue;
 				}
+				if (web_message->is_text() && !is_valid_utf8(web_message->body)) {
+					web_message.reset();
+					wm_header_parser = WebMessageHeaderParser{};
+					state            = WEB_MESSAGE_HEADER;
+					WebMessage nop(WebMessageOpcode::CLOSE, {}, WebMessage::CLOSE_STATUS_NOT_UTF8);
+					write(std::move(nop));
+					return false;
+				}
 				state = WEB_MESSAGE_READY;
-				if (called_from_runloop)
-					rwd_handler();
-				return;
+				return true;
 			default:  // waiting write, closing, etc
-				return;
+				return false;
 			}
 		}
 	} catch (const std::exception &) {
-		close();
-		if (called_from_runloop)
-			rwd_handler();
+		read_buffer.clear();
+		sock.write_shutdown();
+		return true;
 	}
 }
 
@@ -427,7 +456,7 @@ CRAB_INLINE bool ServerConnection::read_next(Request &req) {
 	req.header = request_parser.req;
 	// We do not move req, because we must remember params for response
 	state = RESPONSE_HEADER;
-	advance_state(false);
+	advance_state();
 	return true;
 }
 
@@ -438,7 +467,7 @@ CRAB_INLINE bool ServerConnection::read_next(WebMessage &message) {
 	web_message.reset();
 	wm_header_parser = WebMessageHeaderParser{};
 	state            = WEB_MESSAGE_HEADER;
-	advance_state(false);
+	advance_state();
 	return true;
 }
 
@@ -504,6 +533,8 @@ CRAB_INLINE void ServerConnection::write(WebMessage &&message, BufferOptions bo)
 	} else {
 		// Control messages can be sent between frames of ordinary messages
 		// https://tools.ietf.org/html/rfc6455#section-5.5
+		if (message.opcode == WebMessageOpcode::CLOSE)
+			message.body = details::web_message_create_close_body(message.body, message.close_code);
 		// We truncate body instead of throw, because it can be generated from (for example) exception text. It would
 		// be unwise to expect users to get so deep into procotol details
 		if (message.body.size() > 125)
@@ -643,7 +674,8 @@ CRAB_INLINE void ServerConnection::sock_handler() {
 		// call read_next, which will call advance_state, and so on
 		return;
 	}
-	advance_state(true);
+	if (advance_state())
+		rwd_handler();
 }
 
 CRAB_INLINE void ServerConnection::on_wm_ping_timer() {
@@ -654,14 +686,14 @@ CRAB_INLINE void ServerConnection::on_wm_ping_timer() {
 	wm_ping_timer.once(WM_PING_TIMEOUT_SEC);
 }
 
-CRAB_INLINE void ServerConnection::advance_state(bool called_from_runloop) {
+CRAB_INLINE bool ServerConnection::advance_state() {
 	// do not process new request if data waiting to be sent
 	if (sock.get_total_buffer_size() != 0)
-		return;
+		return false;
 	try {
 		while (true) {
 			if (read_buffer.empty() && read_buffer.read_from(sock) == 0)
-				return;
+				return false;
 			switch (state) {
 			case REQUEST_HEADER:
 				request_parser.parse(read_buffer);
@@ -678,9 +710,7 @@ CRAB_INLINE void ServerConnection::advance_state(bool called_from_runloop) {
 				if (!http_body_parser.is_good())
 					continue;
 				state = REQUEST_READY;
-				if (called_from_runloop)
-					rwd_handler();
-				return;
+				return true;
 			case WEB_MESSAGE_HEADER:
 				wm_header_parser.parse(read_buffer);
 				if (!wm_header_parser.is_good())
@@ -694,13 +724,6 @@ CRAB_INLINE void ServerConnection::advance_state(bool called_from_runloop) {
 				if (!wm_body_parser.is_good())
 					continue;
 				// Control frames are allowed between message fragments
-				if (wm_header_parser.opcode == static_cast<int>(WebMessageOpcode::CLOSE)) {
-					WebMessage nop(WebMessageOpcode::CLOSE, wm_body_parser.body.clear());
-					wm_header_parser = WebMessageHeaderParser{};
-					state            = WEB_MESSAGE_HEADER;
-					write(std::move(nop));  // We echo reason back. sock.shutdown will happen inside write()
-					return;
-				}
 				if (wm_header_parser.opcode == static_cast<int>(WebMessageOpcode::PING)) {
 					WebMessage nop(WebMessageOpcode::PONG, wm_body_parser.body.clear());
 					wm_header_parser = WebMessageHeaderParser{};
@@ -712,6 +735,18 @@ CRAB_INLINE void ServerConnection::advance_state(bool called_from_runloop) {
 					wm_header_parser = WebMessageHeaderParser{};
 					state            = WEB_MESSAGE_HEADER;
 					continue;
+				}
+				if (wm_header_parser.opcode == static_cast<int>(WebMessageOpcode::CLOSE)) {
+					auto body = wm_body_parser.body.clear();
+					web_message.emplace(WebMessageOpcode::CLOSE);
+					if (body.size() >= 2) {
+						web_message->close_code = (uint8_cast(body.data())[0] << 8) + uint8_cast(body.data())[1];
+						web_message->body       = body.substr(2);
+						if (!is_valid_utf8(web_message->body))
+							web_message->body.clear();  // No way to tell user about such an error
+					}
+					state = WEB_MESSAGE_READY;
+					return true;
 				}
 				if (!web_message) {
 					if (wm_header_parser.opcode == 0)
@@ -728,18 +763,25 @@ CRAB_INLINE void ServerConnection::advance_state(bool called_from_runloop) {
 					state            = WEB_MESSAGE_HEADER;
 					continue;
 				}
+				if (web_message->is_text() && !is_valid_utf8(web_message->body)) {
+					web_message.reset();
+					wm_header_parser = WebMessageHeaderParser{};
+					state            = WEB_MESSAGE_HEADER;
+					WebMessage nop(WebMessageOpcode::CLOSE, {}, WebMessage::CLOSE_STATUS_NOT_UTF8);
+					write(std::move(nop));
+					return false;
+				}
 				state = WEB_MESSAGE_READY;
-				if (called_from_runloop)
-					rwd_handler();
-				return;
+				return true;
 			default:  // waiting write, closing, etc
-				return;
+				return false;
 			}
 		}
 	} catch (const std::exception &) {
-		close();
-		if (called_from_runloop)
-			rwd_handler();
+		wm_ping_timer.cancel();
+		read_buffer.clear();
+		sock.write_shutdown();
+		return true;
 	}
 }
 

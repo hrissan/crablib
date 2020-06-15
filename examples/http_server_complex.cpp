@@ -77,33 +77,38 @@ public:
 			if (request.header.path == "/ws") {
 				connected_sockets.push_back(who);
 				auto it = --connected_sockets.end();
-				who->web_socket_upgrade(
-				    [who](http::WebMessage &&message) {
-					    std::cout << "Server Got Message: " << message.body << " from who=" << size_t(who)
-					              << std::endl;
-					    if (message.is_binary()) {  // Echo binary messages back AS IS
-						    who->write(std::move(message));
-					    } else {
-						    who->write(http::WebMessage("Echo from Crab: " + message.body));
-					    }
-					    crab::RunLoop::current()->stats.print_records(std::cout);
-				    },
-				    [this, it]() { connected_sockets.erase(it); });
+				who->web_socket_upgrade([this, it, who](http::WebMessage &&message) {
+					if (message.is_close()) {
+						std::cout << "Server Got Close Message: " << message.body << " from who=" << size_t(who)
+						          << std::endl;
+						connected_sockets.erase(it);
+						return;
+					}
+					std::cout << "Server Got Message: " << message.body << " from who=" << size_t(who) << std::endl;
+					if (message.is_binary()) {  // Echo binary messages back AS IS
+						who->write(std::move(message));
+					} else {
+						who->write(http::WebMessage("Echo from Crab: " + message.body));
+					}
+					crab::RunLoop::current()->stats.print_records(std::cout);
+				});
 				who->write(http::WebMessage("Server-initiated on connect message!"));
 				return;
 			}
 			if (request.header.path == "/ws_big") {
 				connected_stream_sockets.push_back(who);
 				auto it = --connected_stream_sockets.end();
-				who->web_socket_upgrade(
-				    [who](http::WebMessage &&message) {
-					    std::cout << "Server Got Big Message: " << message.body << " from who=" << size_t(who)
-					              << std::endl;
-					    uint64_t len = 100 * 1000 * 1000;
-					    who->start_write_stream(
-					        http::WebMessageOpcode::TEXT, [who, len]() { write_stream_data(who, len); });
-				    },
-				    [this, it]() { connected_stream_sockets.erase(it); });
+				who->web_socket_upgrade([this, it, who](http::WebMessage &&message) {
+					if (message.is_close()) {
+						connected_stream_sockets.erase(it);
+						return;
+					}
+					std::cout << "Server Got Big Message: " << message.body << " from who=" << size_t(who)
+					          << std::endl;
+					uint64_t len = 100 * 1000 * 1000;
+					who->start_write_stream(
+					    http::WebMessageOpcode::TEXT, [who, len]() { write_stream_data(who, len); });
+				});
 				who->write(http::WebMessage("Server-initiated on connect message!"));
 				return;
 			}

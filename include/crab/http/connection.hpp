@@ -132,7 +132,7 @@ protected:
 
 	void dns_handler(const std::vector<Address> &names);
 	void sock_handler();
-	void advance_state(bool called_from_runloop);
+	bool advance_state();
 
 	Handler rwd_handler;
 
@@ -218,7 +218,7 @@ protected:
 
 	void sock_handler();
 	void on_wm_ping_timer();
-	void advance_state(bool called_from_runloop);
+	bool advance_state();
 
 	Handler rwd_handler;
 

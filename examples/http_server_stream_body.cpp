@@ -43,11 +43,12 @@ public:
 				header.status                    = 200;
 				header.transfer_encoding_chunked = true;
 				header.set_content_type("text/html", "charset=utf-8");
-				who->start_write_stream(std::move(header), []() {},
-				    [this, it]() {
-					    std::cout << "Streaming clinet disconnected" << std::endl;
-					    waiting_clients.erase(it);
-				    });
+				who->start_write_stream(std::move(header), [this, it, who]() {
+					if (!who->is_open()) {
+						std::cout << "Streaming clinet disconnected" << std::endl;
+						waiting_clients.erase(it);
+					}
+				});
 				who->write(body_so_far.data(), body_so_far.size());
 				return;
 			}
@@ -77,6 +78,10 @@ public:
 
 private:
 	static void write_stream_data(http::Client *who, uint64_t len, bool transfer_encoding_chunked) {
+		if (!who->is_open()) {
+			std::cout << "Client disconnected in the middle of transfer" << std::endl;
+			return;
+		}
 		char buffer[65536]{};
 		while (who->can_write() && who->get_body_position() != len) {
 			auto to_write = static_cast<size_t>(std::min<uint64_t>(len - who->get_body_position(), sizeof(buffer)));

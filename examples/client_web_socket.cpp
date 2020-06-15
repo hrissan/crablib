@@ -27,11 +27,16 @@ private:
 			return on_ws_closed();
 		http::WebMessage wm;
 		while (ws.read_next(wm)) {
+			if (wm.is_close()) {
+				std::cout << "Client Got Close Message: " << wm.body << std::endl;
+				ws.write(http::WebMessage{http::WebMessageOpcode::CLOSE});
+			}
 			if (wm.is_binary()) {
 				std::cout << "Client Got Binary Message: " << crab::to_hex(wm.body.data(), wm.body.size())
 				          << std::endl;
-			} else {
-				std::cout << "Client Got Message: " << wm.body << std::endl;
+			}
+			if (wm.is_text()) {
+				std::cout << "Client Got Text Message: " << wm.body << std::endl;
 			}
 		}
 	}

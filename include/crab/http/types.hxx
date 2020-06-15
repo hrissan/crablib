@@ -226,15 +226,6 @@ CRAB_INLINE std::string RequestHeader::to_string() const {
 	return ss.str();
 }
 
-CRAB_INLINE WebMessage WebMessage::close_message(const std::string &text, uint16_t code) {
-	WebMessage result(WebMessageOpcode::CLOSE);
-	result.body.reserve(2 + text.size());
-	result.body.push_back(static_cast<char>(code >> 8));
-	result.body.push_back(static_cast<char>(code & 0xFF));
-	result.body += text;
-	return result;
-}
-
 CRAB_INLINE bool ResponseHeader::is_websocket_upgrade() const {
 	return status == 101 && connection_upgrade && upgrade_websocket && !sec_websocket_accept.empty();
 }

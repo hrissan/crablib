@@ -4,6 +4,9 @@
 // *Really* minimal PCG32 code / (c) 2014 M.E. O'Neill / pcg-random.org
 // Licensed under Apache License 2.0 (NO WARRANTY, etc. see website)
 
+// Copyright (c) 2008-2010 Bjoern Hoehrmann <bjoern@hoehrmann.de>
+// See http://bjoern.hoehrmann.de/utf-8/decoder/dfa/ for details.
+
 #pragma once
 
 #include <cctype>
@@ -104,6 +107,9 @@ inline std::string to_hex(const bdata &data) { return to_hex(data.data(), data.s
 
 int from_hex_digit(char sym);
 bool from_hex(bdata &data, const std::string &str);
+
+bool is_valid_utf8(const uint8_t *data, size_t count);
+inline bool is_valid_utf8(const std::string &str) { return is_valid_utf8(uint8_cast(str.data()), str.size()); }
 
 template<typename T>
 T rol(T mask, size_t shift) {

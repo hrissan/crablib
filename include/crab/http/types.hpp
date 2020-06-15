@@ -72,24 +72,30 @@ struct WebMessage {
 	CRAB_DEPRECATED static constexpr WebMessageOpcode OPCODE_BINARY = WebMessageOpcode::BINARY;
 	CRAB_DEPRECATED static constexpr WebMessageOpcode OPCODE_CLOSE  = WebMessageOpcode::CLOSE;
 
+	// according to https://tools.ietf.org/html/rfc6455#section-5.5.3
+	// if CLOSE contains body, it must contain code (uint16_t BE) in the first 2 bytes of message
+	// more status codes available in RFC
+	static constexpr uint16_t CLOSE_STATUS_NORMAL          = 1000;
+	static constexpr uint16_t CLOSE_STATUS_NO_CODE         = 1005;
+	static constexpr uint16_t CLOSE_STATUS_DISCONNECT      = 1006;
+	static constexpr uint16_t CLOSE_STATUS_NOT_UTF8        = 1007;
+	static constexpr uint16_t CLOSE_STATUS_MESSAGE_TOO_BIG = 1009;
+	static constexpr uint16_t CLOSE_STATUS_ERROR           = 1011;
+
 	WebMessage() = default;
 	explicit WebMessage(std::string body) : opcode(WebMessageOpcode::TEXT), body(std::move(body)) {}
 	explicit WebMessage(WebMessageOpcode opcode) : opcode(opcode) {}
 	WebMessage(WebMessageOpcode opcode, std::string body) : opcode(opcode), body(std::move(body)) {}
+	WebMessage(WebMessageOpcode opcode, std::string body, uint16_t close_code)
+	    : opcode(opcode), body(std::move(body)), close_code(close_code) {}
 
 	WebMessageOpcode opcode = WebMessageOpcode::CLOSE;
 	std::string body;
+	uint16_t close_code = CLOSE_STATUS_NO_CODE;
 
 	bool is_binary() const { return opcode == WebMessageOpcode::BINARY; }
 	bool is_text() const { return opcode == WebMessageOpcode::TEXT; }
-
-	// according to https://tools.ietf.org/html/rfc6455#section-5.5.3
-	// if CLOSE contains body, it must contain code (uint16_t BE) in the first 2 bytes of message
-	// users are advised to either send empty message or use this fun to generate compliant message
-	// more status codes available in RFC
-	static constexpr uint16_t CLOSE_STATUS_NORMAL = 1000;
-	static constexpr uint16_t CLOSE_STATUS_ERROR  = 1011;
-	static WebMessage close_message(const std::string &text, uint16_t code);
+	bool is_close() const { return opcode == WebMessageOpcode::CLOSE; }
 };
 
 struct ResponseHeader : public RequestResponseHeader {

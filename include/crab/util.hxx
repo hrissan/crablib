@@ -4,6 +4,10 @@
 // *Really* minimal PCG32 code / (c) 2014 M.E. O'Neill / pcg-random.org
 // Licensed under Apache License 2.0 (NO WARRANTY, etc. see website)
 
+// Copyright (c) 2008-2010 Bjoern Hoehrmann <bjoern@hoehrmann.de>
+// See http://bjoern.hoehrmann.de/utf-8/decoder/dfa/ for details.
+// Included with tiny modifcations
+
 #include <string.h>
 #include <algorithm>
 #include <iostream>
@@ -51,6 +55,55 @@ CRAB_INLINE bool from_hex(bdata &data, const std::string &str) {
 	}
 	data = std::move(result);
 	return true;
+}
+
+namespace details {
+
+enum { UTF8_ACCEPT = 0, UTF8_REJECT = 12 };
+
+uint32_t inline utf8_decode(uint32_t *state, uint32_t *codep, uint32_t byte) {
+	// clang-format off
+    static const uint8_t utf8d[] = {
+            // The first part of the table maps bytes to character classes that
+            // to reduce the size of the transition table and create bitmasks.
+            0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+            0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+            0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+            0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,  0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,
+            1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,  9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,
+            7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,  7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,
+            8,8,2,2,2,2,2,2,2,2,2,2,2,2,2,2,  2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,
+            10,3,3,3,3,3,3,3,3,3,3,3,3,4,3,3, 11,6,6,6,5,8,8,8,8,8,8,8,8,8,8,8,
+
+            // The second part is a transition table that maps a combination
+            // of a state of the automaton and a character class to a state.
+            0,12,24,36,60,96,84,12,12,12,48,72, 12,12,12,12,12,12,12,12,12,12,12,12,
+            12, 0,12,12,12,12,12, 0,12, 0,12,12, 12,24,12,12,12,12,12,24,12,24,12,12,
+            12,12,12,12,12,12,12,24,12,12,12,12, 12,24,12,12,12,12,12,12,12,24,12,12,
+            12,12,12,12,12,12,12,36,12,36,12,12, 12,36,12,12,12,12,12,36,12,36,12,12,
+            12,36,12,12,12,12,12,12,12,12,12,12,
+    };
+
+    uint32_t type = utf8d[byte];
+
+    *codep = (*state != UTF8_ACCEPT) ?
+             (byte & 0x3fu) | (*codep << 6) :
+             (0xff >> type) & (byte);
+
+    *state = utf8d[256 + *state + type];
+    return *state;
+	// clang-format on
+}
+
+}  // namespace details
+
+bool is_valid_utf8(const uint8_t *data, size_t count) {
+	uint32_t codepoint, state = details::UTF8_ACCEPT;
+
+	for (size_t pos = 0; pos != count; ++pos)
+		details::utf8_decode(&state, &codepoint, data[pos]);
+
+	return state == details::UTF8_ACCEPT;
 }
 
 namespace details {

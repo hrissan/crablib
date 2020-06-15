@@ -26,16 +26,16 @@ CRAB_INLINE void Client::write(Response &&response) {
 	if (response.header.date.empty())
 		response.header.date = Server::get_date();
 	ServerConnection::write(std::move(response));
-	d_handler = {};
+	d_handler = nullptr;
 }
+
+CRAB_INLINE void Client::write(WebMessage &&wm) { ServerConnection::write(std::move(wm)); }
 
 CRAB_INLINE void Client::write(const uint8_t *val, size_t count, BufferOptions buffer_options) {
 	ServerConnection::write(val, count, buffer_options);
 	body_position += count;
 	if (!is_writing_body()) {
-		s_handler = {};
-		if (!w_handler)
-			d_handler = {};
+		rwd_handler = nullptr;
 	}
 }
 
@@ -43,45 +43,41 @@ CRAB_INLINE void Client::write(std::string &&ss, BufferOptions buffer_options) {
 	ServerConnection::write(std::move(ss), buffer_options);
 	body_position += ss.size();
 	if (!is_writing_body()) {
-		s_handler = {};
-		if (!w_handler)
-			d_handler = {};
+		rwd_handler = nullptr;
 	}
 }
 
 CRAB_INLINE void Client::write_last_chunk(BufferOptions bo) {
 	ServerConnection::write_last_chunk(bo);
-	s_handler = {};
-	if (!w_handler)
-		d_handler = {};
+	rwd_handler = nullptr;
 }
 
-CRAB_INLINE void Client::web_socket_upgrade(W_handler &&wcb, Handler &&dcb) {
+CRAB_INLINE void Client::web_socket_upgrade(WS_handler &&cb) {
 	ServerConnection::web_socket_upgrade();
-	w_handler = std::move(wcb);
-	d_handler = std::move(dcb);
+	d_handler  = nullptr;
+	ws_handler = std::move(cb);
 }
 
-CRAB_INLINE void Client::postpone_response(Handler &&dcb) {
+CRAB_INLINE void Client::postpone_response(Handler &&cb) {
 	invariant(!is_state_websocket(), "After web socket upgrade you can use only web socket functions");
-	d_handler = std::move(dcb);
+	d_handler = std::move(cb);
 }
 
-CRAB_INLINE void Client::start_write_stream(ResponseHeader &&response, Handler &&scb, Handler &&dcb) {
+CRAB_INLINE void Client::start_write_stream(ResponseHeader &&response, Handler &&cb) {
 	if (response.date.empty())
 		response.date = Server::get_date();
 	ServerConnection::write(std::move(response));
-	s_handler     = std::move(scb);
-	d_handler     = std::move(dcb);
+	d_handler     = nullptr;
+	rwd_handler   = std::move(cb);
 	body_position = 0;
-	s_handler();  // Some data might are ready, so we call handler immediately. TODO - investigate consequences
+	rwd_handler();  // Some data might are ready, so we call handler immediately. TODO - investigate consequences
 }
 
 CRAB_INLINE void Client::start_write_stream(WebMessageOpcode opcode, Handler &&scb) {
 	ServerConnection::write(opcode);
-	s_handler     = std::move(scb);
+	rwd_handler   = std::move(scb);
 	body_position = 0;
-	s_handler();  // Some data might are ready, so we call handler immediately. TODO - investigate consequences
+	rwd_handler();  // Some data might are ready, so we call handler immediately. TODO - investigate consequences
 }
 
 CRAB_INLINE Server::Server(const Address &address) : la_socket{address, std::bind(&Server::accept_all, this)} {}
@@ -113,8 +109,8 @@ CRAB_INLINE void Server::on_client_handler(std::list<Client>::iterator it) {
 		return on_client_disconnected(it);
 	WebMessage message;
 	Request request;
-	if (who->s_handler)
-		who->s_handler();
+	if (who->rwd_handler)
+		who->rwd_handler();
 	while (true) {
 		if (who->read_next(message)) {
 			on_client_handle_message(who, std::move(message));
@@ -139,6 +135,10 @@ CRAB_INLINE void Server::on_client_disconnected(std::list<Client>::iterator it) 
 	Client *who = &*it;
 	if (who->d_handler)
 		who->d_handler();
+	if (who->rwd_handler)
+		who->rwd_handler();
+	if (who->ws_handler)
+		who->ws_handler(WebMessage{WebMessageOpcode::CLOSE, {}, WebMessage::CLOSE_STATUS_DISCONNECT});
 	clients.erase(it);
 }
 
@@ -170,12 +170,16 @@ CRAB_INLINE void Server::on_client_handle_request(Client *who, Request &&request
 
 CRAB_INLINE void Server::on_client_handle_message(Client *who, WebMessage &&message) {
 	try {
-		if (who->w_handler)
-			who->w_handler(std::move(message));
+		auto opcode = message.opcode;
+		if (who->ws_handler)
+			who->ws_handler(std::move(message));
+		if (opcode == WebMessageOpcode::CLOSE)
+			who->ws_handler = nullptr;  // So we will not send second CLOSE on disconnect
 	} catch (const std::exception &ex) {
 		std::cout << "HTTP socket request leads to throw/catch, what=" << ex.what() << std::endl;
-		who->write(WebMessage::close_message(ex.what(), WebMessage::CLOSE_STATUS_ERROR));
+		who->write(WebMessage{WebMessageOpcode::CLOSE, ex.what(), WebMessage::CLOSE_STATUS_ERROR});
 		// TODO - hope we do not leak security messages there
 	}
 }
+
 }}  // namespace crab::http
