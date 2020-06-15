@@ -45,13 +45,6 @@ CRAB_INLINE WebMessageHeaderParser::State WebMessageHeaderParser::consume(uint8_
 		opcode = (input & 0x0F);
 		if (!is_opcode_supported(opcode))
 			throw std::runtime_error("Invalid opcode");
-		if (previous_opcode != 0 && opcode != 0)
-			throw std::runtime_error("Non-continuation in the subsequent chunk");
-		if (opcode == 0) {
-			if (previous_opcode == 0)
-				throw std::runtime_error("Continuation in the first chunk");
-			opcode = previous_opcode;
-		}
 		return MESSAGE_BYTE_1;
 	case MESSAGE_BYTE_1:
 		if ((input & 0x80) != 0)
@@ -59,6 +52,8 @@ CRAB_INLINE WebMessageHeaderParser::State WebMessageHeaderParser::consume(uint8_
 		payload_len = (input & 0x7F);
 		if ((opcode & 0x08) != 0 && payload_len > 125)
 			throw std::runtime_error("Control frame with payload_len > 125");
+		if ((opcode & 0x08) != 0 && !fin)
+			throw std::runtime_error("Control frame must not be fragmented");
 		if (payload_len == 126) {
 			payload_len           = 0;
 			remaining_field_bytes = 2;
@@ -112,13 +107,10 @@ CRAB_INLINE void WebMessageBodyParser::parse(Buffer &buf) {
 	buf.did_read(ptr - buf.read_ptr());
 }
 
-CRAB_INLINE void WebMessageBodyParser::add_chunk(const WebMessageHeaderParser &chunk) {
-	remaining_bytes += chunk.payload_len;
-	if (chunk.fin && chunk.payload_len < 1024 * 1024)  // Good optimization for common single-fragment messages
-		body.get_buffer().reserve(body.get_buffer().size() + static_cast<size_t>(chunk.payload_len));
-	masking_key   = chunk.masking_key ? *chunk.masking_key : 0;
-	masking_shift = 0;
-	state         = (remaining_bytes == 0) ? GOOD : BODY;
+CRAB_INLINE WebMessageBodyParser::WebMessageBodyParser(uint64_t payload_len, details::optional<uint32_t> mk)
+    : state((payload_len == 0) ? GOOD : BODY), remaining_bytes(payload_len), masking_key(mk ? *mk : 0) {
+	if (payload_len < 65536)  // TODO - constant
+		body.get_buffer().reserve(static_cast<size_t>(payload_len));
 }
 
 CRAB_INLINE const uint8_t *WebMessageBodyParser::consume(const uint8_t *begin, const uint8_t *end) {

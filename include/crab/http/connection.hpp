@@ -124,8 +124,9 @@ protected:
 	ResponseParser response_parser;
 	BodyParser http_body_parser;
 
-	WebMessageHeaderParser wm_header_parser;
-	WebMessageBodyParser wm_body_parser;  // Single per several chunks
+	WebMessageHeaderParser wm_header_parser;    // Chunk header
+	WebMessageBodyParser wm_body_parser;        // Chunk body
+	details::optional<WebMessage> web_message;  // Built from chunks
 	std::string sec_websocket_key;
 	Random rnd;  // for masking_key, dns name selection, web socket secret key
 
@@ -205,8 +206,9 @@ protected:
 	RequestParser request_parser;
 	BodyParser http_body_parser;
 
-	WebMessageHeaderParser wm_header_parser;
-	WebMessageBodyParser wm_body_parser;  // Single per several chunks
+	WebMessageHeaderParser wm_header_parser;    // Chunk header
+	WebMessageBodyParser wm_body_parser;        // Chunk body
+	details::optional<WebMessage> web_message;  // Built from chunks
 	Timer wm_ping_timer;
 	// Server-side ping required for some NATs to keep port open
 	// TCP keep-alive is set by most browsers, but surprisingly it is not enough.

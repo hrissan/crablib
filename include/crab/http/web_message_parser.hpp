@@ -27,10 +27,6 @@ private:
 
 class WebMessageHeaderParser {
 public:
-	explicit WebMessageHeaderParser(int previous_opcode = 0) : previous_opcode(previous_opcode) {}
-	// We pass 0 for first chunk, req.opcode is filled with actual opcode
-	// We pass req.opcode for subsequent chunks, req.opcode will be filled with it
-
 	bool fin             = false;
 	int opcode           = 0;
 	uint64_t payload_len = 0;
@@ -65,7 +61,6 @@ public:
 private:
 	enum State { MESSAGE_BYTE_0, MESSAGE_BYTE_1, MESSAGE_LENGTH, MASKING_KEY, GOOD } state = MESSAGE_BYTE_0;
 
-	int previous_opcode          = 0;
 	size_t remaining_field_bytes = 0;
 	State consume(uint8_t input);
 };
@@ -74,7 +69,8 @@ class WebMessageBodyParser {
 public:
 	StringStream body;
 
-	void add_chunk(const WebMessageHeaderParser &chunk);
+	WebMessageBodyParser() = default;
+	explicit WebMessageBodyParser(uint64_t payload_len, details::optional<uint32_t> mk);
 
 	const uint8_t *parse(const uint8_t *begin, const uint8_t *end) {
 		while (begin != end && state != GOOD)

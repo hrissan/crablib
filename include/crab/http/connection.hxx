@@ -176,10 +176,9 @@ CRAB_INLINE bool ClientConnection::read_next(Response &req) {
 CRAB_INLINE bool ClientConnection::read_next(WebMessage &message) {
 	if (state != WEB_MESSAGE_READY)
 		return false;
-	message.body     = wm_body_parser.body.clear();
-	message.opcode   = static_cast<WebMessageOpcode>(wm_header_parser.opcode);
+	message = std::move(*web_message);
+	web_message.reset();
 	wm_header_parser = WebMessageHeaderParser{};
-	wm_body_parser   = WebMessageBodyParser{};
 	state            = WEB_MESSAGE_HEADER;
 	advance_state(false);
 	return true;
@@ -341,38 +340,50 @@ CRAB_INLINE void ClientConnection::advance_state(bool called_from_runloop) {
 				wm_header_parser.parse(read_buffer);
 				if (!wm_header_parser.is_good())
 					continue;
-				wm_body_parser.add_chunk(wm_header_parser);
-				state = WEB_MESSAGE_BODY;
+				wm_body_parser = WebMessageBodyParser{wm_header_parser.payload_len, wm_header_parser.masking_key};
+				state          = WEB_MESSAGE_BODY;
 				// Fall through (to correctly handle zero-length body). Next line is understood by GCC
 				// Fall through
 			case WEB_MESSAGE_BODY:
 				wm_body_parser.parse(read_buffer);
 				if (!wm_body_parser.is_good())
 					continue;
-				if (!wm_header_parser.fin) {
-					wm_header_parser = WebMessageHeaderParser{wm_header_parser.opcode};
-					state            = WEB_MESSAGE_HEADER;
-					continue;
-				}
-				state = WEB_MESSAGE_READY;
+				// Control frames are allowed between message fragments
 				if (wm_header_parser.opcode == static_cast<int>(WebMessageOpcode::CLOSE)) {
-					WebMessage nop;
-					invariant(read_next(nop), "WebSocket read_next OPCODE_CLOSE did no succeed");
+					WebMessage nop(WebMessageOpcode::CLOSE, wm_body_parser.body.clear());
+					wm_header_parser = WebMessageHeaderParser{};
+					state            = WEB_MESSAGE_HEADER;
 					write(std::move(nop));  // We echo reason back. sock.shutdown will happen inside write()
 					return;
 				}
 				if (wm_header_parser.opcode == static_cast<int>(WebMessageOpcode::PING)) {
-					WebMessage nop;
-					invariant(read_next(nop), "WebSocket read_next OPCODE_PING did no succeed");
-					nop.opcode = WebMessageOpcode::PONG;
+					WebMessage nop(WebMessageOpcode::PONG, wm_body_parser.body.clear());
+					wm_header_parser = WebMessageHeaderParser{};
+					state            = WEB_MESSAGE_HEADER;
 					write(std::move(nop));
 					continue;
 				}
 				if (wm_header_parser.opcode == static_cast<int>(WebMessageOpcode::PONG)) {
-					WebMessage nop;
-					invariant(read_next(nop), "WebSocket read_next OPCODE_PONG did no succeed");
+					wm_header_parser = WebMessageHeaderParser{};
+					state            = WEB_MESSAGE_HEADER;
 					continue;
 				}
+				if (!web_message) {
+					if (wm_header_parser.opcode == 0)
+						throw std::runtime_error("Continuation in the first chunk");
+					web_message.emplace(
+					    static_cast<WebMessageOpcode>(wm_header_parser.opcode), wm_body_parser.body.clear());
+				} else {
+					if (wm_header_parser.opcode != 0)
+						throw std::runtime_error("Non-continuation in the subsequent chunk");
+					web_message->body += wm_body_parser.body.clear();
+				}
+				if (!wm_header_parser.fin) {
+					wm_header_parser = WebMessageHeaderParser{};
+					state            = WEB_MESSAGE_HEADER;
+					continue;
+				}
+				state = WEB_MESSAGE_READY;
 				if (called_from_runloop)
 					rwd_handler();
 				return;
@@ -423,10 +434,9 @@ CRAB_INLINE bool ServerConnection::read_next(Request &req) {
 CRAB_INLINE bool ServerConnection::read_next(WebMessage &message) {
 	if (state != WEB_MESSAGE_READY || writing_web_message_body)
 		return false;  // We can start streaming message at any state, but must not allow reading until finished
-	message.body     = wm_body_parser.body.clear();
-	message.opcode   = static_cast<WebMessageOpcode>(wm_header_parser.opcode);
+	message = std::move(*web_message);
+	web_message.reset();
 	wm_header_parser = WebMessageHeaderParser{};
-	wm_body_parser   = WebMessageBodyParser{};
 	state            = WEB_MESSAGE_HEADER;
 	advance_state(false);
 	return true;
@@ -675,40 +685,50 @@ CRAB_INLINE void ServerConnection::advance_state(bool called_from_runloop) {
 				wm_header_parser.parse(read_buffer);
 				if (!wm_header_parser.is_good())
 					continue;
-				if (!wm_header_parser.masking_key)
-					throw std::runtime_error("Web Socket Client must use masking");
-				wm_body_parser.add_chunk(wm_header_parser);
-				state = WEB_MESSAGE_BODY;
+				wm_body_parser = WebMessageBodyParser{wm_header_parser.payload_len, wm_header_parser.masking_key};
+				state          = WEB_MESSAGE_BODY;
 				// Fall through (to correctly handle zero-length body). Next line is understood by GCC
 				// Fall through
 			case WEB_MESSAGE_BODY:
 				wm_body_parser.parse(read_buffer);
 				if (!wm_body_parser.is_good())
 					continue;
-				if (!wm_header_parser.fin) {
-					wm_header_parser = WebMessageHeaderParser{wm_header_parser.opcode};
-					state            = WEB_MESSAGE_HEADER;
-					continue;
-				}
-				state = WEB_MESSAGE_READY;
+				// Control frames are allowed between message fragments
 				if (wm_header_parser.opcode == static_cast<int>(WebMessageOpcode::CLOSE)) {
-					WebMessage nop;
-					invariant(read_next(nop), "WebSocket read_next OPCODE_CLOSE did no succeed");
+					WebMessage nop(WebMessageOpcode::CLOSE, wm_body_parser.body.clear());
+					wm_header_parser = WebMessageHeaderParser{};
+					state            = WEB_MESSAGE_HEADER;
 					write(std::move(nop));  // We echo reason back. sock.shutdown will happen inside write()
 					return;
 				}
 				if (wm_header_parser.opcode == static_cast<int>(WebMessageOpcode::PING)) {
-					WebMessage nop;
-					invariant(read_next(nop), "WebSocket read_next OPCODE_PING did no succeed");
-					nop.opcode = WebMessageOpcode::PONG;
+					WebMessage nop(WebMessageOpcode::PONG, wm_body_parser.body.clear());
+					wm_header_parser = WebMessageHeaderParser{};
+					state            = WEB_MESSAGE_HEADER;
 					write(std::move(nop));
 					continue;
 				}
 				if (wm_header_parser.opcode == static_cast<int>(WebMessageOpcode::PONG)) {
-					WebMessage nop;
-					invariant(read_next(nop), "WebSocket read_next OPCODE_PONG did no succeed");
+					wm_header_parser = WebMessageHeaderParser{};
+					state            = WEB_MESSAGE_HEADER;
 					continue;
 				}
+				if (!web_message) {
+					if (wm_header_parser.opcode == 0)
+						throw std::runtime_error("Continuation in the first chunk");
+					web_message.emplace(
+					    static_cast<WebMessageOpcode>(wm_header_parser.opcode), wm_body_parser.body.clear());
+				} else {
+					if (wm_header_parser.opcode != 0)
+						throw std::runtime_error("Non-continuation in the subsequent chunk");
+					web_message->body += wm_body_parser.body.clear();
+				}
+				if (!wm_header_parser.fin) {
+					wm_header_parser = WebMessageHeaderParser{};
+					state            = WEB_MESSAGE_HEADER;
+					continue;
+				}
+				state = WEB_MESSAGE_READY;
 				if (called_from_runloop)
 					rwd_handler();
 				return;
