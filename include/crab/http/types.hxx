@@ -187,8 +187,8 @@ CRAB_INLINE void RequestResponseHeader::set_content_type(const std::string &mime
 }
 
 CRAB_INLINE bool RequestHeader::is_websocket_upgrade() const {
-	return method == "GET" && connection_upgrade && upgrade_websocket && !sec_websocket_key.empty() &&
-	       sec_websocket_version == "13" && keep_alive;
+	return method == "GET" && http_version_major == 1 && http_version_minor == 1 && connection_upgrade &&
+	       upgrade_websocket && !sec_websocket_key.empty() && sec_websocket_version == "13" && keep_alive;
 }
 
 CRAB_INLINE void RequestHeader::set_uri(const std::string &uri) {
@@ -224,6 +224,15 @@ CRAB_INLINE std::string RequestHeader::to_string() const {
 		ss << "sec-websocket-version: " << sec_websocket_version << "\r\n";
 	ss << "\r\n";
 	return ss.str();
+}
+
+CRAB_INLINE WebMessage WebMessage::close_message(const std::string &text, uint16_t code) {
+	WebMessage result(WebMessageOpcode::CLOSE);
+	result.body.reserve(2 + text.size());
+	result.body.push_back(static_cast<char>(code >> 8));
+	result.body.push_back(static_cast<char>(code & 0xFF));
+	result.body += text;
+	return result;
 }
 
 CRAB_INLINE bool ResponseHeader::is_websocket_upgrade() const {

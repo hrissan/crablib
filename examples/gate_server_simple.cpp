@@ -29,8 +29,8 @@ int test_http(size_t num, uint16_t port) {
 				    //		std::cout << "Server Got Message: " << message.body << std::endl;
 				    LatencyMessage lm;
 				    if (message.is_binary() || !lm.parse(message.body)) {
-					    who->write(
-					        http::WebMessage(http::WebMessage::OPCODE_CLOSE, "Error, expecting Latency Message"));
+					    who->write(http::WebMessage::close_message(
+					        "Error, expecting Latency Message", http::WebMessage::CLOSE_STATUS_ERROR));
 					    return;
 				    }
 				    lm.add_lat("server", std::chrono::steady_clock::now());

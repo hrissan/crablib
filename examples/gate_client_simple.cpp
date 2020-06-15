@@ -68,7 +68,7 @@ int test_client(int num, const std::string &host, uint16_t port) {
 		lm.body = "Message " + std::to_string(message_counter);
 
 		http::WebMessage wm;
-		wm.opcode     = http::WebMessage::OPCODE_TEXT;
+		wm.opcode     = http::WebMessageOpcode::TEXT;
 		wm.body       = lm.save();
 		message_start = std::chrono::high_resolution_clock::now();
 		runloop.stats.push_record("SendWebMessage", 0, message_counter);

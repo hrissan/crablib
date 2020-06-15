@@ -13,13 +13,28 @@
 
 namespace crab { namespace http {
 
-class MessageHeaderParser {
+class WebMessageHeaderSaver {
 public:
-	explicit MessageHeaderParser(int previous_opcode = 0) : previous_opcode(previous_opcode) {}
+	WebMessageHeaderSaver(bool fin, int opcode, uint64_t payload_len, details::optional<uint32_t> masking_key);
+
+	const uint8_t *data() const { return buffer; }
+	size_t size() const { return pos; }
+
+private:
+	uint8_t buffer[16];  // Uninitialized, according to spec, actual max size should be 14
+	size_t pos = 0;
+};
+
+class WebMessageHeaderParser {
+public:
+	explicit WebMessageHeaderParser(int previous_opcode = 0) : previous_opcode(previous_opcode) {}
 	// We pass 0 for first chunk, req.opcode is filled with actual opcode
 	// We pass req.opcode for subsequent chunks, req.opcode will be filled with it
 
-	WebMessageHeader req;
+	bool fin             = false;
+	int opcode           = 0;
+	uint64_t payload_len = 0;
+	details::optional<uint32_t> masking_key;
 
 	template<typename InputIterator>
 	InputIterator parse(InputIterator begin, InputIterator end) {
@@ -31,10 +46,21 @@ public:
 	bool is_good() const { return state == GOOD; }
 	void parse(Buffer &buf);
 
-	enum { MESSAGE_FRAME_BUFFER_SIZE = 16 };  // According to spec, actual max size should be 14
-	static size_t write_message_frame(uint8_t buffer[MESSAGE_FRAME_BUFFER_SIZE], const WebMessage &message,
-	    details::optional<uint32_t> masking_key);
 	static void mask_data(size_t masking_shift, char *data, size_t size, uint32_t masking_key);
+
+	static bool is_opcode_supported(int opcode) {
+		switch (opcode) {
+		case static_cast<int>(WebMessageOpcode::TEXT):
+		case static_cast<int>(WebMessageOpcode::BINARY):
+		case static_cast<int>(WebMessageOpcode::CLOSE):
+		case static_cast<int>(WebMessageOpcode::PING):
+		case static_cast<int>(WebMessageOpcode::PONG):
+			return true;
+		default:
+			break;
+		}
+		return false;
+	}
 
 private:
 	enum State { MESSAGE_BYTE_0, MESSAGE_BYTE_1, MESSAGE_LENGTH, MASKING_KEY, GOOD } state = MESSAGE_BYTE_0;
@@ -44,11 +70,11 @@ private:
 	State consume(uint8_t input);
 };
 
-class MessageBodyParser {
+class WebMessageBodyParser {
 public:
 	StringStream body;
 
-	void add_chunk(const WebMessageHeader &chunk);
+	void add_chunk(const WebMessageHeaderParser &chunk);
 
 	const uint8_t *parse(const uint8_t *begin, const uint8_t *end) {
 		while (begin != end && state != GOOD)

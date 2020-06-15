@@ -53,8 +53,8 @@ CRAB_INLINE void BufferedTCPSocket::buffer(std::string &&ss) {
 		data_to_write.emplace_back(std::move(ss));
 }
 
-CRAB_INLINE void BufferedTCPSocket::write(const uint8_t *val, size_t count, BufferOptions buffer_options) {
-	if (buffer_options == BUFFER_ONLY)
+CRAB_INLINE void BufferedTCPSocket::write(const uint8_t *val, size_t count, BufferOptions bo) {
+	if (bo == BUFFER_ONLY)
 		return buffer(val, count);
 	if (!sock.is_open() || write_shutdown_asked)
 		return;
@@ -67,9 +67,9 @@ CRAB_INLINE void BufferedTCPSocket::write(const uint8_t *val, size_t count, Buff
 	write();
 }
 
-CRAB_INLINE void BufferedTCPSocket::write(std::string &&ss, BufferOptions buffer_options) {
+CRAB_INLINE void BufferedTCPSocket::write(std::string &&ss, BufferOptions bo) {
 	buffer(std::move(ss));
-	if (buffer_options != BUFFER_ONLY)
+	if (bo != BUFFER_ONLY)
 		write();
 }
 
@@ -177,9 +177,9 @@ CRAB_INLINE bool ClientConnection::read_next(WebMessage &message) {
 	if (state != WEB_MESSAGE_READY)
 		return false;
 	message.body     = wm_body_parser.body.clear();
-	message.opcode   = wm_header_parser.req.opcode;
-	wm_header_parser = MessageHeaderParser{};
-	wm_body_parser   = MessageBodyParser{};
+	message.opcode   = static_cast<WebMessageOpcode>(wm_header_parser.opcode);
+	wm_header_parser = WebMessageHeaderParser{};
+	wm_body_parser   = WebMessageBodyParser{};
 	state            = WEB_MESSAGE_HEADER;
 	advance_state(false);
 	return true;
@@ -219,14 +219,25 @@ CRAB_INLINE void ClientConnection::write(WebMessage &&message) {
 	    "Connection unexpected write");
 
 	uint32_t masking_key = rnd.pod<uint32_t>();
-	uint8_t frame_buffer[MessageHeaderParser::MESSAGE_FRAME_BUFFER_SIZE];  // Uninitialized
-	auto frame_buffer_len = MessageHeaderParser::write_message_frame(frame_buffer, message, masking_key);
-	MessageHeaderParser::mask_data(0, &message.body[0], message.body.size(), masking_key);
+	if (message.opcode == WebMessageOpcode::TEXT || message.opcode == WebMessageOpcode::BINARY) {
+		// invariant(!writing_web_message_body, "Sending new message before previous one finished"); Future streaming
+		// plug
+	} else {
+		// Control messages can be sent between frames of ordinary messages
+		// https://tools.ietf.org/html/rfc6455#section-5.5
+		// We truncate body instead of throw, because it can be generated from (for example) exception text. It would
+		// be unwise to expect users to get so deep into procotol details
+		if (message.body.size() > 125)
+			message.body.resize(125);
+	}
+	WebMessageHeaderSaver header{true, static_cast<int>(message.opcode), message.body.size(), masking_key};
+	WebMessageHeaderParser::mask_data(0, &message.body[0], message.body.size(), masking_key);
 
-	sock.buffer(frame_buffer, frame_buffer_len);
+	sock.buffer(header.data(), header.size());
 	sock.write(std::move(message.body));
-	if (message.opcode == WebMessage::OPCODE_CLOSE) {
+	if (message.opcode == WebMessageOpcode::CLOSE) {
 		// We will not attempt to read response. Client logic should not depend on it.
+		read_buffer.clear();
 		sock.write_shutdown();
 	}
 }
@@ -284,8 +295,8 @@ CRAB_INLINE void ClientConnection::sock_handler() {
 }
 
 CRAB_INLINE void ClientConnection::advance_state(bool called_from_runloop) {
-	// do not process new request if too much data waiting to be sent
-	if (sock.get_total_buffer_size() > 65536)  // TODO - constant
+	// do not process new request if data waiting to be sent
+	if (sock.get_total_buffer_size() != 0)
 		return;
 	try {
 		while (true) {
@@ -322,15 +333,15 @@ CRAB_INLINE void ClientConnection::advance_state(bool called_from_runloop) {
 				if (response_parser.req.sec_websocket_accept !=
 				    ResponseHeader::generate_sec_websocket_accept(sec_websocket_key))
 					throw std::runtime_error("Wrong value of 'Sec-WebSocket-Accept' header");
-				wm_header_parser = MessageHeaderParser{};
-				wm_body_parser   = MessageBodyParser{};
+				wm_header_parser = WebMessageHeaderParser{};
+				wm_body_parser   = WebMessageBodyParser{};
 				state            = WEB_MESSAGE_HEADER;
 				continue;
 			case WEB_MESSAGE_HEADER:
 				wm_header_parser.parse(read_buffer);
 				if (!wm_header_parser.is_good())
 					continue;
-				wm_body_parser.add_chunk(wm_header_parser.req);
+				wm_body_parser.add_chunk(wm_header_parser);
 				state = WEB_MESSAGE_BODY;
 				// Fall through (to correctly handle zero-length body). Next line is understood by GCC
 				// Fall through
@@ -338,26 +349,26 @@ CRAB_INLINE void ClientConnection::advance_state(bool called_from_runloop) {
 				wm_body_parser.parse(read_buffer);
 				if (!wm_body_parser.is_good())
 					continue;
-				if (!wm_header_parser.req.fin) {
-					wm_header_parser = MessageHeaderParser{wm_header_parser.req.opcode};
+				if (!wm_header_parser.fin) {
+					wm_header_parser = WebMessageHeaderParser{wm_header_parser.opcode};
 					state            = WEB_MESSAGE_HEADER;
 					continue;
 				}
 				state = WEB_MESSAGE_READY;
-				if (wm_header_parser.req.opcode == WebMessage::OPCODE_CLOSE) {
+				if (wm_header_parser.opcode == static_cast<int>(WebMessageOpcode::CLOSE)) {
 					WebMessage nop;
 					invariant(read_next(nop), "WebSocket read_next OPCODE_CLOSE did no succeed");
 					write(std::move(nop));  // We echo reason back. sock.shutdown will happen inside write()
 					return;
 				}
-				if (wm_header_parser.req.opcode == WebMessage::OPCODE_PING) {
+				if (wm_header_parser.opcode == static_cast<int>(WebMessageOpcode::PING)) {
 					WebMessage nop;
 					invariant(read_next(nop), "WebSocket read_next OPCODE_PING did no succeed");
-					nop.opcode = WebMessage::OPCODE_PONG;
+					nop.opcode = WebMessageOpcode::PONG;
 					write(std::move(nop));
 					continue;
 				}
-				if (wm_header_parser.req.opcode == WebMessage::OPCODE_PONG) {
+				if (wm_header_parser.opcode == static_cast<int>(WebMessageOpcode::PONG)) {
 					WebMessage nop;
 					invariant(read_next(nop), "WebSocket read_next OPCODE_PONG did no succeed");
 					continue;
@@ -380,8 +391,7 @@ CRAB_INLINE ServerConnection::ServerConnection(Handler &&rwd_handler)
     : read_buffer(8192)
     , wm_ping_timer([&]() { on_wm_ping_timer(); })
     , rwd_handler(std::move(rwd_handler))
-    , sock([this]() { sock_handler(); })
-    , state(REQUEST_HEADER) {}
+    , sock([this]() { sock_handler(); }) {}
 
 CRAB_INLINE void ServerConnection::accept(TCPAcceptor &acceptor) {
 	close();
@@ -391,11 +401,12 @@ CRAB_INLINE void ServerConnection::accept(TCPAcceptor &acceptor) {
 }
 
 CRAB_INLINE void ServerConnection::close() {
-	state = REQUEST_HEADER;
-	wm_ping_timer.cancel();
 	read_buffer.clear();
+	wm_ping_timer.cancel();
 	sock.close();
-	peer_address = Address();
+	state                    = REQUEST_HEADER;
+	writing_web_message_body = false;
+	peer_address             = Address();
 }
 
 CRAB_INLINE bool ServerConnection::read_next(Request &req) {
@@ -404,102 +415,140 @@ CRAB_INLINE bool ServerConnection::read_next(Request &req) {
 	req.body   = http_body_parser.body.clear();
 	req.header = request_parser.req;
 	// We do not move req, because we must remember params for response
-	state = WAITING_WRITE_RESPONSE_HEADER;
+	state = RESPONSE_HEADER;
 	advance_state(false);
 	return true;
 }
 
 CRAB_INLINE bool ServerConnection::read_next(WebMessage &message) {
-	if (state != WEB_MESSAGE_READY)
-		return false;
+	if (state != WEB_MESSAGE_READY || writing_web_message_body)
+		return false;  // We can start streaming message at any state, but must not allow reading until finished
 	message.body     = wm_body_parser.body.clear();
-	message.opcode   = wm_header_parser.req.opcode;
-	wm_header_parser = MessageHeaderParser{};
-	wm_body_parser   = MessageBodyParser{};
+	message.opcode   = static_cast<WebMessageOpcode>(wm_header_parser.opcode);
+	wm_header_parser = WebMessageHeaderParser{};
+	wm_body_parser   = WebMessageBodyParser{};
 	state            = WEB_MESSAGE_HEADER;
 	advance_state(false);
 	return true;
 }
 
 CRAB_INLINE void ServerConnection::web_socket_upgrade() {
+	if (!is_open())
+		return;  // This NOP simplifies state machines of connection users
+	invariant(state == RESPONSE_HEADER, "Connection unexpected write");
 	if (!request_parser.req.is_websocket_upgrade())
 		throw std::runtime_error("Attempt to upgrade non-upgradable connection");
 
-	Response response;
+	ResponseHeader response;  // HTTP/1.1, keep-alive
 
-	response.header.connection_upgrade = request_parser.req.connection_upgrade;
-	response.header.upgrade_websocket  = request_parser.req.upgrade_websocket;
-	response.header.sec_websocket_accept =
+	response.connection_upgrade = true;
+	response.upgrade_websocket  = true;
+	response.sec_websocket_accept =
 	    ResponseHeader::generate_sec_websocket_accept(request_parser.req.sec_websocket_key);
-	response.header.status = 101;
+	response.status = 101;
 
-	write(std::move(response));
+	sock.write(response.to_string());
+
+	wm_header_parser = WebMessageHeaderParser{};
+	wm_body_parser   = WebMessageBodyParser{};
+	state            = WEB_MESSAGE_HEADER;
+	wm_ping_timer.once(WM_PING_TIMEOUT_SEC);  // Always server-side
 }
 
 CRAB_INLINE void ServerConnection::write(Response &&resp) {
 	if (!is_open())
 		return;  // This NOP simplifies state machines of connection users
-	const bool is_websocket_upgrade      = resp.header.is_websocket_upgrade();
 	const bool transfer_encoding_chunked = resp.header.transfer_encoding_chunked;
 	write(std::move(resp.header), BUFFER_ONLY);
-	write(std::move(resp.body), BUFFER_ONLY);
+	write(std::move(resp.body), transfer_encoding_chunked ? BUFFER_ONLY : WRITE);
 	if (transfer_encoding_chunked)
 		write_last_chunk();  // Otherwise, state is already switched into RECEIVE_HEADER
-	// shutdown is already written during switch to RECEIVE_HEADER
-	if (is_websocket_upgrade) {  // TODO - better logic here
-		wm_header_parser = MessageHeaderParser{};
-		wm_body_parser   = MessageBodyParser{};
-		state            = WEB_MESSAGE_HEADER;
-		wm_ping_timer.once(WM_PING_TIMEOUT_SEC);  // Always server-side
-	}
+		                     // shutdown is already written during switch to RECEIVE_HEADER
 }
 
-CRAB_INLINE void ServerConnection::write(WebMessage &&message) {
+CRAB_INLINE void ServerConnection::write(ResponseHeader &&resp, BufferOptions bo) {
+	// TODO - if this fun is used instead of
 	if (!is_open())
 		return;  // This NOP simplifies state machines of connection users
-	invariant(state == WEB_MESSAGE_HEADER || state == WEB_MESSAGE_BODY || state == WEB_MESSAGE_READY,
-	    "Connection unexpected write");
-
-	uint8_t frame_buffer[MessageHeaderParser::MESSAGE_FRAME_BUFFER_SIZE];  // Uninitialized
-	auto frame_buffer_len = MessageHeaderParser::write_message_frame(frame_buffer, message, {});
-	// Server-side uses no masking key
-
-	sock.buffer(frame_buffer, frame_buffer_len);
-	sock.write(std::move(message.body));
-	if (message.opcode == WebMessage::OPCODE_CLOSE) {
-		wm_ping_timer.cancel();
-		sock.write_shutdown();
-	} else {
-		wm_ping_timer.once(WM_PING_TIMEOUT_SEC);
-	}
-}
-
-CRAB_INLINE void ServerConnection::write(ResponseHeader &&resp, BufferOptions buffer_options) {
-	if (!is_open())
-		return;  // This NOP simplifies state machines of connection users
-	invariant(state == WAITING_WRITE_RESPONSE_HEADER, "Connection unexpected write");
+	invariant(state == RESPONSE_HEADER, "Connection unexpected write");
+	invariant(!resp.is_websocket_upgrade(), "Please use web_socket_upgrade() function for web socket upgrade");
+	invariant(resp.transfer_encoding_chunked || resp.content_length,
+	    "Please set either chunked encoding or content_length");
 
 	resp.http_version_major = request_parser.req.http_version_major;
 	resp.http_version_minor = request_parser.req.http_version_minor;
 	resp.keep_alive         = request_parser.req.keep_alive;
 
-	invariant(resp.is_websocket_upgrade() || resp.transfer_encoding_chunked || resp.content_length,
-	    "Please set either chunked encoding or content_length");
 	remaining_body_content_length = resp.content_length;
-	sock.write(resp.to_string(), buffer_options);
-	state = WAITING_WRITE_RESPONSE_BODY;
+	sock.write(resp.to_string(), bo);
+	state = RESPONSE_BODY;
 }
 
-CRAB_INLINE void ServerConnection::write(const uint8_t *val, size_t count, BufferOptions buffer_options) {
-	invariant(state == WAITING_WRITE_RESPONSE_BODY, "Connection unexpected write");
+CRAB_INLINE void ServerConnection::write(WebMessage &&message, BufferOptions bo) {
+	if (!is_open())
+		return;  // This NOP simplifies state machines of connection users
+	invariant(is_state_websocket(), "Connection unexpected write");
+
+	if (message.opcode == WebMessageOpcode::TEXT || message.opcode == WebMessageOpcode::BINARY) {
+		invariant(!writing_web_message_body, "Sending new message before previous one finished");
+	} else {
+		// Control messages can be sent between frames of ordinary messages
+		// https://tools.ietf.org/html/rfc6455#section-5.5
+		// We truncate body instead of throw, because it can be generated from (for example) exception text. It would
+		// be unwise to expect users to get so deep into procotol details
+		if (message.body.size() > 125)
+			message.body.resize(125);
+	}
+	WebMessageHeaderSaver header{true, static_cast<int>(message.opcode), message.body.size(), {}};
+	sock.buffer(header.data(), header.size());
+	sock.write(std::move(message.body), bo);
+	if (message.opcode == WebMessageOpcode::CLOSE) {
+		wm_ping_timer.cancel();
+		read_buffer.clear();
+		sock.write_shutdown();
+		return;
+	}
+	if (bo == BufferOptions::WRITE)
+		wm_ping_timer.once(WM_PING_TIMEOUT_SEC);
+}
+
+void ServerConnection::write(WebMessageOpcode opcode) {
+	if (!is_open())
+		return;  // This NOP simplifies state machines of connection users
+	invariant(is_state_websocket(), "Connection unexpected write");
+	invariant(opcode == WebMessageOpcode::TEXT || opcode == WebMessageOpcode::BINARY,
+	    "Control frames must not be fragmented");
+	invariant(!writing_web_message_body, "Sending new message before previous one finished");
+	writing_web_message_body = true;
+
+	WebMessageHeaderSaver header{false, static_cast<int>(opcode), 0, {}};
+	// Server-side uses no masking key
+	// We will write 0-length !FIN frame immediately, then
+	// write single !FIN frame per write call, then write single 0-lenght FIN frame in write_last_chunk()
+	sock.buffer(header.data(), header.size());
+}
+
+CRAB_INLINE void ServerConnection::write(const uint8_t *val, size_t count, BufferOptions bo) {
+	invariant(is_writing_body(), "Connection unexpected write");
+	if (writing_web_message_body) {
+		if (count == 0)
+			return;
+		WebMessageHeaderSaver header{false, 0, count, {}};
+		sock.buffer(header.data(), header.size());
+		sock.write(val, count, bo);
+		if (bo == BufferOptions::WRITE)
+			wm_ping_timer.once(WM_PING_TIMEOUT_SEC);
+		return;
+	}
 	if (remaining_body_content_length) {
 		invariant(count <= *remaining_body_content_length, "Overshoot content-length");
 		*remaining_body_content_length -= count;
-		sock.write(val, count, buffer_options);
+		sock.write(val, count, bo);
 		if (*remaining_body_content_length == 0) {
-			sock.write(std::string{});           // if everything was buffered, flush
-			if (!request_parser.req.keep_alive)  // We sent it in our response header
+			if (!request_parser.req.keep_alive) {  // We sent it in our response header
+				read_buffer.clear();
 				sock.write_shutdown();
+			}
 			request_parser = RequestParser{};
 			state          = REQUEST_HEADER;
 		}
@@ -512,19 +561,30 @@ CRAB_INLINE void ServerConnection::write(const uint8_t *val, size_t count, Buffe
 	invariant(buf_n > 0, "sprintf error (unexpected)");
 	sock.buffer(buf, buf_n);
 	sock.buffer(val, count);
-	sock.write("\r\n", 2, buffer_options);
+	sock.write("\r\n", 2, bo);
 }
 
-CRAB_INLINE void ServerConnection::write(std::string &&ss, BufferOptions buffer_options) {
-	invariant(state == WAITING_WRITE_RESPONSE_BODY, "Connection unexpected write");
+CRAB_INLINE void ServerConnection::write(std::string &&ss, BufferOptions bo) {
+	invariant(is_writing_body(), "Connection unexpected write");
+	if (writing_web_message_body) {
+		if (ss.size() == 0)
+			return;
+		WebMessageHeaderSaver header{false, 0, ss.size(), {}};
+		sock.buffer(header.data(), header.size());
+		sock.write(std::move(ss), bo);
+		if (bo == BufferOptions::WRITE)
+			wm_ping_timer.once(WM_PING_TIMEOUT_SEC);
+		return;
+	}
 	if (remaining_body_content_length) {
 		invariant(ss.size() <= *remaining_body_content_length, "Overshoot content-length");
 		*remaining_body_content_length -= ss.size();
-		sock.write(std::move(ss), buffer_options);
+		sock.write(std::move(ss), bo);
 		if (*remaining_body_content_length == 0) {
-			sock.write(std::string{});           // if everything was buffered, flush
-			if (!request_parser.req.keep_alive)  // We sent it in our response header
+			if (!request_parser.req.keep_alive) {  // We sent it in our response header
+				read_buffer.clear();
 				sock.write_shutdown();
+			}
 			request_parser = RequestParser{};
 			state          = REQUEST_HEADER;
 		}
@@ -537,15 +597,26 @@ CRAB_INLINE void ServerConnection::write(std::string &&ss, BufferOptions buffer_
 	invariant(buf_n > 0, "sprintf error (unexpected)");
 	sock.buffer(buf, buf_n);
 	sock.buffer(std::move(ss));
-	sock.write("\r\n", 2, buffer_options);
+	sock.write("\r\n", 2, bo);
 }
 
-CRAB_INLINE void ServerConnection::write_last_chunk() {
-	invariant(state == WAITING_WRITE_RESPONSE_BODY, "Connection unexpected write");
+CRAB_INLINE void ServerConnection::write_last_chunk(BufferOptions bo) {
+	invariant(is_writing_body(), "Connection unexpected write");
+	if (writing_web_message_body) {
+		WebMessageHeaderSaver header{true, 0, 0, {}};
+		sock.write(header.data(), header.size(), bo);
+		if (bo == BufferOptions::WRITE)
+			wm_ping_timer.once(WM_PING_TIMEOUT_SEC);
+		writing_web_message_body = false;
+		return;
+	}
+	invariant(state == RESPONSE_BODY, "Connection unexpected write");
 	invariant(!remaining_body_content_length, "write_last_chunk is for chunked encoding only");
-	sock.write(std::string{"0\r\n\r\n"});
-	if (!request_parser.req.keep_alive)  // We sent it in our response header
+	sock.write(std::string{"0\r\n\r\n"}, bo);
+	if (!request_parser.req.keep_alive) {  // We sent it in our response header
+		read_buffer.clear();
 		sock.write_shutdown();
+	}
 	request_parser = RequestParser{};
 	state          = REQUEST_HEADER;
 }
@@ -556,27 +627,26 @@ CRAB_INLINE void ServerConnection::sock_handler() {
 		rwd_handler();
 		return;
 	}
-	if (state == WAITING_WRITE_RESPONSE_BODY) {
+	if (is_writing_body()) {
 		rwd_handler();  // So body streaming will work
 		// This follows usual async pull socket pattern, when after finishing writing body client will
 		// call read_next, which will call advance_state, and so on
 		return;
 	}
-	if (state == WEB_MESSAGE_HEADER || state == WEB_MESSAGE_BODY || state == WEB_MESSAGE_READY) {
-		wm_ping_timer.once(WM_PING_TIMEOUT_SEC);
-	}
 	advance_state(true);
 }
 
 CRAB_INLINE void ServerConnection::on_wm_ping_timer() {
-	if (sock.get_total_buffer_size() == 0)
-		write(WebMessage{WebMessage::OPCODE_PING, std::string{}});
+	if (sock.get_total_buffer_size() != 0)
+		sock.write(std::string{});  // Flushing buffer is enough
+	else
+		write(WebMessage{WebMessageOpcode::PING, std::string{}});
 	wm_ping_timer.once(WM_PING_TIMEOUT_SEC);
 }
 
 CRAB_INLINE void ServerConnection::advance_state(bool called_from_runloop) {
-	// do not process new request if too much data waiting to be sent
-	if (sock.get_total_buffer_size() > 65536)  // TODO - constant
+	// do not process new request if data waiting to be sent
+	if (sock.get_total_buffer_size() != 0)
 		return;
 	try {
 		while (true) {
@@ -605,9 +675,9 @@ CRAB_INLINE void ServerConnection::advance_state(bool called_from_runloop) {
 				wm_header_parser.parse(read_buffer);
 				if (!wm_header_parser.is_good())
 					continue;
-				if (!wm_header_parser.req.mask)
+				if (!wm_header_parser.masking_key)
 					throw std::runtime_error("Web Socket Client must use masking");
-				wm_body_parser.add_chunk(wm_header_parser.req);
+				wm_body_parser.add_chunk(wm_header_parser);
 				state = WEB_MESSAGE_BODY;
 				// Fall through (to correctly handle zero-length body). Next line is understood by GCC
 				// Fall through
@@ -615,26 +685,26 @@ CRAB_INLINE void ServerConnection::advance_state(bool called_from_runloop) {
 				wm_body_parser.parse(read_buffer);
 				if (!wm_body_parser.is_good())
 					continue;
-				if (!wm_header_parser.req.fin) {
-					wm_header_parser = MessageHeaderParser{wm_header_parser.req.opcode};
+				if (!wm_header_parser.fin) {
+					wm_header_parser = WebMessageHeaderParser{wm_header_parser.opcode};
 					state            = WEB_MESSAGE_HEADER;
 					continue;
 				}
 				state = WEB_MESSAGE_READY;
-				if (wm_header_parser.req.opcode == WebMessage::OPCODE_CLOSE) {
+				if (wm_header_parser.opcode == static_cast<int>(WebMessageOpcode::CLOSE)) {
 					WebMessage nop;
 					invariant(read_next(nop), "WebSocket read_next OPCODE_CLOSE did no succeed");
 					write(std::move(nop));  // We echo reason back. sock.shutdown will happen inside write()
 					return;
 				}
-				if (wm_header_parser.req.opcode == WebMessage::OPCODE_PING) {
+				if (wm_header_parser.opcode == static_cast<int>(WebMessageOpcode::PING)) {
 					WebMessage nop;
 					invariant(read_next(nop), "WebSocket read_next OPCODE_PING did no succeed");
-					nop.opcode = WebMessage::OPCODE_PONG;
+					nop.opcode = WebMessageOpcode::PONG;
 					write(std::move(nop));
 					continue;
 				}
-				if (wm_header_parser.req.opcode == WebMessage::OPCODE_PONG) {
+				if (wm_header_parser.opcode == static_cast<int>(WebMessageOpcode::PONG)) {
 					WebMessage nop;
 					invariant(read_next(nop), "WebSocket read_next OPCODE_PONG did no succeed");
 					continue;

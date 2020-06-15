@@ -37,7 +37,9 @@ public:
 #if __cplusplus >= 201703L
 	size_t write_some(const std::byte *val, size_t count) { return write_some(uint8_cast(val), count); }
 #endif
-	bool can_write() const { return total_data_to_write == 0 && sock.can_write(); }
+	bool can_write() const { return sock.can_write(); }
+	// does not depend on get_total_buffer_size(), so that clients can use simple can_write() to push data to socket
+	// even if data was buffered by buffer() calls
 
 	// Write into socket, all data that did not fit are store in a buffer and sent later
 	void write(const uint8_t *val, size_t count, BufferOptions bo = WRITE);
@@ -109,7 +111,7 @@ public:
 		WEB_UPGRADE_RESPONSE_HEADER,  // Client side of Web Socket
 		WEB_MESSAGE_HEADER,           // Both side of Web Socket
 		WEB_MESSAGE_BODY,             // Both side of Web Socket
-		WEB_MESSAGE_READY             // Both side of Web Socket
+		WEB_MESSAGE_READY,            // Both side of Web Socket
 	};
 
 	State get_state() const { return state; }
@@ -122,8 +124,8 @@ protected:
 	ResponseParser response_parser;
 	BodyParser http_body_parser;
 
-	MessageHeaderParser wm_header_parser;
-	MessageBodyParser wm_body_parser;  // Single per several chunks
+	WebMessageHeaderParser wm_header_parser;
+	WebMessageBodyParser wm_body_parser;  // Single per several chunks
 	std::string sec_websocket_key;
 	Random rnd;  // for masking_key, dns name selection, web socket secret key
 
@@ -155,13 +157,16 @@ public:
 	bool is_open() const { return sock.is_open(); }
 	const Address &get_peer_address() const { return peer_address; }
 
-	void write(Response &&resp);
-	void write(WebMessage &&);
 	bool read_next(Request &req);
 	bool read_next(WebMessage &);
-	void web_socket_upgrade();  // Will throw if not upgradable
 
+	void write(Response &&resp);
+	void write(WebMessage &&, BufferOptions bo = WRITE);  // Any opcode, except Pong
+	void web_socket_upgrade();                            // Will throw if not upgradable
+
+	// Streaming protocol, first write response/web message header, then stream data
 	void write(ResponseHeader &&resp, BufferOptions bo = WRITE);  // Write header now, body later
+	void write(WebMessageOpcode opcode);                          // Buffer header now, body later
 
 	void write(const uint8_t *val, size_t count, BufferOptions bo = WRITE);  // Write body chunk
 	void write(const char *val, size_t count, BufferOptions bo = WRITE) { write(uint8_cast(val), count, bo); }
@@ -169,26 +174,27 @@ public:
 	void write(const std::byte *val, size_t count, BufferOptions bo = WRITE) { write(uint8_cast(val), count, bo); }
 #endif
 	void write(std::string &&ss, BufferOptions bo = WRITE);  // Write body chunk
-	void write_last_chunk();                                 // for chunk encoding, finishes body
+	void write_last_chunk(BufferOptions bo = WRITE);  // for chunk encoding and multiframe web messages, finishes body
 
 	enum State {
-		REQUEST_HEADER,                 // Server side
-		REQUEST_BODY,                   // Server side
-		REQUEST_READY,                  // Server side
-		WAITING_WRITE_RESPONSE_HEADER,  // Server side
-		WAITING_WRITE_RESPONSE_BODY,    // Server side
+		REQUEST_HEADER,   // Reading header
+		REQUEST_BODY,     // Reading body
+		REQUEST_READY,    // Waiting read_next() call
+		RESPONSE_HEADER,  // Waiting write of header
+		RESPONSE_BODY,    // Waiting write of all body chunks
 
-		WEB_MESSAGE_HEADER,  // Both side of Web Socket
-		WEB_MESSAGE_BODY,    // Both side of Web Socket
-		WEB_MESSAGE_READY    // Both side of Web Socket
+		WEB_MESSAGE_HEADER,  // Reading header
+		WEB_MESSAGE_BODY,    // Reading body
+		WEB_MESSAGE_READY,   // Waiting read_next() call
 	};
 
 	// TODO - fix SHUTDOWN logic, add additional state for Connection: close
 
 	State get_state() const { return state; }
 
-	bool can_write() const { return sock.get_total_buffer_size() == 0; }
+	bool can_write() const { return sock.can_write(); }
 	size_t get_total_buffer_size() const { return sock.get_total_buffer_size(); }
+	bool is_writing_body() const { return writing_web_message_body || state == RESPONSE_BODY; }
 
 	enum { WM_PING_TIMEOUT_SEC = 45 };
 	// Slightly less than default TCP keep-alive of 50 sec
@@ -199,11 +205,12 @@ protected:
 	RequestParser request_parser;
 	BodyParser http_body_parser;
 
-	MessageHeaderParser wm_header_parser;
-	MessageBodyParser wm_body_parser;  // Single per several chunks
+	WebMessageHeaderParser wm_header_parser;
+	WebMessageBodyParser wm_body_parser;  // Single per several chunks
 	Timer wm_ping_timer;
 	// Server-side ping required for some NATs to keep port open
 	// TCP keep-alive is set by most browsers, but surprisingly it is not enough.
+	// We reset this timer on write() only
 
 	details::optional<uint64_t> remaining_body_content_length;  // empty for chunked
 
@@ -215,8 +222,11 @@ protected:
 
 	BufferedTCPSocket sock;
 
-	State state;
+	State state                   = REQUEST_HEADER;
+	bool writing_web_message_body = false;  // Web Sockets are sockets, you can write in the middle of reading
 	Address peer_address;
+
+	bool is_state_websocket() const { return state >= WEB_MESSAGE_HEADER; }
 };
 
 }  // namespace http

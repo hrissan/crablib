@@ -219,4 +219,13 @@ private:
 	uint64_t inc   = 0;
 };
 
+#if defined(__GNUC__) || defined(__clang__)
+#define CRAB_DEPRECATED __attribute__((deprecated))
+#elif defined(_MSC_VER)
+#define CRAB_DEPRECATED __declspec(deprecated)
+#else
+// No deprecation warnings on other compilers
+#define CRAB_DEPRECATED
+#endif
+
 }  // namespace crab

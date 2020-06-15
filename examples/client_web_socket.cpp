@@ -51,7 +51,7 @@ private:
 	}
 	void send_message() {
 		std::cout << "Sending message " << message_counter << std::endl;
-		ws.write(http::WebMessage{http::WebMessage::OPCODE_TEXT, "Message " + std::to_string(message_counter)});
+		ws.write(http::WebMessage{http::WebMessageOpcode::TEXT, "Message " + std::to_string(message_counter)});
 		message_counter += 1;
 		send_timer.once(1);
 	}

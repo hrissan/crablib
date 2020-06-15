@@ -24,8 +24,30 @@ static const char HTML[] = R"zzz(
                   var received_msg = evt.data;
                   console.log("Message is received...", received_msg);
                };
-               ws.onclose = function() {
-                  console.log("Connection is closed...");
+               ws.onclose = function(evt) {
+                  console.log("Connection is closed, code=", evt.code, " reason=", evt.reason);
+               };
+            } else {
+               console.log("WebSocket NOT supported by your Browser!");
+            }
+         }
+         function WebSocketTestBig() {
+            if ("WebSocket" in window) {
+              var url = new URL('/ws_big', window.location.href);
+              url.protocol = url.protocol.replace('http', 'ws');
+              console.log("WebSocket is supported by your Browser! Connecting to", url.href);
+              var ws = new WebSocket(url.href);
+              ws.onopen = function() {
+                  ws.send("Message to send");
+                  console.log("Big Message is sent...");
+               };
+               ws.onmessage = function (evt) {
+                  var received_msg = evt.data;
+                  console.log("Big message is received, length=", received_msg.length);
+                  ws.send("Next message to send");
+               };
+               ws.onclose = function(evt) {
+                  console.log("Big connection is closed, code=", evt.code, " reason=", evt.reason);
                };
             } else {
                console.log("WebSocket NOT supported by your Browser!");
@@ -33,8 +55,14 @@ static const char HTML[] = R"zzz(
          }
       </script>
    </head><body>
-      <div id = "sse">
-         Open JavaScript Console first, then <a href = "javascript:WebSocketTest()">Run WebSocket Test</a>
+      <div>
+         Open JavaScript Console first.
+      </div>
+      <div>
+         Small messges <a href = "javascript:WebSocketTest()">Run Test</a>
+      </div>
+      <div>
+         Big messages with body streaming <a href = "javascript:WebSocketTestBig()">Run Test</a>
       </div>
    </body></html>
 )zzz";
@@ -51,7 +79,8 @@ public:
 				auto it = --connected_sockets.end();
 				who->web_socket_upgrade(
 				    [who](http::WebMessage &&message) {
-					    //		std::cout << "Server Got Message: " << message.body << std::endl;
+					    std::cout << "Server Got Message: " << message.body << " from who=" << size_t(who)
+					              << std::endl;
 					    if (message.is_binary()) {  // Echo binary messages back AS IS
 						    who->write(std::move(message));
 					    } else {
@@ -60,6 +89,21 @@ public:
 					    crab::RunLoop::current()->stats.print_records(std::cout);
 				    },
 				    [this, it]() { connected_sockets.erase(it); });
+				who->write(http::WebMessage("Server-initiated on connect message!"));
+				return;
+			}
+			if (request.header.path == "/ws_big") {
+				connected_stream_sockets.push_back(who);
+				auto it = --connected_stream_sockets.end();
+				who->web_socket_upgrade(
+				    [who](http::WebMessage &&message) {
+					    std::cout << "Server Got Big Message: " << message.body << " from who=" << size_t(who)
+					              << std::endl;
+					    uint64_t len = 100 * 1000 * 1000;
+					    who->start_write_stream(
+					        http::WebMessageOpcode::TEXT, [who, len]() { write_stream_data(who, len); });
+				    },
+				    [this, it]() { connected_stream_sockets.erase(it); });
 				who->write(http::WebMessage("Server-initiated on connect message!"));
 				return;
 			}
@@ -82,6 +126,20 @@ public:
 	}
 
 private:
+	static void write_stream_data(http::Client *who, uint64_t len) {
+		char buffer[65536]{};
+		while (who->can_write() && who->get_body_position() != len) {
+			auto to_write = static_cast<size_t>(std::min<uint64_t>(len - who->get_body_position(), sizeof(buffer)));
+			who->write(buffer, to_write);
+		}
+		if (who->get_body_position() == len) {
+			who->write_last_chunk();
+			std::cout << "Downloader finished for who=" << size_t(who) << std::endl;
+		} else {
+			std::cout << "Downloader buffer full, will continue writing for who=" << size_t(who)
+			          << " later position=" << who->get_body_position() << std::endl;
+		}
+	}
 	void on_stat_timer() {
 		stat_timer.once(1);
 
@@ -98,6 +156,7 @@ private:
 	crab::Timer stat_timer;
 	size_t req_counter = 0;
 	std::list<http::Client *> connected_sockets;
+	std::list<http::Client *> connected_stream_sockets;
 };
 
 int main(int argc, char *argv[]) {

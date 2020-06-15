@@ -40,14 +40,14 @@ public:
 	void write(const std::byte *val, size_t count, BufferOptions bo = WRITE) { write(uint8_cast(val), count, bo); }
 #endif
 	void write(std::string &&ss, BufferOptions bo = WRITE);  // Write body chunk
-	void write_last_chunk();                                 // for chunk encoding, finishes body
+	void write_last_chunk(BufferOptions bo = WRITE);         // for chunk encoding, finishes body
 
 	using ServerConnection::can_write;
-	using ServerConnection::write_last_chunk;
 
 	void web_socket_upgrade(W_handler &&wcb, Handler &&dcb);
 	void postpone_response(Handler &&dcb);
 	void start_write_stream(ResponseHeader &&response, Handler &&scb, Handler &&dcb = empty_handler);
+	void start_write_stream(WebMessageOpcode opcode, Handler &&scb);
 
 	uint64_t get_body_position() const { return body_position; }
 

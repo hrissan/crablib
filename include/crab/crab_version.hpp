@@ -49,7 +49,7 @@
     #define CRAB_INLINE inline
 #endif
 
-#define CRAB_BRANCH " (branch new_http_connection)"
+#define CRAB_BRANCH " (branch dev)"
 // No tricks, we wish to be easily includable in header-only mode
 
 #define CRAB_VERSION "0.8.1"

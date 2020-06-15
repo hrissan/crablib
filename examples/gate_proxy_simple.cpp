@@ -81,7 +81,7 @@ int test_proxy(int num, uint16_t port, uint16_t upstream_port) {
 			//                    std::cout << lm.save() << std::endl;
 
 			http::WebMessage reply;
-			reply.opcode = http::WebMessage::OPCODE_TEXT;
+			reply.opcode = http::WebMessageOpcode::TEXT;
 			reply.body   = lm.save();
 			it->second->write(std::move(reply));
 			runloop.stats.print_records(std::cout);

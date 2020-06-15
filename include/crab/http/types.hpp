@@ -64,33 +64,32 @@ struct RequestHeader : public RequestResponseHeader {
 	std::string to_string() const;
 };
 
-struct WebMessageHeader {
-	bool fin             = false;
-	bool mask            = false;
-	int opcode           = 0;
-	uint32_t masking_key = 0;
-	uint64_t payload_len = 0;
-};
+enum class WebMessageOpcode { TEXT = 1, BINARY = 2, CLOSE = 8, PING = 9, PONG = 0xA };
 
 struct WebMessage {
-	static constexpr int OPCODE_TEXT   = 1;
-	static constexpr int OPCODE_BINARY = 2;
-	static constexpr int OPCODE_CLOSE  = 8;
-	static constexpr int OPCODE_PING   = 9;
-	static constexpr int OPCODE_PONG   = 0xA;
-	int opcode                         = 0;
+	// Use WebMessageOpcode::TEXT, WebMessageOpcode::BINARY, WebMessageOpcode::CLOSE instead
+	CRAB_DEPRECATED static constexpr WebMessageOpcode OPCODE_TEXT   = WebMessageOpcode::TEXT;
+	CRAB_DEPRECATED static constexpr WebMessageOpcode OPCODE_BINARY = WebMessageOpcode::BINARY;
+	CRAB_DEPRECATED static constexpr WebMessageOpcode OPCODE_CLOSE  = WebMessageOpcode::CLOSE;
+
+	WebMessage() = default;
+	explicit WebMessage(std::string body) : opcode(WebMessageOpcode::TEXT), body(std::move(body)) {}
+	explicit WebMessage(WebMessageOpcode opcode) : opcode(opcode) {}
+	WebMessage(WebMessageOpcode opcode, std::string body) : opcode(opcode), body(std::move(body)) {}
+
+	WebMessageOpcode opcode = WebMessageOpcode::CLOSE;
 	std::string body;
 
-	static bool is_good_opcode(int opcode) {
-		if (opcode >= 3 && opcode <= 7)
-			return false;
-		return opcode >= 0 && opcode <= 0xA;
-	}
-	bool is_binary() const { return opcode == OPCODE_BINARY; }
-	bool is_text() const { return opcode == OPCODE_TEXT; }
-	WebMessage() = default;
-	explicit WebMessage(std::string body) : opcode(OPCODE_TEXT), body(std::move(body)) {}
-	WebMessage(int opcode, std::string body) : opcode(opcode), body(std::move(body)) {}
+	bool is_binary() const { return opcode == WebMessageOpcode::BINARY; }
+	bool is_text() const { return opcode == WebMessageOpcode::TEXT; }
+
+	// according to https://tools.ietf.org/html/rfc6455#section-5.5.3
+	// if CLOSE contains body, it must contain code (uint16_t BE) in the first 2 bytes of message
+	// users are advised to either send empty message or use this fun to generate compliant message
+	// more status codes available in RFC
+	static constexpr uint16_t CLOSE_STATUS_NORMAL = 1000;
+	static constexpr uint16_t CLOSE_STATUS_ERROR  = 1011;
+	static WebMessage close_message(const std::string &text, uint16_t code);
 };
 
 struct ResponseHeader : public RequestResponseHeader {
