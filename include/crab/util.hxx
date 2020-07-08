@@ -97,7 +97,7 @@ uint32_t inline utf8_decode(uint32_t *state, uint32_t *codep, uint32_t byte) {
 
 }  // namespace details
 
-bool is_valid_utf8(const uint8_t *data, size_t count) {
+CRAB_INLINE bool is_valid_utf8(const uint8_t *data, size_t count) {
 	uint32_t codepoint, state = details::UTF8_ACCEPT;
 
 	for (size_t pos = 0; pos != count; ++pos)

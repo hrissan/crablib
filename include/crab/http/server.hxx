@@ -29,7 +29,11 @@ CRAB_INLINE void Client::write(Response &&response) {
 	d_handler = nullptr;
 }
 
-CRAB_INLINE void Client::write(WebMessage &&wm) { ServerConnection::write(std::move(wm)); }
+CRAB_INLINE void Client::write(WebMessage &&wm) {
+	if (wm.is_close())
+		web_message_close_sent = true;
+	ServerConnection::write(std::move(wm));
+}
 
 CRAB_INLINE void Client::write(const uint8_t *val, size_t count, BufferOptions buffer_options) {
 	ServerConnection::write(val, count, buffer_options);
@@ -54,8 +58,9 @@ CRAB_INLINE void Client::write_last_chunk(BufferOptions bo) {
 
 CRAB_INLINE void Client::web_socket_upgrade(WS_handler &&cb) {
 	ServerConnection::web_socket_upgrade();
-	d_handler  = nullptr;
-	ws_handler = std::move(cb);
+	d_handler              = nullptr;
+	ws_handler             = std::move(cb);
+	web_message_close_sent = false;
 }
 
 CRAB_INLINE void Client::postpone_response(Handler &&cb) {
@@ -138,7 +143,8 @@ CRAB_INLINE void Server::on_client_disconnected(std::list<Client>::iterator it) 
 	if (who->rwd_handler)
 		who->rwd_handler();
 	if (who->ws_handler)
-		who->ws_handler(WebMessage{WebMessageOpcode::CLOSE, {}, WebMessage::CLOSE_STATUS_DISCONNECT});
+		who->ws_handler(WebMessage{WebMessageOpcode::CLOSE, {},
+		    who->web_message_close_sent ? WebMessage::CLOSE_STATUS_NORMAL : WebMessage::CLOSE_STATUS_DISCONNECT});
 	clients.erase(it);
 }
 

@@ -67,7 +67,8 @@ private:
 	Handler d_handler;
 	Handler rwd_handler;
 
-	uint64_t body_position = 0;
+	uint64_t body_position      = 0;
+	bool web_message_close_sent = false;
 	friend class Server;
 };
 

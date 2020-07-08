@@ -553,7 +553,7 @@ CRAB_INLINE void ServerConnection::write(WebMessage &&message, BufferOptions bo)
 		wm_ping_timer.once(WM_PING_TIMEOUT_SEC);
 }
 
-void ServerConnection::write(WebMessageOpcode opcode) {
+CRAB_INLINE void ServerConnection::write(WebMessageOpcode opcode) {
 	if (!is_open())
 		return;  // This NOP simplifies state machines of connection users
 	invariant(is_state_websocket(), "Connection unexpected write");
