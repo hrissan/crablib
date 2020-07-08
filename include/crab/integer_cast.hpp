@@ -239,26 +239,26 @@ details::optional<T> safe_sub_opt(T a, T b) {
 
 template<typename T>
 T safe_add(T a, T b) {
-    if (b >= 0) {
-        if (a > std::numeric_limits<T>::max() - b)
-            throw std::out_of_range("add overflow");
-    } else {
-        if (a < std::numeric_limits<T>::min() - b)
-            throw std::out_of_range("add underflow");
-    }
-    return a + b;
+	if (b >= 0) {
+		if (a > std::numeric_limits<T>::max() - b)
+			throw std::out_of_range("add overflow");
+	} else {
+		if (a < std::numeric_limits<T>::min() - b)
+			throw std::out_of_range("add underflow");
+	}
+	return a + b;
 }
 
 template<typename T>
 T safe_sub(T a, T b) {
-    if (b <= 0) {
-        if (a > std::numeric_limits<T>::max() + b)
-            throw std::out_of_range("sub overflow");
-    } else {
-        if (a < std::numeric_limits<T>::min() + b)
-            throw std::out_of_range("sub underflow");
-    }
-    return a - b;
+	if (b <= 0) {
+		if (a > std::numeric_limits<T>::max() + b)
+			throw std::out_of_range("sub overflow");
+	} else {
+		if (a < std::numeric_limits<T>::min() + b)
+			throw std::out_of_range("sub underflow");
+	}
+	return a - b;
 }
 
 template<typename T>
