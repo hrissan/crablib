@@ -338,7 +338,7 @@ CRAB_INLINE BodyParser::BodyParser(details::optional<uint64_t> content_length, b
 		// Rules about which requests and responses should and should not have body
 		// are complicated.
 		remaining_bytes = *content_length;
-		if (remaining_bytes < 65536)  // TODO - constant
+		if (remaining_bytes < 4096)  // TODO - constant
 			body.get_buffer().reserve(static_cast<size_t>(remaining_bytes));
 	}
 	state = (remaining_bytes == 0) ? GOOD : CONTENT_LENGTH_BODY;
