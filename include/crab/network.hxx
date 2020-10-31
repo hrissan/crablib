@@ -130,7 +130,7 @@ CRAB_INLINE void RunLoopLinks::cancel_called_watcher(Watcher *watcher) {
 CRAB_INLINE void RunLoopLinks::trigger_called_watchers() {
 	std::unique_lock<std::mutex> lock(mutex);
 	while (!fired_objects.empty()) {
-		Watcher &watcher = *fired_objects.begin();
+		Watcher &watcher = fired_objects.front();
 		watcher.fired_objects_node.unlink();
 		triggered_callables.push_back(watcher.a_handler);
 	}
@@ -144,7 +144,7 @@ CRAB_INLINE void RunLoop::run() {
 	links.now  = steady_clock::now();
 	while (!links.quit) {
 		if (!links.triggered_callables.empty()) {
-			Callable &callable = *links.triggered_callables.begin();
+			Callable &callable = links.triggered_callables.front();
 			callable.triggered_callables_node.unlink();
 			callable.handler();
 			continue;
@@ -159,7 +159,7 @@ CRAB_INLINE void RunLoop::run() {
 			step(0);  // Poll, beware, both lists in a line below could change as a result
 			if (links.triggered_callables.empty() && !idle_handlers.empty()) {
 				// Nothing triggered during poll, time for idle handlers to run
-				Idle &idle = *idle_handlers.begin();
+				Idle &idle = idle_handlers.front();
 				// Rotate round-robin
 				idle.idle_node.unlink();
 				idle_handlers.push_back(idle);
@@ -297,7 +297,7 @@ private:
 					cond.wait(lock);
 					continue;
 				}
-				executing_request = &*work_queue.begin();
+				executing_request = &work_queue.front();
 				executing_request->work_queue_node.unlink();
 				host_name = std::move(executing_request->host_name);
 				port      = executing_request->port;

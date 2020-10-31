@@ -64,7 +64,7 @@ CRAB_INLINE void RunLoop::run() {
 		} else {
 			if (io.poll() == 0 && !idle_handlers.empty()) {
 				// Nothing triggered during poll, time for idle handlers to run
-				Idle &idle = *idle_handlers.begin();
+				Idle &idle = idle_handlers.front();
 				// Rotate round-robin
 				idle.idle_node.unlink();
 				idle_handlers.push_back(idle);

@@ -118,7 +118,7 @@ CRAB_INLINE void RunLoop::on_idle_observer(CFRunLoopObserverRef, CFRunLoopActivi
 	auto loop = reinterpret_cast<RunLoop *>(info);
 	// idle_handlers must not be empty here, but check is cheap
 	if (activity == kCFRunLoopBeforeWaiting && !loop->idle_handlers.empty()) {
-		Idle &idle = *loop->idle_handlers.begin();
+		Idle &idle = loop->idle_handlers.front();
 		// Rotate round-robin
 		idle.idle_node.unlink();
 		loop->idle_handlers.push_back(idle);
