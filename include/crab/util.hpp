@@ -21,20 +21,20 @@
 
 #if __cplusplus >= 201703L
 #include <optional>
-namespace crab { namespace details {
+namespace crab {
 template<typename T>
 using optional = std::optional<T>;
-}}  // namespace crab::details
+}  // namespace crab
 #else
 // Simplified, only works for value types
-namespace crab { namespace details {
+namespace crab {
 template<typename T>
 class optional {
 	T impl;
 	bool valid = false;
 
 public:
-	optional() noexcept = default;
+	optional() = default;
 	optional(const optional<T> &other) : impl(other.impl), valid(other.valid) {}
 	optional(optional<T> &&other) : impl(std::move(other.impl)), valid(other.valid) {}
 	optional(const T &other) : impl(other), valid(true) {}
@@ -75,7 +75,7 @@ public:
 	T &value() { return !valid ? throw std::bad_cast() : impl; }
 	const T &value() const { return !valid ? throw std::bad_cast() : impl; }
 };
-}}  // namespace crab::details
+}  // namespace crab
 #endif
 
 namespace crab {

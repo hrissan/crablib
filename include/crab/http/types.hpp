@@ -30,7 +30,7 @@ struct RequestResponseHeader {
 	std::vector<Header> headers;  // names are lower-case
 
 	bool keep_alive = true;
-	details::optional<uint64_t> content_length;
+	optional<uint64_t> content_length;
 
 	bool transfer_encoding_chunked = false;
 	std::vector<std::string> transfer_encodings;  // lower-case, other than chunked, identity

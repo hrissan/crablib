@@ -15,7 +15,7 @@ namespace crab { namespace http {
 
 class WebMessageHeaderSaver {
 public:
-	WebMessageHeaderSaver(bool fin, int opcode, uint64_t payload_len, details::optional<uint32_t> masking_key);
+	WebMessageHeaderSaver(bool fin, int opcode, uint64_t payload_len, optional<uint32_t> masking_key);
 
 	const uint8_t *data() const { return buffer; }
 	size_t size() const { return pos; }
@@ -30,7 +30,7 @@ public:
 	bool fin             = false;
 	int opcode           = 0;
 	uint64_t payload_len = 0;
-	details::optional<uint32_t> masking_key;
+	optional<uint32_t> masking_key;
 
 	template<typename InputIterator>
 	InputIterator parse(InputIterator begin, InputIterator end) {
@@ -70,7 +70,7 @@ public:
 	StringStream body;
 
 	WebMessageBodyParser() = default;
-	explicit WebMessageBodyParser(uint64_t payload_len, details::optional<uint32_t> mk);
+	explicit WebMessageBodyParser(uint64_t payload_len, optional<uint32_t> mk);
 
 	const uint8_t *parse(const uint8_t *begin, const uint8_t *end) {
 		while (begin != end && state != GOOD)

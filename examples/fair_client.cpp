@@ -45,7 +45,7 @@ private:
 		send_more_requests();
 	}
 	void send_more_requests() {
-		if (send_time.size() > max_requests / 2)
+		if (send_time.size() > max_requests)
 			return;
 		size_t count = max_requests - send_time.size();
 		socket.write(std::string(count, '1'));

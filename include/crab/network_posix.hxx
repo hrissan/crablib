@@ -688,7 +688,7 @@ CRAB_INLINE UDPReceiver::UDPReceiver(const Address &address, Handler &&cb, const
 	fd.swap(tmp);
 }
 
-CRAB_INLINE details::optional<size_t> UDPReceiver::read_datagram(uint8_t *data, size_t count, Address *peer_addr) {
+CRAB_INLINE optional<size_t> UDPReceiver::read_datagram(uint8_t *data, size_t count, Address *peer_addr) {
 	if (!fd.is_valid() || !r_handler.can_read)
 		return {};
 	Address in_addr;

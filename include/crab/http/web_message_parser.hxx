@@ -12,7 +12,7 @@
 namespace crab { namespace http {
 
 CRAB_INLINE WebMessageHeaderSaver::WebMessageHeaderSaver(
-    bool fin, int opcode, uint64_t payload_len, details::optional<uint32_t> masking_key) {
+    bool fin, int opcode, uint64_t payload_len, optional<uint32_t> masking_key) {
 	buffer[pos++] = (fin ? 0x80 : 0) | static_cast<int>(opcode);
 	if (payload_len < 126) {
 		buffer[pos++] = static_cast<uint8_t>(payload_len | (masking_key ? 0x80 : 0));
@@ -107,7 +107,7 @@ CRAB_INLINE void WebMessageBodyParser::parse(Buffer &buf) {
 	buf.did_read(ptr - buf.read_ptr());
 }
 
-CRAB_INLINE WebMessageBodyParser::WebMessageBodyParser(uint64_t payload_len, details::optional<uint32_t> mk)
+CRAB_INLINE WebMessageBodyParser::WebMessageBodyParser(uint64_t payload_len, optional<uint32_t> mk)
     : state((payload_len == 0) ? GOOD : BODY), remaining_bytes(payload_len), masking_key(mk ? *mk : 0) {
 	if (payload_len < 65536)  // TODO - constant
 		body.get_buffer().reserve(static_cast<size_t>(payload_len));
