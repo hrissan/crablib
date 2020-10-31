@@ -73,6 +73,9 @@ endif()
 add_executable(dns_resolve ${SOURCE_FILES} dns_resolve.cpp)
 add_executable(watcher_latency ${SOURCE_FILES} watcher_latency.cpp)
 
+add_executable(api_client ${SOURCE_FILES} api_client.cpp)
+add_executable(api_server ${SOURCE_FILES} api_server.cpp)
+
 add_executable(http_server_simple ${SOURCE_FILES} http_server_simple.cpp)
 add_executable(http_server_longpoll ${SOURCE_FILES} http_server_longpoll.cpp)
 add_executable(http_server_proxy_trivial ${SOURCE_FILES} http_server_proxy_trivial.cpp)

@@ -2,6 +2,8 @@
 
 ### 0.9.1
 
+- `optional` moved out of `details` namespace
+- example of fair resource-bound API server. TODO - improve example
 
 ### 0.9.0
 
