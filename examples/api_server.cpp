@@ -7,6 +7,19 @@
 
 #include <crab/crab.hpp>
 
+const bool debug = false;
+
+class ApiWorkers {
+public:
+	struct Output {
+
+	};
+};
+
+class ApiNetwork {
+public:
+};
+
 class ApiServerApp {
 public:
 	explicit ApiServerApp(const crab::Address &bind_address)
@@ -14,7 +27,7 @@ public:
 	    , worker_ready_ab([&]() { on_worker_ready_ab(); })
 	    , stat_timer([&]() { print_stats(); }) {
 		print_stats();
-		for (size_t i = 0; i != std::thread::hardware_concurrency(); ++i)
+		for (size_t i = 0; i != 1; ++i)
 			worker_threads.emplace_back(&ApiServerApp::worker_fun, this);
 	}
 	~ApiServerApp() {
@@ -69,7 +82,7 @@ private:
 
 	enum { SI = sizeof(Client) };
 	size_t max_clients                     = 128 * 1024;
-	size_t max_pending_requests_per_client = 1600;
+	size_t max_pending_requests_per_client = 16;
 	size_t max_requests_memory             = 256 * 1024 * 1024;
 	size_t max_responses_memory            = 1024 * 1024 * 1024;
 	size_t max_request_length              = 1024 * 1024;
@@ -91,7 +104,7 @@ private:
 
 	struct WorkItem {
 		crab::Watcher *watcher = nullptr;
-		Client *client         = 0;  // We never destroy clients, so pointer is safe
+		Client *client         = nullptr;  // We never destroy clients, so pointer is safe
 		size_t client_id       = 0;  // But client ids change, so we know the work done is for disconnected one
 		crab::Buffer request{0};
 		crab::Buffer response{0};
@@ -142,7 +155,8 @@ private:
 	// IntrusiveList is good as a queue due to O(1) removal cost and auto-remove in Node destructor
 
 	crab::Timer stat_timer;
-	size_t requests_processed = 0;
+	size_t requests_received = 0;
+	size_t responses_sent = 0;
 
 	enum { HEADER_SIZE = 16 };
 
@@ -180,8 +194,11 @@ private:
 	void read_header(Client &client) {
 		if (client.state != Client::READING_HEADER)
 			return;
-		if (is_over_local_limit(client))
+		if (is_over_local_limit(client)) {
+			if (debug)
+				std::cout << "read_header is_over_local_limit" << std::endl;
 			return;  // Local limit triggered by local send
+		}
 		if (client.read_buffer.size() < HEADER_SIZE) {
 			client.total_read += client.read_buffer.read_from(client.socket);
 			if (client.read_buffer.size() < HEADER_SIZE) {
@@ -192,11 +209,14 @@ private:
 		client.read_buffer.read(reinterpret_cast<uint8_t *>(&client.request_header->len), 4);
 		client.read_buffer.did_read(HEADER_SIZE - 4);  // Skip other bytes
 		if (client.request_header->len != 4) {         // > max_request_length) {
-			std::cout << "Bad Request Len" << std::endl;
+			if (debug)
+				std::cout << "Bad Request Len" << std::endl;
 			// TODO - disconnect here
 		}
 		if (!request_memory_queue.empty() ||
 		    total_requests_memory + client.request_header->len > max_requests_memory) {
+			if (debug)
+				std::cout << "WAITING_MEMORY_FOR_BODY, request_memory_queue.push " << std::endl;
 			client.state = Client::WAITING_MEMORY_FOR_BODY;
 			request_memory_queue.push_back(client);
 			return;
@@ -205,6 +225,8 @@ private:
 	}
 	void start_reading_body(Client &client) {
 		invariant(client.state != Client::READING_BODY, "");
+		if (debug)
+			std::cout << "start_reading_body " << std::endl;
 		total_requests_memory += client.request_header->len;
 		client.request_body.clear(client.request_header->len);
 		client.request_header.reset();
@@ -220,10 +242,13 @@ private:
 		client.total_read += client.request_body.read_from(client.socket);
 		if (!client.request_body.full())
 			return;
+		requests_received += 1;
 		client.state = Client::READING_HEADER;
 		client.requests.push_back(std::move(client.request_body));
 		client.request_body.clear();
 		if (!response_memory_queue.empty() || total_response_memory + max_response_length > max_responses_memory) {
+			if (debug)
+				std::cout << "read_body ready, response_memory_queue.push " << std::endl;
 			response_memory_queue.push_back(client);
 		} else {
 			run_worker(client);
@@ -231,6 +256,8 @@ private:
 		read_header(client);
 	}
 	bool run_worker(Client &client) {
+		if (debug)
+			std::cout << "run_worker " << std::endl;
 		if (false) {
 			crab::Buffer request = std::move(client.requests.front());
 			client.requests.pop_front();
@@ -239,7 +266,7 @@ private:
 
 			total_requests_memory -= request.capacity();
 			total_response_memory += response.capacity();
-			requests_processed += 1;
+			responses_sent += 1;
 			client.responses.push_back(std::move(response));
 			send_responses(client);
 			return true;
@@ -282,13 +309,14 @@ private:
 			}
 			total_response_memory += w.response.capacity();
 			w.client->requests_in_work -= 1;
-			requests_processed += 1;
+			responses_sent += 1;
 			//			const bool was_empty = w.client->responses.empty();
 			w.client->responses.push_back(std::move(w.response));
 			//			if (was_empty) // TODO - check if this optimization is useful
 			send_responses(*w.client);
 		}
 		worker_responses_taken.clear();
+		read_requests_fair(); // if we read header, we could need to read body
 	}
 	void send_responses(Client &client) {
 		//	    if (!client.socket.can_write()) // TODO - check if this optimization is useful
@@ -297,9 +325,12 @@ private:
 			client.total_written += client.responses.front().write_to(client.socket);
 			if (!client.responses.front().empty())
 				break;
+			if (debug)
+				std::cout << "send_responses sent complete response " << std::endl;
 			total_response_memory -= client.responses.front().capacity();
 			client.responses.pop_front();
 			run_workers_fair();  // because total_response_memory decreased
+			read_header(client); // read header if we were in local limit
 		}
 	}
 	void read_requests_fair() {
@@ -390,12 +421,13 @@ private:
 	}
 	void print_stats() {
 		stat_timer.once(1);
-		std::cout << "requests processed (during last second)=" << requests_processed << std::endl;
+		std::cout << "requests received/responses sent (during last second)=" << requests_received << "/" << responses_sent << std::endl;
 		//		if (!clients.empty()) {
 		//			std::cout << "Client.front read=" << clients.front().total_read
 		//			          << " written=" << clients.front().total_written << std::endl;
 		//		}
-		requests_processed = 0;
+		requests_received = 0;
+		responses_sent = 0;
 	}
 };
 
