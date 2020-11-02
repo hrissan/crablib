@@ -116,10 +116,10 @@ CRAB_INLINE std::string invariant_violated(const char *expr, const char *file, i
 
 CRAB_INLINE Random::Random() {
 	std::random_device rd;
-	std::uniform_int_distribution<uint32_t> dist;  // random_device has unspecified min and max
+	std::uniform_int_distribution<uint64_t> dist;  // random_device has unspecified min and max
 
-	inc   = (uint64_t(dist(rd)) << 32U) ^ dist(rd);
-	state = (uint64_t(dist(rd)) << 32U) ^ dist(rd);
+	inc   = dist(rd);
+	state = dist(rd);
 }
 
 CRAB_INLINE Random::Random(uint32_t seed) { state = uint64_t(seed) << 32U; }

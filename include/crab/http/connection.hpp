@@ -124,9 +124,9 @@ protected:
 	ResponseParser response_parser;
 	BodyParser http_body_parser;
 
-	WebMessageHeaderParser wm_header_parser;    // Chunk header
-	WebMessageBodyParser wm_body_parser;        // Chunk body
-	details::optional<WebMessage> web_message;  // Built from chunks
+	WebMessageHeaderParser wm_header_parser;  // Chunk header
+	WebMessageBodyParser wm_body_parser;      // Chunk body
+	optional<WebMessage> web_message;         // Built from chunks
 	std::string sec_websocket_key;
 	Random rnd;  // for masking_key, dns name selection, web socket secret key
 
@@ -138,7 +138,7 @@ protected:
 
 	DNSResolver dns;
 	BufferedTCPSocket sock;
-	details::optional<Request> waiting_request;  // We allow sending single request in RESOLVING_HOST state
+	optional<Request> waiting_request;  // We allow sending single request in RESOLVING_HOST state
 
 	State state;
 	std::string protocol, host;
@@ -206,15 +206,15 @@ protected:
 	RequestParser request_parser;
 	BodyParser http_body_parser;
 
-	WebMessageHeaderParser wm_header_parser;    // Chunk header
-	WebMessageBodyParser wm_body_parser;        // Chunk body
-	details::optional<WebMessage> web_message;  // Built from chunks
+	WebMessageHeaderParser wm_header_parser;  // Chunk header
+	WebMessageBodyParser wm_body_parser;      // Chunk body
+	optional<WebMessage> web_message;         // Built from chunks
 	Timer wm_ping_timer;
 	// Server-side ping required for some NATs to keep port open
 	// TCP keep-alive is set by most browsers, but surprisingly it is not enough.
 	// We reset this timer on write() only
 
-	details::optional<uint64_t> remaining_body_content_length;  // empty for chunked
+	optional<uint64_t> remaining_body_content_length;  // empty for chunked
 
 	void sock_handler();
 	void on_wm_ping_timer();

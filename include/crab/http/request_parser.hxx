@@ -325,7 +325,7 @@ CRAB_INLINE void RequestParser::process_ready_header() {
 	req.headers.emplace_back(header);  // Copy is better here
 }
 
-CRAB_INLINE BodyParser::BodyParser(details::optional<uint64_t> content_length, bool chunked) {
+CRAB_INLINE BodyParser::BodyParser(optional<uint64_t> content_length, bool chunked) {
 	if (chunked) {
 		// ignore content_length, even if set. Motivation - if client did not use
 		// chunked encoding, will throw in chunk header parser

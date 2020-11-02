@@ -328,7 +328,7 @@ public:
 	void set_handler(Handler &&cb) { r_handler.handler = std::move(cb); }
 
 	static constexpr size_t MAX_DATAGRAM_SIZE = 65536;
-	details::optional<size_t> read_datagram(uint8_t *data, size_t count, Address *peer_addr = nullptr);
+	optional<size_t> read_datagram(uint8_t *data, size_t count, Address *peer_addr = nullptr);
 	// returns () if buffer is empty
 	// returns (datagram_size) if datagram was read, even if it was truncated
 	// We do not consider truncation as an error here. Any sane protocol will detect truncated

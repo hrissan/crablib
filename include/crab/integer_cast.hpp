@@ -214,7 +214,7 @@ inline T integer_cast(const char *data, size_t size) {
 }
 
 template<typename T>
-details::optional<T> safe_add_opt(T a, T b) {
+optional<T> safe_add_opt(T a, T b) {
 	if (b >= 0) {
 		if (a > std::numeric_limits<T>::max() - b)
 			return {};
@@ -226,7 +226,7 @@ details::optional<T> safe_add_opt(T a, T b) {
 }
 
 template<typename T>
-details::optional<T> safe_sub_opt(T a, T b) {
+optional<T> safe_sub_opt(T a, T b) {
 	if (b <= 0) {
 		if (a > std::numeric_limits<T>::max() + b)
 			return {};

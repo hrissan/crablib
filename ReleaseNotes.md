@@ -1,5 +1,13 @@
 ## Release Notes
 
+### 0.9.1
+
+*Low level*
+- `optional` moved out of `details` namespace, tiny fix in optional
+
+*Bugs fixed*
+- When setting socket options to 1, they were set to uninitialized value instead. Worked because luck plus `true = anything non-zero`.  
+
 ### 0.9.0
 
 *Low level*
