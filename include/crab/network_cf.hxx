@@ -188,8 +188,9 @@ CRAB_INLINE bool TCPSocket::finish_connect() {
 	return true;
 }
 
-CRAB_INLINE bool TCPSocket::connect(const Address &address) {
+CRAB_INLINE bool TCPSocket::connect(const Address &address, const Settings &) {
 	close();
+	// TODO - implement settings
 	CFStringRef hname =
 	    CFStringCreateWithCString(kCFAllocatorDefault, address.get_address().c_str(), kCFStringEncodingUTF8);
 	CFHostRef host = CFHostCreateWithName(kCFAllocatorDefault, hname);
@@ -264,7 +265,8 @@ CRAB_INLINE void TCPSocket::write_cb(CFWriteStreamRef stream, CFStreamEventType 
 	}
 }
 
-CRAB_INLINE TCPAcceptor::TCPAcceptor(const Address &address, Handler &&cb) : a_handler(std::move(cb)) {
+CRAB_INLINE TCPAcceptor::TCPAcceptor(const Address &address, Handler &&cb, const Settings &settings)
+    : a_handler(std::move(cb)) {
 	CFSocketContext context = {0, this, 0, 0, 0};
 	CFSocketRef impl        = CFSocketCreate(kCFAllocatorDefault, address.impl_get_sockaddr()->sa_family, SOCK_STREAM,
         IPPROTO_TCP, kCFSocketAcceptCallBack, accept_cb, &context);
@@ -278,6 +280,7 @@ CRAB_INLINE TCPAcceptor::TCPAcceptor(const Address &address, Handler &&cb) : a_h
 		throw std::runtime_error("crab::TCPAcceptor error");
 	CFRelease(sincfd);
 	sincfd = nullptr;
+	// TODO - set options here
 
 	socket_source = CFSocketCreateRunLoopSource(kCFAllocatorDefault, impl, 0);
 	CFRelease(impl);

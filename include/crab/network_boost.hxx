@@ -305,8 +305,9 @@ CRAB_INLINE void TCPSocket::close() {
 
 CRAB_INLINE bool TCPSocket::is_open() const { return impl && (impl->connected || impl->pending_connect); }
 
-CRAB_INLINE bool TCPSocket::connect(const Address &address) {
+CRAB_INLINE bool TCPSocket::connect(const Address &address, const Settings &settings) {
 	close();
+	// TODO - implement settings
 	if (!impl)
 		impl.reset(new TCPSocketImpl(this));
 	impl->start_connect(address);
@@ -377,12 +378,15 @@ struct TCPAcceptorImpl {
 	}
 };
 
-CRAB_INLINE TCPAcceptor::TCPAcceptor(const Address &address, Handler &&cb)
+CRAB_INLINE TCPAcceptor::TCPAcceptor(const Address &address, Handler &&cb, const Settings &settings)
     : a_handler(std::move(cb)), impl(new TCPAcceptorImpl(this)) {
 	boost::asio::ip::tcp::resolver resolver(RunLoop::current()->get_impl()->io);
 	boost::asio::ip::tcp::endpoint endpoint(address.get_addr(), address.get_port());
 	impl->acceptor.open(endpoint.protocol());
-	impl->acceptor.set_option(boost::asio::ip::tcp::acceptor::reuse_address(true));
+	if (settings.reuse_addr)
+		impl->acceptor.set_option(boost::asio::ip::tcp::acceptor::reuse_address(true));
+	// TODO - other options, like impl->acceptor.set_option(boost::asio::ip::tcp::no_delay{true});
+	m_tcpSocket.open(boost::asio::ip::tcp::v4());
 	impl->acceptor.bind(endpoint);
 	impl->acceptor.listen();
 

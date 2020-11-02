@@ -171,9 +171,28 @@ private:
 
 std::ostream &operator<<(std::ostream &os, const Address &msg);
 
+namespace details {
+// We have to declare settings outside, due to
+// https://stackoverflow.com/questions/17430377/error-when-using-in-class-initialization-of-non-static-data-member-and-nested-cl
+struct TCPSocketSettings {
+	bool tcp_nodelay   = true;
+	size_t sndbuf_size = 0;  // 0 is do not set
+	size_t rcvbuf_size = 0;  // 0 is do not set
+};
+
+struct TCPAcceptorSettings : public TCPSocketSettings {
+	// TCPAcceptor will set TCPSocketSettings for all accepted sockets (through listen socket or manualy)
+	bool reuse_addr = false;
+	bool reuse_port = false;
+};
+
+}  // namespace details
+
 // socket is not RAII because it can go to disconnected state by external interaction
 class TCPSocket : public IStream, public OStream {
 public:
+	using Settings = details::TCPSocketSettings;
+
 	explicit TCPSocket(Handler &&cb);
 	// cb is called when read or write is possible or socket closed from other side
 	// in your handler, first check for is_open(), if false, socket was closed
@@ -184,8 +203,10 @@ public:
 	// after close you are guaranteed that no handlers will be called
 	bool is_open() const;  // Connecting or connected
 
-	bool connect(const Address &address);
+	bool connect(const Address &address, const Settings &settings = Settings{});
 	// either returns false or returns true and will call rwd_handler in future
+	// We need settings here, because we combine socket() and connect() in one call
+	// and at least SO_RCVBUF must be set before connect
 
 	void accept(TCPAcceptor &acceptor, Address *accepted_addr = nullptr);
 	// throws if acceptor.can_accept() is false, so check can_accept() before
@@ -219,6 +240,8 @@ public:
 	// We decided to implement it in http::Connection which has all information needed
 	// Implementing in TCPSocket would require tracking state and additional checks for users, who
 	// do not use write_shutdown at all
+
+	// TODO - set individual settings after connect/accept
 private:
 	Callable rwd_handler;
 
@@ -246,7 +269,8 @@ private:
 
 class TCPAcceptor {
 public:
-	explicit TCPAcceptor(const Address &address, Handler &&cb);
+	using Settings = details::TCPAcceptorSettings;
+	explicit TCPAcceptor(const Address &address, Handler &&cb, const Settings &settings = Settings{});
 	void set_handler(Handler &&cb) { a_handler.handler = std::move(cb); }
 	~TCPAcceptor();
 

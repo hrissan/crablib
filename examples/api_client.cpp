@@ -7,13 +7,12 @@
 
 class ApiClientApp {
 public:
-	explicit ApiClientApp(
-	    const crab::Address &address, crab::bdata request_body)
+	explicit ApiClientApp(const crab::Address &address, crab::bdata request_body)
 	    : address(address)
-		, request_bytes(65536)
+	    , request_bytes(65536)
 	    , socket([&]() { socket_handler_greedy(); })
-		, socket_incoming_buffer(65536)
-		, socket_outgoing_buffer(65536)
+	    , socket_incoming_buffer(65536)
+	    , socket_outgoing_buffer(65536)
 	    , reconnect_timer([&]() { connect(); })
 	    , stat_timer([&]() { print_stats(); }) {
 		uint8_t header_padding[HEADER_SIZE - 4]{};
@@ -62,7 +61,7 @@ private:
 			reconnect_timer.once(1);
 		} else {
 			std::cout << "Upstream socket connection attempt started..." << std::endl;
-			bytes_sent = 0;
+			bytes_sent     = 0;
 			bytes_received = 0;
 			send_more_requests();
 		}
@@ -70,8 +69,8 @@ private:
 	void print_stats() {
 		stat_timer.once(1);
 		std::cout << "bytes sent/received (during last second)=" << bytes_sent << "/" << bytes_received << std::endl;
-//		bytes_sent = 0;
-//		bytes_received = 0;
+		//		bytes_sent = 0;
+		//		bytes_received = 0;
 	}
 	const crab::Address address;
 	crab::Buffer request_bytes;
@@ -82,7 +81,7 @@ private:
 
 	crab::Timer reconnect_timer;
 
-	size_t bytes_sent = 0;
+	size_t bytes_sent     = 0;
 	size_t bytes_received = 0;
 	crab::Timer stat_timer;
 };
@@ -100,7 +99,7 @@ int main(int argc, char *argv[]) {
 	crab::RunLoop runloop;
 
 	std::list<ApiClientApp> apps;
-	const size_t count    = argc < 3 ? 1 : crab::integer_cast<size_t>(argv[2]);
+	const size_t count = argc < 3 ? 1 : crab::integer_cast<size_t>(argv[2]);
 
 	for (size_t i = 0; i != count; ++i)
 		apps.emplace_back(crab::Address(argv[1]), crab::bdata{1, 2, 3, 4});

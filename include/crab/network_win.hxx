@@ -356,7 +356,7 @@ CRAB_INLINE bool TCPSocket::is_open() const {
 	return (impl && impl->fd.get_value() >= 0) || rwd_handler.is_pending_callable();
 }
 
-CRAB_INLINE bool TCPSocket::connect(const Address &address) {
+CRAB_INLINE bool TCPSocket::connect(const Address &address, const Settings &) {
 	close();
 	if (!impl)
 		impl.reset(new TCPSocketImpl(this));
@@ -366,6 +366,7 @@ CRAB_INLINE bool TCPSocket::connect(const Address &address) {
 	if (CreateIoCompletionPort(tmp.handle_value(), RunLoop::current()->get_impl()->completion_queue.value,
 	        details::OverlappedKey, 0) == NULL)
 		return false;
+	// TODO - implement settings
 	impl->read_overlapped.zero_overlapped();
 	DWORD numBytes              = 0;
 	DWORD last                  = 0;
@@ -520,14 +521,15 @@ CRAB_INLINE void TCPSocket::accept(TCPAcceptor &acceptor, Address *accepted_addr
 	acceptor.impl->start_accept();
 }
 
-CRAB_INLINE TCPAcceptor::TCPAcceptor(const Address &address, Handler &&a_handler)
+CRAB_INLINE TCPAcceptor::TCPAcceptor(const Address &address, Handler &&a_handler, const Settings &settings)
     : a_handler(std::move(a_handler)), impl(new TCPAcceptorImpl(this)) {
 	details::SocketDescriptor tmp(socket(address.impl_get_sockaddr()->sa_family, SOCK_STREAM, IPPROTO_TCP));
 	if (tmp.get_value() == -1)
 		std::runtime_error("crab::TCPAcceptor::TCPAcceptor socket() failed");
+	// TODO - implement more settings
 	int set = 1;  // Microsoft URODI
-	if (setsockopt(tmp.get_value(), SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char *>(&set), sizeof(set)) !=
-	    0) {
+	if (settings.reuse_addr && setsockopt(tmp.get_value(), SOL_SOCKET, SO_REUSEADDR,
+	                               reinterpret_cast<const char *>(&set), sizeof(set)) != 0) {
 		throw std::runtime_error("crab::TCPAcceptor::TCPAcceptor setsockopt SO_REUSEADDR failed");
 	}
 	impl->ai_family   = address.impl_get_sockaddr()->sa_family;

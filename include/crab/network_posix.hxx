@@ -69,9 +69,8 @@ CRAB_INLINE void FileDescriptor::reset(int new_value) {
 
 constexpr int MAX_EVENTS = 512;
 
-CRAB_INLINE void setsockopt_1(int fd, int level, int optname) {
-	int set = 1;
-	check(setsockopt(fd, level, optname, &set, sizeof(set)) >= 0, "crab::setsockopt failed");
+CRAB_INLINE void setsockopt_int(int fd, int level, int optname, int value) {
+	check(setsockopt(fd, level, optname, &value, sizeof(value)) >= 0, "crab::setsockopt failed");
 }
 
 CRAB_INLINE void set_nonblocking(int fd) {
@@ -331,20 +330,26 @@ CRAB_INLINE void TCPSocket::io_cb_write(ev::io &, int) {
 }
 #endif
 
-CRAB_INLINE bool TCPSocket::connect(const Address &address) {
+CRAB_INLINE bool TCPSocket::connect(const Address &address, const Settings &settings) {
 	close();
 	try {
 		details::FileDescriptor tmp(::socket(address.impl_get_sockaddr()->sa_family, SOCK_STREAM, IPPROTO_TCP),
 		    "crab::connect socket() failed");
 #if defined(__MACH__)
-		details::setsockopt_1(tmp.get_value(), SOL_SOCKET, SO_NOSIGPIPE);
+		details::setsockopt_int(tmp.get_value(), SOL_SOCKET, SO_NOSIGPIPE, 1);
 #endif
+		// SO_RCVBUF has effects on window negotiations, so set buffer sizes before connect
+		if (settings.sndbuf_size)
+			details::setsockopt_int(tmp.get_value(), SOL_SOCKET, SO_SNDBUF, integer_cast<int>(settings.sndbuf_size));
+		if (settings.rcvbuf_size)
+			details::setsockopt_int(tmp.get_value(), SOL_SOCKET, SO_RCVBUF, integer_cast<int>(settings.rcvbuf_size));
 		details::set_nonblocking(tmp.get_value());
 		int connect_result =
 		    ::connect(tmp.get_value(), address.impl_get_sockaddr(), address.impl_get_sockaddr_length());
 		if (connect_result < 0 && errno != EINPROGRESS)
 			return false;
-		details::setsockopt_1(tmp.get_value(), IPPROTO_TCP, TCP_NODELAY);
+		if (settings.tcp_nodelay)  // For compatibility, set after connect
+			details::setsockopt_int(tmp.get_value(), IPPROTO_TCP, TCP_NODELAY, 1);
 #if CRAB_IMPL_LIBEV
 		io_read.start(tmp.get_value(), ev::READ);
 		io_write.start(tmp.get_value(), ev::WRITE);
@@ -460,7 +465,7 @@ CRAB_INLINE void TCPAcceptor::io_cb_read(ev::io &, int) {
 }
 #endif
 
-CRAB_INLINE TCPAcceptor::TCPAcceptor(const Address &address, Handler &&cb)
+CRAB_INLINE TCPAcceptor::TCPAcceptor(const Address &address, Handler &&cb, const Settings &settings)
     : a_handler(std::move(cb))
     , fd_limit_timer([&]() { a_handler.handler(); })
 #if CRAB_IMPL_LIBEV
@@ -472,10 +477,19 @@ CRAB_INLINE TCPAcceptor::TCPAcceptor(const Address &address, Handler &&cb)
 	details::FileDescriptor tmp(::socket(address.impl_get_sockaddr()->sa_family, SOCK_STREAM, IPPROTO_TCP),
 	    "crab::TCPAcceptor socket() failed");
 #if defined(__MACH__)
-	details::setsockopt_1(tmp.get_value(), SOL_SOCKET, SO_NOSIGPIPE);
+	details::setsockopt_int(tmp.get_value(), SOL_SOCKET, SO_NOSIGPIPE, 1);
 #endif
-	details::setsockopt_1(tmp.get_value(), SOL_SOCKET, SO_REUSEADDR);
-	details::setsockopt_1(tmp.get_value(), SOL_SOCKET, SO_REUSEPORT); // TODO - do not commit with this to master, add settings
+	if (settings.reuse_addr)
+		details::setsockopt_int(tmp.get_value(), SOL_SOCKET, SO_REUSEADDR, 1);
+	if (settings.reuse_port)
+		details::setsockopt_int(tmp.get_value(), SOL_SOCKET, SO_REUSEPORT, 1);
+	// Settings below are inherited by accepted sockets. TODO - check TCP_NODELAY
+	if (settings.tcp_nodelay)
+		details::setsockopt_int(tmp.get_value(), IPPROTO_TCP, TCP_NODELAY, 1);
+	if (settings.sndbuf_size)
+		details::setsockopt_int(tmp.get_value(), SOL_SOCKET, SO_SNDBUF, integer_cast<int>(settings.sndbuf_size));
+	if (settings.rcvbuf_size)
+		details::setsockopt_int(tmp.get_value(), SOL_SOCKET, SO_RCVBUF, integer_cast<int>(settings.rcvbuf_size));
 
 	if (::bind(tmp.get_value(), address.impl_get_sockaddr(), address.impl_get_sockaddr_length()) < 0) {
 		std::stringstream ss;
@@ -484,6 +498,7 @@ CRAB_INLINE TCPAcceptor::TCPAcceptor(const Address &address, Handler &&cb)
 		throw std::runtime_error(ss.str());
 	}
 	details::set_nonblocking(tmp.get_value());
+	// Specifying 0 as a second param leads to RST to client on some systems when lots of clients rush in.
 	details::check(listen(tmp.get_value(), SOMAXCONN) >= 0, "crab::TCPAcceptor listen failed");
 #if CRAB_IMPL_LIBEV
 	io_read.start(tmp.get_value(), ev::READ);
@@ -507,6 +522,7 @@ CRAB_INLINE bool TCPAcceptor::can_accept() {
 #if defined(__MACH__)
 			details::FileDescriptor sd(::accept(fd.get_value(), in_addr.impl_get_sockaddr(), &in_len));
 			// On FreeBSD non-blocking flag is inherited automatically - very smart :)
+			// Even relatively modern OS X has no accept4 function, so code below cannot be used
 #else  // defined(__linux__)
 			details::FileDescriptor sd(
 			    ::accept4(fd.get_value(), in_addr.impl_get_sockaddr(), &in_len, SOCK_NONBLOCK));
@@ -542,9 +558,8 @@ CRAB_INLINE bool TCPAcceptor::can_accept() {
 				return false;
 			}
 #if defined(__MACH__)
-			details::setsockopt_1(sd.get_value(), SOL_SOCKET, SO_NOSIGPIPE);
+			details::setsockopt_int(sd.get_value(), SOL_SOCKET, SO_NOSIGPIPE, 1);  // Surprisingly, not inherited
 #endif
-			details::setsockopt_1(sd.get_value(), IPPROTO_TCP, TCP_NODELAY);
 			accepted_fd.swap(sd);
 			accepted_addr = in_addr;
 			return true;
@@ -583,7 +598,7 @@ CRAB_INLINE UDPTransmitter::UDPTransmitter(const Address &address, Handler &&cb,
 	details::set_nonblocking(tmp.get_value());
 
 	if (address.is_multicast()) {
-		details::setsockopt_1(tmp.get_value(), SOL_SOCKET, SO_BROADCAST);
+		details::setsockopt_int(tmp.get_value(), SOL_SOCKET, SO_BROADCAST, 1);
 		auto mreq = details::fill_ip_mreqn(adapter);
 		details::check(setsockopt(tmp.get_value(), IPPROTO_IP, IP_MULTICAST_IF, &mreq, sizeof(mreq)) >= 0,
 		    "crab::UDPTransmitter: Failed to select multicast adapter");
@@ -658,8 +673,8 @@ CRAB_INLINE UDPReceiver::UDPReceiver(const Address &address, Handler &&cb, const
 	    "crab::UDPReceiver socket() failed");
 	if (address.is_multicast()) {
 		// TODO - check flag combination on Mac
-		details::setsockopt_1(tmp.get_value(), SOL_SOCKET, SO_REUSEADDR);
-		details::setsockopt_1(tmp.get_value(), SOL_SOCKET, SO_REUSEPORT);
+		details::setsockopt_int(tmp.get_value(), SOL_SOCKET, SO_REUSEADDR, 1);
+		details::setsockopt_int(tmp.get_value(), SOL_SOCKET, SO_REUSEPORT, 1);
 	}
 	details::set_nonblocking(tmp.get_value());
 

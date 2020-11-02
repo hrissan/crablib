@@ -8,7 +8,7 @@
 #include <crab/crab.hpp>
 
 const bool debug = false;
-enum { HEADER_SIZE = 16};
+enum { HEADER_SIZE = 16 };
 
 class Client;
 class ApiWorkers {
@@ -16,8 +16,8 @@ public:
 	struct OutputQueue;
 	struct WorkItem {
 		OutputQueue *output_queue = nullptr;
-		void *client         = nullptr;  // TODO - fix this crap. We never destroy clients, so pointer is safe
-		size_t client_id       = 0;  // But client ids change, so we know the work done is for disconnected one
+		void *client              = nullptr;  // TODO - fix this crap. We never destroy clients, so pointer is safe
+		size_t client_id          = 0;  // But client ids change, so we know the work done is for disconnected one
 		crab::Buffer request{0};
 		crab::Buffer response{0};
 	};
@@ -26,10 +26,10 @@ public:
 		std::deque<WorkItem> worker_responses;
 		crab::Watcher worker_ready_ab;
 
-		explicit OutputQueue(crab::Handler && handler):worker_ready_ab(std::move(handler)){}
+		explicit OutputQueue(crab::Handler &&handler) : worker_ready_ab(std::move(handler)) {}
 	};
 	ApiWorkers() {
-		for (size_t i = 0; i != 1; ++i)
+		for (size_t i = 0; i != 2; ++i)
 			worker_threads.emplace_back(&ApiWorkers::worker_fun, this);
 	}
 	~ApiWorkers() {
@@ -49,11 +49,12 @@ public:
 		response.did_write(HEADER_SIZE - 4);  // TODO security issue, uninitialized memory
 		response.did_write(len);              // TODO security issue, uninitialized memory
 	}
-	void add_work(WorkItem && work_item) {
+	void add_work(WorkItem &&work_item) {
 		std::unique_lock<std::mutex> lock(worker_requests_mutex);
 		worker_requests.push_back(std::move(work_item));
 		worker_requests_cond.notify_one();
 	}
+
 private:
 	std::mutex worker_requests_mutex;
 	bool worker_should_quit = false;
@@ -87,19 +88,20 @@ private:
 	}
 };
 
-
 class ApiNetwork {
 public:
-	explicit ApiNetwork(ApiWorkers & api_workers, const crab::Address &bind_address)
+	explicit ApiNetwork(ApiWorkers &api_workers,
+	    const crab::Address &bind_address,
+	    const crab::TCPAcceptor::Settings &settings)
 	    : api_workers(api_workers)
-	    , la_socket(bind_address, [&]() { accept_all(); })
+	    , la_socket(bind_address, [&]() { accept_all(); }, settings)
 	    , output_queue([&]() { on_worker_ready_ab(); })
 	    , stat_timer([&]() { print_stats(); }) {
 		print_stats();
 	}
 
 private:
-	ApiWorkers & api_workers;
+	ApiWorkers &api_workers;
 	crab::TCPAcceptor la_socket;
 
 	// Client states
@@ -167,7 +169,7 @@ private:
 
 	crab::Timer stat_timer;
 	size_t requests_received = 0;
-	size_t responses_sent = 0;
+	size_t responses_sent    = 0;
 
 	//	void on_idle() {
 	//		const size_t MAX_COUNTER = 1;
@@ -282,10 +284,10 @@ private:
 		}
 		total_response_memory += max_response_length;
 		ApiWorkers::WorkItem work_item;
-		work_item.output_queue   = &output_queue;
-		work_item.client_id = client.client_id;
-		work_item.client    = &client;
-		work_item.request   = std::move(client.requests.front());
+		work_item.output_queue = &output_queue;
+		work_item.client_id    = client.client_id;
+		work_item.client       = &client;
+		work_item.request      = std::move(client.requests.front());
 		client.requests.pop_front();
 		client.requests_in_work += 1;
 
@@ -314,7 +316,7 @@ private:
 		for (auto &w : worker_responses_taken) {
 			total_response_memory -= max_response_length;
 			total_requests_memory -= w.request.capacity();
-			Client & client = *reinterpret_cast<Client *>(w.client);
+			Client &client = *reinterpret_cast<Client *>(w.client);
 			if (client.client_id != w.client_id) {  // Disconnected/reconnected
 				continue;
 			}
@@ -327,7 +329,7 @@ private:
 			send_responses(client);
 		}
 		worker_responses_taken.clear();
-		read_requests_fair(); // if we read header, we could need to read body
+		read_requests_fair();  // if we read header, we could need to read body
 	}
 	void send_responses(Client &client) {
 		//	    if (!client.socket.can_write()) // TODO - check if this optimization is useful
@@ -340,8 +342,8 @@ private:
 				std::cout << "send_responses sent complete response " << std::endl;
 			total_response_memory -= client.responses.front().capacity();
 			client.responses.pop_front();
-			run_workers_fair();  // because total_response_memory decreased
-			read_header(client); // read header if we were in local limit
+			run_workers_fair();   // because total_response_memory decreased
+			read_header(client);  // read header if we were in local limit
 		}
 	}
 	void read_requests_fair() {
@@ -432,32 +434,45 @@ private:
 	}
 	void print_stats() {
 		stat_timer.once(1);
-		std::cout << "requests received/responses sent (during last second)=" << requests_received << "/" << responses_sent << std::endl;
+		std::cout << "requests received/responses sent (during last second)=" << requests_received << "/"
+		          << responses_sent << std::endl;
 		//		if (!clients.empty()) {
 		//			std::cout << "Client.front read=" << clients.front().total_read
 		//			          << " written=" << clients.front().total_written << std::endl;
 		//		}
 		requests_received = 0;
-		responses_sent = 0;
+		responses_sent    = 0;
 	}
 };
 
 class ApiServerApp {
 public:
-	explicit ApiServerApp(const crab::Address &bind_address)
-	: network(workers, bind_address) {
-//	, network2(workers, bind_address)
-//	, network3(workers, bind_address)
-//	, network4(workers, bind_address) {
-//		, network2(workers2, crab::Address("0.0.0.0:7001")) {
+	static crab::TCPAcceptor::Settings setts() {
+		crab::TCPAcceptor::Settings result;
+		result.reuse_addr  = true;
+		result.reuse_port  = true;
+		result.tcp_nodelay = true;
+		return result;
 	}
+	explicit ApiServerApp(const crab::Address &bind_address) : network(workers, bind_address, setts()) {
+		//		, network2(workers2, crab::Address("0.0.0.0:7001")) {
+		for (size_t i = 0; i != 4; ++i)
+			network_threads.emplace_back(&ApiServerApp::thread_fun, this, bind_address);
+	}
+	// TODO - stop network_threads
+
 private:
 	ApiWorkers workers;
-//	ApiWorkers workers2;
 	ApiNetwork network;
-//	ApiNetwork network2;
-//	ApiNetwork network3;
-//	ApiNetwork network4;
+	std::vector<std::thread> network_threads;
+
+	void thread_fun(const crab::Address &bind_address) {
+		crab::RunLoop runloop;
+
+		ApiNetwork network2(workers, bind_address, setts());
+
+		runloop.run();
+	}
 };
 
 int main(int argc, char *argv[]) {
