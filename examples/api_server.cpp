@@ -8,29 +8,31 @@
 #include <crab/crab.hpp>
 
 const bool debug = false;
+enum { HEADER_SIZE = 16};
 
+class Client;
 class ApiWorkers {
 public:
-	struct Output {
-
+	struct OutputQueue;
+	struct WorkItem {
+		OutputQueue *output_queue = nullptr;
+		void *client         = nullptr;  // TODO - fix this crap. We never destroy clients, so pointer is safe
+		size_t client_id       = 0;  // But client ids change, so we know the work done is for disconnected one
+		crab::Buffer request{0};
+		crab::Buffer response{0};
 	};
-};
+	struct OutputQueue {
+		std::mutex worker_responses_mutex;
+		std::deque<WorkItem> worker_responses;
+		crab::Watcher worker_ready_ab;
 
-class ApiNetwork {
-public:
-};
-
-class ApiServerApp {
-public:
-	explicit ApiServerApp(const crab::Address &bind_address)
-	    : la_socket(bind_address, [&]() { accept_all(); })
-	    , worker_ready_ab([&]() { on_worker_ready_ab(); })
-	    , stat_timer([&]() { print_stats(); }) {
-		print_stats();
+		explicit OutputQueue(crab::Handler && handler):worker_ready_ab(std::move(handler)){}
+	};
+	ApiWorkers() {
 		for (size_t i = 0; i != 1; ++i)
-			worker_threads.emplace_back(&ApiServerApp::worker_fun, this);
+			worker_threads.emplace_back(&ApiWorkers::worker_fun, this);
 	}
-	~ApiServerApp() {
+	~ApiWorkers() {
 		{
 			std::unique_lock<std::mutex> lock(worker_requests_mutex);
 			worker_should_quit = true;
@@ -40,7 +42,64 @@ public:
 			th.join();
 	}
 
+	static void process_work_item(const crab::Buffer &request, crab::Buffer &response) {
+		size_t len = request.size();
+		response.clear(HEADER_SIZE + len);
+		response.write(reinterpret_cast<const uint8_t *>(&len), 4);
+		response.did_write(HEADER_SIZE - 4);  // TODO security issue, uninitialized memory
+		response.did_write(len);              // TODO security issue, uninitialized memory
+	}
+	void add_work(WorkItem && work_item) {
+		std::unique_lock<std::mutex> lock(worker_requests_mutex);
+		worker_requests.push_back(std::move(work_item));
+		worker_requests_cond.notify_one();
+	}
 private:
+	std::mutex worker_requests_mutex;
+	bool worker_should_quit = false;
+	std::condition_variable worker_requests_cond;
+	std::deque<WorkItem> worker_requests;
+
+	std::vector<std::thread> worker_threads;
+
+	void worker_fun() {
+		WorkItem work_item;
+		while (true) {
+			{
+				std::unique_lock<std::mutex> lock(worker_requests_mutex);
+				if (worker_should_quit)
+					return;
+				if (worker_requests.empty()) {
+					worker_requests_cond.wait(lock);
+					continue;
+				}
+				work_item = std::move(worker_requests.front());
+				worker_requests.pop_front();
+			}
+			process_work_item(work_item.request, work_item.response);
+			auto output_queue = work_item.output_queue;
+			{
+				std::unique_lock<std::mutex> lock(output_queue->worker_responses_mutex);
+				output_queue->worker_responses.push_back(std::move(work_item));
+			}
+			output_queue->worker_ready_ab.call();  // Wake up correct network thread
+		}
+	}
+};
+
+
+class ApiNetwork {
+public:
+	explicit ApiNetwork(ApiWorkers & api_workers, const crab::Address &bind_address)
+	    : api_workers(api_workers)
+	    , la_socket(bind_address, [&]() { accept_all(); })
+	    , output_queue([&]() { on_worker_ready_ab(); })
+	    , stat_timer([&]() { print_stats(); }) {
+		print_stats();
+	}
+
+private:
+	ApiWorkers & api_workers;
 	crab::TCPAcceptor la_socket;
 
 	// Client states
@@ -102,63 +161,13 @@ private:
 	// callbacks for such clients are ignored
 	// client is put in fair_queue if it has more than 1 request pending (sending batch requests)
 
-	struct WorkItem {
-		crab::Watcher *watcher = nullptr;
-		Client *client         = nullptr;  // We never destroy clients, so pointer is safe
-		size_t client_id       = 0;  // But client ids change, so we know the work done is for disconnected one
-		crab::Buffer request{0};
-		crab::Buffer response{0};
-	};
-	std::mutex worker_requests_mutex;
-	bool worker_should_quit = false;
-	std::condition_variable worker_requests_cond;
-	std::deque<WorkItem> worker_requests;
-
-	std::mutex worker_responses_mutex;
-	std::deque<WorkItem> worker_responses;
-	std::deque<WorkItem> worker_responses_taken;
-	crab::Watcher worker_ready_ab;
-
-	std::vector<std::thread> worker_threads;
-
-	static void process_work_item(const crab::Buffer &request, crab::Buffer &response) {
-		size_t len = request.size();
-		response.clear(HEADER_SIZE + len);
-		response.write(reinterpret_cast<const uint8_t *>(&len), 4);
-		response.did_write(HEADER_SIZE - 4);  // TODO security issue, uninitialized memory
-		response.did_write(len);              // TODO security issue, uninitialized memory
-	}
-	void worker_fun() {
-		WorkItem work_item;
-		while (true) {
-			{
-				std::unique_lock<std::mutex> lock(worker_requests_mutex);
-				if (worker_should_quit)
-					return;
-				if (worker_requests.empty()) {
-					worker_requests_cond.wait(lock);
-					continue;
-				}
-				work_item = std::move(worker_requests.front());
-				worker_requests.pop_front();
-			}
-			process_work_item(work_item.request, work_item.response);
-			auto watcher = work_item.watcher;
-			{
-				std::unique_lock<std::mutex> lock(worker_responses_mutex);
-				worker_responses.push_back(std::move(work_item));
-			}
-			watcher->call();  // Wake up correct network thread
-		}
-	}
+	ApiWorkers::OutputQueue output_queue;
 
 	// IntrusiveList is good as a queue due to O(1) removal cost and auto-remove in Node destructor
 
 	crab::Timer stat_timer;
 	size_t requests_received = 0;
 	size_t responses_sent = 0;
-
-	enum { HEADER_SIZE = 16 };
 
 	//	void on_idle() {
 	//		const size_t MAX_COUNTER = 1;
@@ -262,7 +271,7 @@ private:
 			crab::Buffer request = std::move(client.requests.front());
 			client.requests.pop_front();
 			crab::Buffer response{0};
-			process_work_item(request, response);
+			ApiWorkers::process_work_item(request, response);
 
 			total_requests_memory -= request.capacity();
 			total_response_memory += response.capacity();
@@ -272,15 +281,15 @@ private:
 			return true;
 		}
 		total_response_memory += max_response_length;
-		std::unique_lock<std::mutex> lock(worker_requests_mutex);
-		worker_requests.emplace_back();
-		worker_requests.back().watcher   = &worker_ready_ab;
-		worker_requests.back().client_id = client.client_id;
-		worker_requests.back().client    = &client;
-		worker_requests.back().request   = std::move(client.requests.front());
+		ApiWorkers::WorkItem work_item;
+		work_item.output_queue   = &output_queue;
+		work_item.client_id = client.client_id;
+		work_item.client    = &client;
+		work_item.request   = std::move(client.requests.front());
 		client.requests.pop_front();
 		client.requests_in_work += 1;
-		worker_requests_cond.notify_one();
+
+		api_workers.add_work(std::move(work_item));
 		return true;
 	}
 	void run_workers_fair() {
@@ -295,25 +304,27 @@ private:
 				response_memory_queue.push_back(client);
 		}
 	}
+	std::deque<ApiWorkers::WorkItem> worker_responses_taken;
 	void on_worker_ready_ab() {
 		{
 			// Do not stop workers pushing into worker_responses, do not allocate memory
-			std::unique_lock<std::mutex> lock(worker_responses_mutex);
-			worker_responses_taken.swap(worker_responses);  // each iteration 2 containers are swapped
+			std::unique_lock<std::mutex> lock(output_queue.worker_responses_mutex);
+			worker_responses_taken.swap(output_queue.worker_responses);  // each iteration 2 containers are swapped
 		}
 		for (auto &w : worker_responses_taken) {
 			total_response_memory -= max_response_length;
 			total_requests_memory -= w.request.capacity();
-			if (w.client->client_id != w.client_id) {  // Disconnected/reconnected
+			Client & client = *reinterpret_cast<Client *>(w.client);
+			if (client.client_id != w.client_id) {  // Disconnected/reconnected
 				continue;
 			}
 			total_response_memory += w.response.capacity();
-			w.client->requests_in_work -= 1;
+			client.requests_in_work -= 1;
 			responses_sent += 1;
 			//			const bool was_empty = w.client->responses.empty();
-			w.client->responses.push_back(std::move(w.response));
+			client.responses.push_back(std::move(w.response));
 			//			if (was_empty) // TODO - check if this optimization is useful
-			send_responses(*w.client);
+			send_responses(client);
 		}
 		worker_responses_taken.clear();
 		read_requests_fair(); // if we read header, we could need to read body
@@ -429,6 +440,24 @@ private:
 		requests_received = 0;
 		responses_sent = 0;
 	}
+};
+
+class ApiServerApp {
+public:
+	explicit ApiServerApp(const crab::Address &bind_address)
+	: network(workers, bind_address) {
+//	, network2(workers, bind_address)
+//	, network3(workers, bind_address)
+//	, network4(workers, bind_address) {
+//		, network2(workers2, crab::Address("0.0.0.0:7001")) {
+	}
+private:
+	ApiWorkers workers;
+//	ApiWorkers workers2;
+	ApiNetwork network;
+//	ApiNetwork network2;
+//	ApiNetwork network3;
+//	ApiNetwork network4;
 };
 
 int main(int argc, char *argv[]) {

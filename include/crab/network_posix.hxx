@@ -70,7 +70,7 @@ CRAB_INLINE void FileDescriptor::reset(int new_value) {
 constexpr int MAX_EVENTS = 512;
 
 CRAB_INLINE void setsockopt_1(int fd, int level, int optname) {
-	int set;
+	int set = 1;
 	check(setsockopt(fd, level, optname, &set, sizeof(set)) >= 0, "crab::setsockopt failed");
 }
 
@@ -475,6 +475,7 @@ CRAB_INLINE TCPAcceptor::TCPAcceptor(const Address &address, Handler &&cb)
 	details::setsockopt_1(tmp.get_value(), SOL_SOCKET, SO_NOSIGPIPE);
 #endif
 	details::setsockopt_1(tmp.get_value(), SOL_SOCKET, SO_REUSEADDR);
+	details::setsockopt_1(tmp.get_value(), SOL_SOCKET, SO_REUSEPORT); // TODO - do not commit with this to master, add settings
 
 	if (::bind(tmp.get_value(), address.impl_get_sockaddr(), address.impl_get_sockaddr_length()) < 0) {
 		std::stringstream ss;
