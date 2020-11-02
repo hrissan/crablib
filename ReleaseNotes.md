@@ -1,9 +1,16 @@
 ## Release Notes
 
+### 0.9.2
+
+- example of fair resource-bound API server. TODO - improve example
+
 ### 0.9.1
 
-- `optional` moved out of `details` namespace
-- example of fair resource-bound API server. TODO - improve example
+*Low level*
+- `optional` moved out of `details` namespace, tiny fix in optional
+
+*Bugs fixed*
+- When setting socket options to 1, they were set to uninitialized value instead. Worked because luck plus `true = anything non-zero`.  
 
 ### 0.9.0
 
