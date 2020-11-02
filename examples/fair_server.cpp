@@ -57,7 +57,7 @@ private:
 		// we will call epoll() once per MAX_COUNTER messages, trading latency for throughput
 		size_t counter = 0;
 		while (!fair_queue.empty() && counter++ < MAX_COUNTER) {
-			Client &c = *fair_queue.begin();
+			Client &c = fair_queue.front();
 			c.fair_queue_node.unlink();
 			if (process_single_request(c)) {
 				continue;
