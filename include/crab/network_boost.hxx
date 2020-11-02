@@ -14,7 +14,7 @@
 
 // This impl is currently outdated and contains some bugs
 // TODO - trampoline counters, like in Windows impl
-// TODO - SignalStop
+// TODO - Signal
 // TODO - check TCPSocket state machine
 // TODO - convert std::chrono time points into boost
 // TODO - UDP
@@ -179,11 +179,11 @@ CRAB_INLINE void Timer::once_at(steady_clock::time_point time_point) {
 	throw std::logic_error("TODO - implement");  // How to convert std::chrono to boost?
 }
 
-CRAB_INLINE bool SignalStop::running_under_debugger() { return false; }
+CRAB_INLINE bool Signal::running_under_debugger() { return false; }
 
-CRAB_INLINE SignalStop::SignalStop(Handler &&cb) : a_handler(std::move(cb)) {}
+CRAB_INLINE Signal::Signal(Handler &&cb, const std::vector<int> &) : a_handler(std::move(cb)) {}
 
-CRAB_INLINE SignalStop::~SignalStop() = default;
+CRAB_INLINE Signal::Signal default;
 
 struct TCPSocketImpl {
 	explicit TCPSocketImpl(TCPSocket *owner) : owner(owner), socket(RunLoop::current()->get_impl()->io) {}

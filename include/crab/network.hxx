@@ -71,6 +71,11 @@ CRAB_INLINE void Callable::add_pending_callable(bool can_read, bool can_write) {
 	this->can_read  = this->can_read || can_read;
 	this->can_write = this->can_write || can_write;
 }
+
+#else
+
+CRAB_INLINE bool Idle::is_active() { return idle_node.in_list(); }
+
 #endif
 
 #if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL || CRAB_IMPL_WINDOWS
@@ -137,7 +142,10 @@ CRAB_INLINE void RunLoopLinks::trigger_called_watchers() {
 }
 }  // namespace details
 
-CRAB_INLINE void RunLoop::cancel() { links.quit = true; }
+CRAB_INLINE void RunLoop::cancel() {
+	links.quit = true;
+	wakeup();
+}
 
 CRAB_INLINE void RunLoop::run() {
 	links.quit = false;
@@ -172,6 +180,37 @@ CRAB_INLINE void RunLoop::run() {
 }
 
 CRAB_INLINE steady_clock::time_point RunLoop::now() { return links.now; }
+
+CRAB_INLINE Thread::Thread(std::function<void()> &&fun)
+    : th([&] {
+	    RunLoop run_loop;
+	    {
+		    std::unique_lock<std::mutex> lock(mu);
+		    run_loop_ptr = &run_loop;
+		    started      = true;  // From this point we have run_loop_ptr pointing to valid object
+		    cond.notify_one();
+	    }
+	    scope_exit defer([&] {
+		    std::unique_lock<std::mutex> lock(mu);
+		    run_loop_ptr = nullptr;
+		    // We do not call cond->notify_one() because we never wait on that condition
+	    });
+	    fun();
+    }) {
+	std::unique_lock<std::mutex> lock(mu);
+	cond.wait(lock, [&]() -> bool { return started; });
+}
+
+CRAB_INLINE Thread::~Thread() {
+	cancel();
+	th.join();
+}
+
+CRAB_INLINE void Thread::cancel() {
+	std::unique_lock<std::mutex> lock(mu);
+	if (run_loop_ptr)
+		run_loop_ptr->cancel();
+}
 
 CRAB_INLINE void Timer::once(double delay_seconds) {
 	const auto now = RunLoop::current()->links.now;

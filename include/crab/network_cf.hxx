@@ -91,11 +91,11 @@ CRAB_INLINE void Idle::set_active(bool a) {
 	}
 }
 
-CRAB_INLINE SignalStop::SignalStop(Handler &&cb) : a_handler(std::move(cb)) {}
+CRAB_INLINE Signal::Signal(Handler &&cb, const std::vector<int> &) : a_handler(std::move(cb)) {}
 
-CRAB_INLINE SignalStop::~SignalStop() {}
+CRAB_INLINE Signal::~Signal() {}
 
-CRAB_INLINE bool SignalStop::running_under_debugger() { return false; }
+CRAB_INLINE bool Signal::running_under_debugger() { return false; }
 
 CRAB_INLINE RunLoop::RunLoop() {
 	if (CurrentLoop::instance)

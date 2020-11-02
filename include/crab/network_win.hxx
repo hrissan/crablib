@@ -158,13 +158,16 @@ CRAB_INLINE void RunLoop::wakeup() {
 		throw std::runtime_error("crab::Watcher::call PostQueuedCompletionStatus failed");
 }
 
-CRAB_INLINE void RunLoop::cancel() { links.quit = true; }
+CRAB_INLINE void RunLoop::cancel() {
+	links.quit = true;
+	wakeup();
+}
 
 CRAB_INLINE bool SignalStop::running_under_debugger() { return false; }
 
-CRAB_INLINE SignalStop::SignalStop(Handler &&cb) : a_handler(std::move(cb)) {}
+CRAB_INLINE Signal::Signal(Handler &&cb, const std::vector<int> &) : a_handler(std::move(cb)) {}
 
-CRAB_INLINE SignalStop::~SignalStop() = default;
+CRAB_INLINE Signal::~Signal() = default;
 
 struct TCPSocketImpl {
 	explicit TCPSocketImpl(TCPSocket *owner)

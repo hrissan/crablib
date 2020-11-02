@@ -77,7 +77,7 @@ int main(int argc, char *argv[]) {
 	std::cout << "This server proxies requests to another server" << std::endl;
 	crab::RunLoop runloop;
 
-	crab::SignalStop sig([&]() {
+	crab::Signal sig([&]() {
 		std::cout << "Good bye" << std::endl;
 		crab::RunLoop::current()->cancel();
 	});

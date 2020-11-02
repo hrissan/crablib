@@ -134,6 +134,7 @@ CRAB_INLINE void RunLoop::wakeup() {
 	struct kevent changeLst {
 		details::EVFILT_USER_WAKEUP, EVFILT_USER, 0, NOTE_TRIGGER, 0, &wake_callable
 	};
+	// TODO - check if EV_ONESHOT should be added
 	details::check(kevent(efd.get_value(), &changeLst, 1, 0, 0, NULL) >= 0, "crab::RunLoop::wakeup");
 }
 
@@ -157,23 +158,27 @@ CRAB_INLINE void RunLoop::step(int timeout_ms) {
 	}
 }
 
-CRAB_INLINE SignalStop::SignalStop(Handler &&cb) : a_handler(std::move(cb)) {
-	signal(SIGINT, SIG_IGN);
-	signal(SIGTERM, SIG_IGN);
+CRAB_INLINE Signal::Signal(Handler &&cb, const std::vector<int> &ss) : a_handler(std::move(cb)), signals(ss) {
+	if (signals.empty()) {
+		signals.push_back(SIGINT);
+		signals.push_back(SIGTERM);
+	}
+	for (auto s : this->signals)
+		signal(s, SIG_IGN);
 
 	struct kevent changes[] = {
 	    {SIGINT, EVFILT_SIGNAL, EV_ADD, 0, 0, &a_handler}, {SIGTERM, EVFILT_SIGNAL, EV_ADD, 0, 0, &a_handler}};
-	details::check(kevent(RunLoop::current()->efd.get_value(), changes, 2, 0, 0, NULL) >= 0,
-	    "crab::SignalStop impl_kevent failed");
+	details::check(
+	    kevent(RunLoop::current()->efd.get_value(), changes, 2, 0, 0, NULL) >= 0, "crab::Signal impl_kevent failed");
 }
 
-CRAB_INLINE SignalStop::~SignalStop() {
+CRAB_INLINE Signal::~Signal() {
 	// We do not remember if signals were enabled
-	signal(SIGINT, SIG_DFL);
-	signal(SIGTERM, SIG_DFL);
+	for (auto s : signals)
+		signal(s, SIG_DFL);
 }
 
-CRAB_INLINE bool SignalStop::running_under_debugger() { return false; }
+CRAB_INLINE bool Signal::running_under_debugger() { return false; }
 
 #elif CRAB_IMPL_EPOLL
 
@@ -227,7 +232,7 @@ CRAB_INLINE void RunLoop::wakeup() {
 	details::check(eventfd_write(wake_fd.get_value(), 1) >= 0, "crab::RunLoop wake_fd counter overflow");
 }
 
-CRAB_INLINE SignalStop::SignalStop(Handler &&cb)
+CRAB_INLINE Signal::Signal(Handler &&cb, const std::vector<int> &ss)
     : a_handler([&, cb]() {  // cb = std::move(cb) is C++14, we will keep C++11 compatibility for some time
 	    signalfd_siginfo info{};
 	    while (true) {
@@ -238,29 +243,35 @@ CRAB_INLINE SignalStop::SignalStop(Handler &&cb)
 		    // Condition (bytes >= sizeof(info) && info.ssi_pid == 0) is true if called from terminal
 	    }
 	    cb();
-    }) {
+    })
+    , signals(ss) {
+	if (signals.empty()) {
+		signals.push_back(SIGINT);
+		signals.push_back(SIGTERM);
+	}
+
 	sigset_t mask;
 	sigemptyset(&mask);
-	sigaddset(&mask, SIGINT);
-	sigaddset(&mask, SIGTERM);
-	details::check(sigprocmask(SIG_BLOCK, &mask, nullptr) >= 0, "crab::Signal sigprocmask failed");
+	for (auto s : signals)
+		sigaddset(&mask, s);
+	details::check(pthread_sigmask(SIG_BLOCK, &mask, nullptr) >= 0, "crab::Signal pthread_sigmask failed");
 	fd.reset(signalfd(-1, &mask, 0));
 	details::check(fd.get_value() >= 0, "crab::Signal signalfd failed");
 	details::set_nonblocking(fd.get_value());
 	RunLoop::current()->impl_add_callable_fd(fd.get_value(), &this->a_handler, true, false);
 }
 
-CRAB_INLINE SignalStop::~SignalStop() {
+CRAB_INLINE Signal::~Signal() {
 	// We do not remember if signals were enabled
 	sigset_t mask;
 	sigemptyset(&mask);
-	sigaddset(&mask, SIGINT);
-	sigaddset(&mask, SIGTERM);
-	if (sigprocmask(SIG_UNBLOCK, &mask, nullptr) < 0)
-		std::cout << "crab::~Signal restoring sigprocmask failed" << std::endl;
+	for (auto s : signals)
+		sigaddset(&mask, s);
+	if (pthread_sigmask(SIG_UNBLOCK, &mask, nullptr) < 0)
+		std::cout << "crab::~Signal restoring pthread_sigmask failed" << std::endl;
 }
 
-CRAB_INLINE bool SignalStop::running_under_debugger() {
+CRAB_INLINE bool Signal::running_under_debugger() {
 	// https://forum.juce.com/t/detecting-if-a-process-is-being-run-under-a-debugger/2098
 	static int underDebugger = 2;
 	if (underDebugger == 2) {

@@ -234,4 +234,11 @@ private:
 #define CRAB_DEPRECATED
 #endif
 
+class scope_exit : private Nocopy {
+public:
+	explicit scope_exit(std::function<void()> &&cb) : callback(std::move(cb)) {}
+	~scope_exit() { callback(); }  // if callback throws, we will exit die to implicit nothrow()
+private:
+	std::function<void()> callback;
+};
 }  // namespace crab

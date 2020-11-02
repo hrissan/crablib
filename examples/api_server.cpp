@@ -454,25 +454,29 @@ public:
 		result.tcp_nodelay = true;
 		return result;
 	}
-	explicit ApiServerApp(const crab::Address &bind_address) : network(workers, bind_address, setts()) {
-		//		, network2(workers2, crab::Address("0.0.0.0:7001")) {
-		for (size_t i = 0; i != 4; ++i)
-			network_threads.emplace_back(&ApiServerApp::thread_fun, this, bind_address);
+	explicit ApiServerApp(const crab::Address &bind_address)
+	    : stop([&]() { stop_network(); }), network(workers, bind_address, setts()) {
+		for (size_t i = 0; i != 3; ++i)
+			network_threads.emplace_back([this, bind_address]() {
+				ApiNetwork network2(workers, bind_address, setts());
+
+				crab::RunLoop::current()->run();
+			});
+		//		timer.once(10);
 	}
-	// TODO - stop network_threads
 
 private:
+	void stop_network() {
+		std::cout << "Signal Stop Received" << std::endl;
+		for (auto &th : network_threads)
+			th.cancel();
+		crab::RunLoop::current()->cancel();
+	}
+	crab::SignalStop stop;  // Must be created before other threads
 	ApiWorkers workers;
 	ApiNetwork network;
-	std::vector<std::thread> network_threads;
-
-	void thread_fun(const crab::Address &bind_address) {
-		crab::RunLoop runloop;
-
-		ApiNetwork network2(workers, bind_address, setts());
-
-		runloop.run();
-	}
+	std::list<crab::Thread> network_threads;
+	//	crab::Timer timer;
 };
 
 int main(int argc, char *argv[]) {
@@ -485,10 +489,13 @@ int main(int argc, char *argv[]) {
 		std::cout << "Usage: api_server <port>" << std::endl;
 		return 0;
 	}
-	crab::RunLoop runloop;
+	{
+		crab::RunLoop runloop;
 
-	ApiServerApp app(crab::Address("0.0.0.0", crab::integer_cast<uint16_t>(argv[1])));
+		ApiServerApp app(crab::Address("0.0.0.0", crab::integer_cast<uint16_t>(argv[1])));
 
-	runloop.run();
+		runloop.run();
+	}
+	std::cout << "Good Bye" << std::endl;
 	return 0;
 }

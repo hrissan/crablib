@@ -46,7 +46,7 @@ class RunLoop;
 class Timer;
 class Idle;
 class Watcher;
-class SignalStop;
+class Signal;
 class TCPSocket;
 class TCPAcceptor;
 

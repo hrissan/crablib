@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include <condition_variable>
 #include <iosfwd>
 #include <memory>
 #include <mutex>
@@ -107,25 +108,30 @@ private:
 #endif
 };
 
-// Handler of both SIGINT and SIGTERM, if you need to do something on Ctrl-C
+// Handler of POSIX signals, if you need to do something on Ctrl-C
+
 // Very platform-dependent, must be created in main thread before other threads
 // are started, due to signal masks being per thread and inherited
+
+// When signals array is empty, SIGINT and SIGTERM are detected on POSIX, while
+// on Windows Ctrl-C in terminal is detected, so empty list of signals is sort-of portable
 
 // Does not prevent SIGTRIP (sudden loss of power :) though, beware
 
 // Common approach is call RunLoop::current()->cancel() in handler, and make
 // application components destructors to close/flush/commit all held resources.
-class SignalStop {
+class Signal {
 public:
-	explicit SignalStop(Handler &&cb);
+	explicit Signal(Handler &&cb, const std::vector<int> &signals = std::vector<int>{});
 	void set_handler(Handler &&cb) { a_handler.handler = std::move(cb); }
-	~SignalStop();
+	~Signal();
 
 	static bool running_under_debugger();
-	// Sometimes signals interfere with debugger. Use this fun to conditionally create SignalStop
+	// Sometimes signals interfere with debugger. Use this fun to conditionally create Signal
 private:
 	Callable a_handler;
 #if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL
+	std::vector<int> signals;
 	details::FileDescriptor fd;
 #elif CRAB_IMPL_LIBEV
 	// TODO
@@ -135,6 +141,8 @@ private:
 	// on Windows we can use https://stackoverflow.com/questions/18291284/handle-ctrlc-on-win32
 #endif
 };
+
+typedef Signal CRAB_DEPRECATED SignalStop;  // use single-argument constructor of Signal instead
 
 class Address {
 public:
@@ -383,7 +391,7 @@ struct RunLoopLinks : private Nocopy {  // Common structure when implementing ov
 
 	IntrusiveList<Callable, &Callable::triggered_callables_node> triggered_callables;
 	steady_clock::time_point now = steady_clock::now();
-	bool quit                    = true;
+	std::atomic<bool> quit{true};  // Before running for the first time, RunLoop is in quit state
 
 	bool process_timer(int &timeout_ms);
 
@@ -398,11 +406,11 @@ struct RunLoopLinks : private Nocopy {  // Common structure when implementing ov
 }  // namespace details
 #endif
 
-class RunLoop {
+class RunLoop : private Nocopy {
 public:
 #if CRAB_IMPL_LIBEV
 	// TODO - remove after KITTEN is cured
-	enum DefaultLoop {};
+	enum DefaultLoop{};
 	explicit RunLoop(DefaultLoop);
 #endif
 	RunLoop();
@@ -411,7 +419,7 @@ public:
 	static RunLoop *current() { return CurrentLoop::instance; }
 
 	void run();     // run until cancel
-	void cancel();  // do not call from other threads, use Watcher.
+	void cancel();  // The only fun allowed to be called from different threads (except Watcher::call)
 
 	steady_clock::time_point now();
 	// will update max 1 per loop iteration. This saves a lot on syscalls, when moving 500
@@ -431,6 +439,7 @@ public:
 #else
 	RunLoopImpl *get_impl() const { return impl.get(); }
 #endif
+
 private:
 	void step(int timeout_ms = MAX_SLEEP_MS);
 	void wakeup();
@@ -439,7 +448,7 @@ private:
 	friend class Idle;
 	friend struct Callable;
 	friend class Watcher;
-	friend class SignalStop;
+	friend class Signal;
 
 	using CurrentLoop = details::StaticHolderTL<RunLoop *>;
 
@@ -466,6 +475,22 @@ private:
 #else
 	std::unique_ptr<RunLoopImpl> impl;
 #endif
+};
+
+// Experimental, safe creation and cancellation of other threads with RunLoops
+// Not movable/copyable so use std::list<Thread> instead of std::vector
+class Thread : private Nocopy {
+public:
+	// forwarding to thread constructor requires strong magic, we use simple lambda, but beware captured lifetimes!
+	explicit Thread(std::function<void()> &&fun);
+	void cancel();  // It is faster to cancel a bunch of Threads, then wait them one by one
+	~Thread();      // cancels RunLoop, then joins thread
+private:
+	RunLoop *run_loop_ptr = nullptr;
+	bool started          = false;  // We need separate condition, because we have 3 states
+	std::mutex mu;
+	std::condition_variable cond;
+	std::thread th;
 };
 
 class DNSResolver {
