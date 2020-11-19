@@ -2,6 +2,7 @@
 
 ### 0.9.2
 
+- fixed bug when HTTP Time header was cached by server for 500 seconds, not milliseconds
 - example of fair resource-bound API server. TODO - improve example
 
 ### 0.9.1

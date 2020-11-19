@@ -24,7 +24,7 @@ CRAB_INLINE void Client::write(Response &&response) {
 	// HTTP message length design is utter crap, we should conform better...
 	// https://www.w3.org/Protocols/rfc2616/rfc2616-sec4.html#sec4.4
 	if (response.header.date.empty())
-		response.header.date = Server::get_date();
+		response.header.date = Server::get_date();  // We avoid pointer to server
 	ServerConnection::write(std::move(response));
 	d_handler = nullptr;
 }
@@ -68,10 +68,10 @@ CRAB_INLINE void Client::postpone_response(Handler &&cb) {
 	d_handler = std::move(cb);
 }
 
-CRAB_INLINE void Client::start_write_stream(ResponseHeader &&response, Handler &&cb) {
+CRAB_INLINE void Client::start_write_stream(ResponseHeader &response, Handler &&cb) {
 	if (response.date.empty())
-		response.date = Server::get_date();
-	ServerConnection::write(std::move(response));
+		response.date = Server::get_date();  // We avoid pointer to server
+	ServerConnection::write(response);
 	d_handler     = nullptr;
 	rwd_handler   = std::move(cb);
 	body_position = 0;
@@ -90,11 +90,13 @@ CRAB_INLINE Server::Server(const Address &address) : la_socket{address, std::bin
 CRAB_INLINE Server::~Server() = default;  // we use incomplete types
 
 CRAB_INLINE const std::string &Server::get_date() {
-	auto &inst = CurrentTimeCache::instance;
-	auto now   = std::chrono::system_clock::now();
-	if (std::chrono::duration_cast<std::chrono::seconds>(now - inst.cached_time_point).count() > 500) {
+	using namespace std::chrono;
+	auto &inst       = CurrentTimeCache::instance;
+	auto now         = RunLoop::current()->now();
+	const auto delta = duration_cast<steady_clock::duration>(milliseconds(500));  // Approximate
+	if (now > inst.cached_time_point + delta) {
 		inst.cached_time_point = now;
-		std::time_t end_time   = std::chrono::system_clock::to_time_t(now);
+		std::time_t end_time   = system_clock::to_time_t(system_clock::now());
 		struct ::tm tm {};
 #if defined(_WIN32)
 		gmtime_s(&tm, &end_time);

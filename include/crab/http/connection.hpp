@@ -166,8 +166,9 @@ public:
 	void web_socket_upgrade();                            // Will throw if not upgradable
 
 	// Streaming protocol, first write response/web message header, then stream data
-	void write(ResponseHeader &&resp, BufferOptions bo = WRITE);  // Write header now, body later
-	void write(WebMessageOpcode opcode);                          // Buffer header now, body later
+	// Will fill response date (if empty), version, keep_alive
+	void write(ResponseHeader &resp, BufferOptions bo = WRITE);  // Write header now, body later
+	void write(WebMessageOpcode opcode);                         // Buffer header now, body later
 
 	void write(const uint8_t *val, size_t count, BufferOptions bo = WRITE);  // Write body chunk
 	void write(const char *val, size_t count, BufferOptions bo = WRITE) { write(uint8_cast(val), count, bo); }

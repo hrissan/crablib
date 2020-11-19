@@ -43,7 +43,8 @@ public:
 	void write(WebMessage &&wm);
 
 	// start streaming response (scb will be called in socket-like fashion on all events)
-	void start_write_stream(ResponseHeader &&response, Handler &&scb);
+	// Will fill response date (if empty), version, keep_alive
+	void start_write_stream(ResponseHeader &response, Handler &&scb);
 	void start_write_stream(WebMessageOpcode opcode, Handler &&scb);
 
 	// when streaming, check if space in write buffer available, is connection closed and get write position
@@ -92,7 +93,7 @@ public:
 
 private:
 	struct TimeCache {
-		std::chrono::system_clock::time_point cached_time_point{};
+		std::chrono::steady_clock::time_point cached_time_point{};
 		std::string cached_date;
 	};
 	using CurrentTimeCache = details::StaticHolderTL<TimeCache>;

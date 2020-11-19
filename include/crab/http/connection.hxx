@@ -452,10 +452,18 @@ CRAB_INLINE void ServerConnection::close() {
 CRAB_INLINE bool ServerConnection::read_next(Request &req) {
 	if (state != REQUEST_READY)
 		return false;
-	req.body   = http_body_parser.body.clear();
-	req.header = request_parser.req;
-	// We do not move req, because we must remember params for response
-	state = RESPONSE_HEADER;
+	req.body = http_body_parser.body.clear();
+	req.header = std::move(request_parser.req);
+	// We move req, but remember params for response. Hopefully compiler will optimize some assignments
+	request_parser.req.method                = req.header.method;
+	request_parser.req.http_version_major    = req.header.http_version_major;
+	request_parser.req.http_version_minor    = req.header.http_version_minor;
+	request_parser.req.connection_upgrade    = req.header.connection_upgrade;
+	request_parser.req.keep_alive            = req.header.keep_alive;
+	request_parser.req.sec_websocket_key     = req.header.sec_websocket_key;
+	request_parser.req.sec_websocket_version = req.header.sec_websocket_version;
+	request_parser.req.upgrade_websocket     = req.header.upgrade_websocket;
+	state                                    = RESPONSE_HEADER;
 	advance_state();
 	return true;
 }
@@ -498,14 +506,14 @@ CRAB_INLINE void ServerConnection::write(Response &&resp) {
 	if (!is_open())
 		return;  // This NOP simplifies state machines of connection users
 	const bool transfer_encoding_chunked = resp.header.transfer_encoding_chunked;
-	write(std::move(resp.header), BUFFER_ONLY);
+	write(resp.header, BUFFER_ONLY);
 	write(std::move(resp.body), transfer_encoding_chunked ? BUFFER_ONLY : WRITE);
 	if (transfer_encoding_chunked)
 		write_last_chunk();  // Otherwise, state is already switched into RECEIVE_HEADER
 		                     // shutdown is already written during switch to RECEIVE_HEADER
 }
 
-CRAB_INLINE void ServerConnection::write(ResponseHeader &&resp, BufferOptions bo) {
+CRAB_INLINE void ServerConnection::write(ResponseHeader &resp, BufferOptions bo) {
 	// TODO - if this fun is used instead of
 	if (!is_open())
 		return;  // This NOP simplifies state machines of connection users
