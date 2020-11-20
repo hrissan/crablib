@@ -183,7 +183,7 @@ namespace details {
 // We have to declare settings outside, due to
 // https://stackoverflow.com/questions/17430377/error-when-using-in-class-initialization-of-non-static-data-member-and-nested-cl
 struct TCPSocketSettings {
-	bool tcp_nodelay   = true;
+	bool tcp_delay     = false;
 	size_t sndbuf_size = 0;  // 0 is do not set
 	size_t rcvbuf_size = 0;  // 0 is do not set
 };

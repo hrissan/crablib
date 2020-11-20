@@ -11,7 +11,11 @@ int test_http(size_t num, uint16_t port) {
 	std::string body = "Hello, Crab " + std::to_string(num) + "!";
 	crab::RunLoop runloop;
 
-	http::Server server(port);
+	http::Server::Settings settings{};
+	settings.reuse_addr = true;
+	settings.reuse_port = true;
+	settings.tcp_delay  = true;
+	http::Server server(crab::Address("0.0.0.0", port), settings);
 	server.r_handler = [&](http::Client *who, http::Request &&request) {
 		http::Response response;
 		response.header.status = 200;

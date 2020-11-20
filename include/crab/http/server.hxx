@@ -25,6 +25,8 @@ CRAB_INLINE void Client::write(Response &&response) {
 	// https://www.w3.org/Protocols/rfc2616/rfc2616-sec4.html#sec4.4
 	if (response.header.date.empty())
 		response.header.date = Server::get_date();  // We avoid pointer to server
+	if (response.header.server.empty())
+		response.header.server = "crab";
 	ServerConnection::write(std::move(response));
 	d_handler = nullptr;
 }
@@ -71,6 +73,8 @@ CRAB_INLINE void Client::postpone_response(Handler &&cb) {
 CRAB_INLINE void Client::start_write_stream(ResponseHeader &response, Handler &&cb) {
 	if (response.date.empty())
 		response.date = Server::get_date();  // We avoid pointer to server
+	if (response.server.empty())
+		response.server = "crab";
 	ServerConnection::write(response);
 	d_handler     = nullptr;
 	rwd_handler   = std::move(cb);
@@ -85,7 +89,8 @@ CRAB_INLINE void Client::start_write_stream(WebMessageOpcode opcode, Handler &&s
 	rwd_handler();  // Some data might are ready, so we call handler immediately. TODO - investigate consequences
 }
 
-CRAB_INLINE Server::Server(const Address &address) : la_socket{address, std::bind(&Server::accept_all, this)} {}
+CRAB_INLINE Server::Server(const Address &address, const Settings &settings)
+    : settings{settings}, acceptor{address, std::bind(&Server::accept_all, this), settings} {}
 
 CRAB_INLINE Server::~Server() = default;  // we use incomplete types
 
@@ -129,11 +134,11 @@ CRAB_INLINE void Server::on_client_handler(std::list<Client>::iterator it) {
 }
 
 CRAB_INLINE void Server::accept_all() {
-	while (la_socket.can_accept()) {  // && clients.size() < max_incoming_connections &&
+	while (acceptor.can_accept() && clients.size() < settings.max_connections) {
 		clients.emplace_back();
 		auto it = --clients.end();
 		it->set_handler([this, it]() { on_client_handler(it); });
-		it->accept(la_socket);
+		it->accept(acceptor);
 		//        std::cout << "HTTP Client accepted=" << cid << " addr=" << (*it)->get_peer_address() << std::endl;
 	}
 }
@@ -148,6 +153,7 @@ CRAB_INLINE void Server::on_client_disconnected(std::list<Client>::iterator it) 
 		who->ws_handler(WebMessage{WebMessageOpcode::CLOSE, {},
 		    who->web_message_close_sent ? WebMessage::CLOSE_STATUS_NORMAL : WebMessage::CLOSE_STATUS_DISCONNECT});
 	clients.erase(it);
+	accept_all();  // In case we were over limit
 }
 
 // Big TODO - reverse r_handler logic, so that user must explicitly call

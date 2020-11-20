@@ -449,9 +449,9 @@ class ApiServerApp {
 public:
 	static crab::TCPAcceptor::Settings setts() {
 		crab::TCPAcceptor::Settings result;
-		result.reuse_addr  = true;
-		result.reuse_port  = true;
-		result.tcp_nodelay = true;
+		result.reuse_addr = true;
+		result.reuse_port = true;
+		result.tcp_delay  = false;
 		return result;
 	}
 	explicit ApiServerApp(const crab::Address &bind_address)
@@ -472,7 +472,7 @@ private:
 			th.cancel();
 		crab::RunLoop::current()->cancel();
 	}
-	crab::SignalStop stop;  // Must be created before other threads
+	crab::Signal stop;  // Must be created before other threads
 	ApiWorkers workers;
 	ApiNetwork network;
 	std::list<crab::Thread> network_threads;

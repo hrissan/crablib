@@ -452,7 +452,7 @@ CRAB_INLINE void ServerConnection::close() {
 CRAB_INLINE bool ServerConnection::read_next(Request &req) {
 	if (state != REQUEST_READY)
 		return false;
-	req.body = http_body_parser.body.clear();
+	req.body   = http_body_parser.body.clear();
 	req.header = std::move(request_parser.req);
 	// We move req, but remember params for response. Hopefully compiler will optimize some assignments
 	request_parser.req.method                = req.header.method;

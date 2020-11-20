@@ -359,7 +359,7 @@ CRAB_INLINE bool TCPSocket::connect(const Address &address, const Settings &sett
 		    ::connect(tmp.get_value(), address.impl_get_sockaddr(), address.impl_get_sockaddr_length());
 		if (connect_result < 0 && errno != EINPROGRESS)
 			return false;
-		if (settings.tcp_nodelay)  // For compatibility, set after connect
+		if (!settings.tcp_delay)  // For compatibility, set after connect
 			details::setsockopt_int(tmp.get_value(), IPPROTO_TCP, TCP_NODELAY, 1);
 #if CRAB_IMPL_LIBEV
 		io_read.start(tmp.get_value(), ev::READ);
@@ -410,6 +410,7 @@ CRAB_INLINE size_t TCPSocket::read_some(uint8_t *data, size_t count) {
 		return 0;
 	RunLoop::current()->stats.RECV_count += 1;
 	RunLoop::current()->stats.push_record("recv", fd.get_value(), int(count));
+	// TODO - decide what happens when count is 0
 	ssize_t result = ::recv(fd.get_value(), data, count, details::CRAB_MSG_NOSIGNAL);
 	RunLoop::current()->stats.push_record("R(recv)", fd.get_value(), int(result));
 	if (result == 0) {  // remote closed
@@ -495,7 +496,7 @@ CRAB_INLINE TCPAcceptor::TCPAcceptor(const Address &address, Handler &&cb, const
 	if (settings.reuse_port)
 		details::setsockopt_int(tmp.get_value(), SOL_SOCKET, SO_REUSEPORT, 1);
 	// Settings below are inherited by accepted sockets. TODO - check TCP_NODELAY
-	if (settings.tcp_nodelay)
+	if (!settings.tcp_delay)
 		details::setsockopt_int(tmp.get_value(), IPPROTO_TCP, TCP_NODELAY, 1);
 	if (settings.sndbuf_size)
 		details::setsockopt_int(tmp.get_value(), SOL_SOCKET, SO_SNDBUF, integer_cast<int>(settings.sndbuf_size));

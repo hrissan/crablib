@@ -17,16 +17,20 @@ int main() {
 	http::Server server(7000);
 
 	server.r_handler = [&](http::Client *who, http::Request &&request) {
+		bool cond = false;
 		std::cout << "Request" << std::endl;
-		for (const auto &q : request.parse_query_params())
+		for (const auto &q : request.parse_query_params()) {
 			std::cout << "    '" << q.first << "' => '" << q.second << "'" << std::endl;
+			if (q.first == crab::Literal{"query"})
+				cond = true;
+		}
 		std::cout << "Cookies" << std::endl;
 		for (const auto &q : request.parse_cookies())
 			std::cout << "    '" << q.first << "' => '" << q.second << "'" << std::endl;
 		http::Response response;
 		response.header.status = 200;
 		response.header.set_content_type("text/plain", "charset=utf-8");
-		response.set_body("Hello, Crab!");
+		response.set_body(cond ? "Hello, Cond!" : "Hello, Crab!");
 		who->write(std::move(response));
 
 		// Or for even simpler code paths, like error messages
