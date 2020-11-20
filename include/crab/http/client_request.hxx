@@ -41,9 +41,9 @@ CRAB_INLINE void ClientRequestSimple::send(const std::string &uri_str, Request &
 	if (!uri.user_info.empty())
 		request.header.basic_authorization = base64::encode(uint8_cast(uri.user_info.data()), uri.user_info.size());
 	if (uri.port.empty()) {
-		if (uri.scheme == Literal{"http"})
+		if (uri.scheme == string_view{"http"})
 			uri.port = "80";
-		else if (uri.scheme == Literal{"https"})
+		else if (uri.scheme == string_view{"https"})
 			uri.port = "443";
 		else
 			throw std::runtime_error("port is empty, while scheme unknown - impossible to guess");

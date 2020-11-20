@@ -257,10 +257,10 @@ CRAB_INLINE std::string ResponseHeader::generate_sec_websocket_accept(const std:
 CRAB_INLINE std::unordered_map<std::string, std::string> Request::parse_query_params() const {
 	QueryParser p;
 	p.parse(header.query_string);
-	if (header.method == Literal{"GET"})  // All other methods support params in body
+	if (header.method == string_view{"GET"})  // All other methods support params in body
 		return std::move(p.parsed);
 	// TODO - multipart data
-	if (header.content_type_mime != Literal{"application/x-www-form-urlencoded"})
+	if (header.content_type_mime != string_view{"application/x-www-form-urlencoded"})
 		return std::move(p.parsed);
 	p.parse(body);
 	return std::move(p.parsed);
@@ -269,7 +269,7 @@ CRAB_INLINE std::unordered_map<std::string, std::string> Request::parse_query_pa
 CRAB_INLINE std::unordered_map<std::string, std::string> Request::parse_cookies() const {
 	CookieParser p;
 	for (const auto &h : header.headers)
-		if (h.name == Literal{"cookie"}) {
+		if (h.name == string_view{"cookie"}) {
 			p.parse(h.value);
 		}
 	return std::move(p.parsed);

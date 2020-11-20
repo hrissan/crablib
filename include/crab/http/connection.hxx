@@ -146,7 +146,7 @@ CRAB_INLINE ClientConnection::ClientConnection(Handler &&rwd_handler)
 
 CRAB_INLINE bool ClientConnection::connect(const std::string &h, uint16_t p, const std::string &pr) {
 	close();
-	if (pr != Literal{"http"} && pr != Literal{"https"})
+	if (pr != string_view{"http"} && pr != string_view{"https"})
 		throw std::runtime_error("ClientConnection unsupported protocol");
 	dns.resolve(h, p, true, false);
 	host     = h;
@@ -284,7 +284,7 @@ CRAB_INLINE void ClientConnection::dns_handler(const std::vector<Address> &names
 		return;
 	}
 	peer_address = names[rnd.pod<size_t>() % names.size()];  // non-zero chance with even single server up
-	if (protocol == Literal{"http"}) {
+	if (protocol == string_view{"http"}) {
 		if (!sock.connect(peer_address)) {
 			close();
 			rwd_handler();

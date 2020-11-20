@@ -241,11 +241,11 @@ CRAB_INLINE std::string URI::to_string() const {
 }
 
 CRAB_INLINE void URIParser::persist_path_component() {
-	if (cur_path_ == Literal{".."}) {
+	if (cur_path_ == string_view{".."}) {
 		// up tree from / is NOP -  https://tools.ietf.org/html/rfc3986#section-5.3
 		if (!path_components_.empty())
 			path_components_.pop_back();
-	} else if (cur_path_ != Literal{"."}) {  // ignore this special case
+	} else if (cur_path_ != string_view{"."}) {  // ignore this special case
 		path_components_.push_back(std::move(cur_path_));
 	}
 	cur_path_.clear();

@@ -21,7 +21,7 @@ int main() {
 		std::cout << "Request" << std::endl;
 		for (const auto &q : request.parse_query_params()) {
 			std::cout << "    '" << q.first << "' => '" << q.second << "'" << std::endl;
-			if (q.first == crab::Literal{"query"})
+			if (q.first == crab::string_view{"query"})
 				cond = true;
 		}
 		std::cout << "Cookies" << std::endl;

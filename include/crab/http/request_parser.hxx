@@ -210,7 +210,8 @@ CRAB_INLINE RequestParser::State RequestParser::consume(char input) {
 		if (input != ':')
 			throw std::runtime_error("':' expected");
 		// We will add other comma-separated headers if we need them later
-		header_cms_list = (header.name == Literal{"connection"}) || (header.name == Literal{"transfer-encoding"});
+		header_cms_list =
+		    (header.name == string_view{"connection"}) || (header.name == string_view{"transfer-encoding"});
 		return SPACE_BEFORE_HEADER_VALUE;
 	case SPACE_BEFORE_HEADER_VALUE:
 		if (is_sp(input))
@@ -250,7 +251,7 @@ CRAB_INLINE void RequestParser::process_ready_header() {
 	if (header_cms_list && header.value.empty())
 		return;  // Empty is NOP in CMS list, like "  ,,keep-alive"
 	// Those comparisons are by size first so very fast
-	if (header.name == Literal{"content-length"}) {
+	if (header.name == string_view{"content-length"}) {
 		if (req.content_length)
 			throw std::runtime_error("content length specified more than once");
 		try {
@@ -260,65 +261,65 @@ CRAB_INLINE void RequestParser::process_ready_header() {
 		}
 		return;
 	}
-	if (header.name == Literal{"transfer-encoding"}) {
+	if (header.name == string_view{"transfer-encoding"}) {
 		tolower(header.value);
-		if (header.value == Literal{"chunked"}) {
+		if (header.value == string_view{"chunked"}) {
 			if (!req.transfer_encodings.empty())
 				throw std::runtime_error("chunk encoding must be applied last");
 			req.transfer_encoding_chunked = true;
 			return;
 		}
-		if (header.value == Literal{"identity"}) {
+		if (header.value == string_view{"identity"}) {
 			return;  // like chunked, it is transparent to user
 		}
 		req.transfer_encodings.push_back(header.value);
 		return;
 	}
-	if (header.name == Literal{"host"}) {
+	if (header.name == string_view{"host"}) {
 		req.host = header.value;
 		return;
 	}
-	if (header.name == Literal{"origin"}) {
+	if (header.name == string_view{"origin"}) {
 		req.origin = header.value;
 		return;
 	}
-	if (header.name == Literal{"content-type"}) {
+	if (header.name == string_view{"content-type"}) {
 		parse_content_type_value(header.value, req.content_type_mime, req.content_type_suffix);
 		return;
 	}
-	if (header.name == Literal{"connection"}) {
+	if (header.name == string_view{"connection"}) {
 		tolower(header.value);
-		if (header.value == Literal{"close"}) {
+		if (header.value == string_view{"close"}) {
 			req.keep_alive = false;
 			return;
 		}
-		if (header.value == Literal{"keep-alive"}) {
+		if (header.value == string_view{"keep-alive"}) {
 			req.keep_alive = true;
 			return;
 		}
-		if (header.value == Literal{"upgrade"}) {
+		if (header.value == string_view{"upgrade"}) {
 			req.connection_upgrade = true;
 			return;
 		}
 		throw std::runtime_error("Invalid 'connection' header value");
 	}
-	if (header.name == Literal{"authorization"}) {
+	if (header.name == string_view{"authorization"}) {
 		parse_authorization_basic(header.value, req.basic_authorization);
 		return;
 	}
-	if (header.name == Literal{"upgrade"}) {
+	if (header.name == string_view{"upgrade"}) {
 		tolower(header.value);
-		if (header.value == Literal{"websocket"}) {
+		if (header.value == string_view{"websocket"}) {
 			req.upgrade_websocket = true;
 			return;
 		}
 		throw std::runtime_error("Invalid 'upgrade' header value");
 	}
-	if (header.name == Literal{"sec-websocket-key"}) {
+	if (header.name == string_view{"sec-websocket-key"}) {
 		req.sec_websocket_key = header.value;  // Copy is better here
 		return;
 	}
-	if (header.name == Literal{"sec-websocket-version"}) {
+	if (header.name == string_view{"sec-websocket-version"}) {
 		req.sec_websocket_version = header.value;  // Copy is better here
 		return;
 	}
