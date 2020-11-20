@@ -56,7 +56,7 @@ public:
 };
 
 // Classic circular buffer
-class Buffer : public IFiniteStream, public OStream {
+class Buffer final : public IFiniteStream, public OStream {
 	bdata impl;
 	size_t read_pos;   // 0..impl.size-1
 	size_t write_pos;  // read_pos..read_pos + impl.size
@@ -65,7 +65,7 @@ public:
 	size_t capacity() const { return impl.size(); }
 	size_t read_some(uint8_t *val, size_t count) override;
 	using IStream::read_some;  // Version for other char types
-	size_t size() const override final {
+	size_t size() const override {
 		return write_pos - read_pos;  // Same as read_count() + read_count2();
 	}
 	size_t write_some(const uint8_t *val, size_t count) override;
