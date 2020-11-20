@@ -17,16 +17,16 @@ int main() {
 	http::Server server(7000);
 
 	server.r_handler = [&](http::Client *who, http::Request &&request) {
-		// std::cout << "Request" << std::endl;
 		bool cond = false;
+		std::cout << "Request" << std::endl;
 		for (const auto &q : request.parse_query_params()) {
+			std::cout << "    '" << q.first << "' => '" << q.second << "'" << std::endl;
 			if (q.first == crab::Literal{"query"})
 				cond = true;
 		}
-		//	std::cout << "    '" << q.first << "' => '" << q.second << "'" << std::endl;
-		// std::cout << "Cookies" << std::endl;
-		// for (const auto &q : request.parse_cookies())
-		//	std::cout << "    '" << q.first << "' => '" << q.second << "'" << std::endl;
+		std::cout << "Cookies" << std::endl;
+		for (const auto &q : request.parse_cookies())
+			std::cout << "    '" << q.first << "' => '" << q.second << "'" << std::endl;
 		http::Response response;
 		response.header.status = 200;
 		response.header.set_content_type("text/plain", "charset=utf-8");

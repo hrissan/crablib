@@ -153,7 +153,7 @@ CRAB_INLINE void Server::on_client_disconnected(std::list<Client>::iterator it) 
 		who->ws_handler(WebMessage{WebMessageOpcode::CLOSE, {},
 		    who->web_message_close_sent ? WebMessage::CLOSE_STATUS_NORMAL : WebMessage::CLOSE_STATUS_DISCONNECT});
 	clients.erase(it);
-	accept_all(); // In case we were over limit
+	accept_all();  // In case we were over limit
 }
 
 // Big TODO - reverse r_handler logic, so that user must explicitly call
