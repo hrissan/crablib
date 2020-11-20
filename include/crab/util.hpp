@@ -93,8 +93,8 @@ public:
 	size_t size() const { return s; }
 
 private:
-	const char *d = nullptr;  // We could save on initializing if count = 0, but seems dangerous
-	size_t s = 0;
+	const char *d = nullptr;  // Initialized for better safety and ease of debugging
+	size_t s      = 0;
 };
 
 inline bool operator==(const std::string &a, const string_view &b) { return b.compare(a) == 0; }
