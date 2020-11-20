@@ -43,7 +43,7 @@ public:
 				header.status                    = 200;
 				header.transfer_encoding_chunked = true;
 				header.set_content_type("text/html", "charset=utf-8");
-				who->start_write_stream(std::move(header), [this, it, who]() {
+				who->start_write_stream(header, [this, it, who]() {
 					if (!who->is_open()) {
 						std::cout << "Streaming clinet disconnected" << std::endl;
 						waiting_clients.erase(it);
@@ -58,7 +58,7 @@ public:
 				header.status         = 200;
 				header.content_length = len;
 				header.set_content_type("application/octet-stream", "");
-				who->start_write_stream(std::move(header), [who, len]() { write_stream_data(who, len, false); });
+				who->start_write_stream(header, [who, len]() { write_stream_data(who, len, false); });
 				return;
 			}
 			if (request.header.path == "/chunked") {
@@ -67,7 +67,7 @@ public:
 				header.status                    = 200;
 				header.transfer_encoding_chunked = true;
 				header.set_content_type("application/octet-stream", "");
-				who->start_write_stream(std::move(header), [who, len]() { write_stream_data(who, len, true); });
+				who->start_write_stream(header, [who, len]() { write_stream_data(who, len, true); });
 				return;
 			}
 			who->write(http::Response::simple_html(404));

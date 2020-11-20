@@ -19,10 +19,10 @@ class IntrusiveNode : public Nocopy {
 public:
 	bool in_list() const { return prev != nullptr; }
 	void unlink() {
-		if (prev) {
-			next->prev = prev;
-			prev->next = next;
-		}
+		if (!prev)
+			return;
+		next->prev = prev;
+		prev->next = next;
 		next = prev = nullptr;
 	}
 	~IntrusiveNode() { unlink(); }

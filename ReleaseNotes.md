@@ -2,6 +2,7 @@
 
 ### 0.9.2
 
+- fixed bug when HTTP Time header was cached by server for 500 seconds, not milliseconds
 - example of fair resource-bound API server. TODO - improve example
 - `SignalStop` renamed to `Signal` and now accepts list of signals. Empty list means to detect generic `Ctrl-C` and sorta works on `Linux`, `Mac` and `Windows`.
 - `crab::Thread` to wrap creation of `std::thread` with RunLoop and perform raceless cancellation
