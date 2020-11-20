@@ -16,7 +16,7 @@ namespace crab {
 
 namespace details {
 
-CRAB_INLINE void sput(std::string &str, const Literal &lit) { str.append(lit.value, lit.size); }
+CRAB_INLINE void sput(std::string &str, const string_view &lit) { str.append(lit.data(), lit.size()); }
 CRAB_INLINE void sput(std::string &str, const std::string &lit) { str += lit; }
 
 CRAB_INLINE void sput(std::string &str, uint64_t value) {
@@ -44,43 +44,43 @@ inline T integer_cast(const char *data, size_t size) {
 
 CRAB_INLINE void to_string_common(const http::RequestResponseHeader &req, std::string &ss) {
 	if (!req.content_type_mime.empty()) {
-		sput(ss, Literal{"content-type: "});
+		sput(ss, string_view{"content-type: "});
 		sput(ss, req.content_type_mime);
 		if (!req.content_type_suffix.empty()) {
-			sput(ss, Literal{"; "});
+			sput(ss, string_view{"; "});
 			sput(ss, req.content_type_suffix);
 		}
-		sput(ss, Literal{"\r\n"});
+		sput(ss, string_view{"\r\n"});
 	}
 	if (req.content_length) {
-		sput(ss, Literal{"content-length: "});
+		sput(ss, string_view{"content-length: "});
 		sput(ss, *req.content_length);
-		sput(ss, Literal{"\r\n"});
+		sput(ss, string_view{"\r\n"});
 	}
 	if (req.http_version_major == 1 && req.http_version_minor == 0 && req.keep_alive) {
-		sput(ss, Literal{"connection: keep-alive\r\n"});
+		sput(ss, string_view{"connection: keep-alive\r\n"});
 	} else if (req.http_version_major == 1 && req.http_version_minor == 1 && !req.keep_alive) {
-		sput(ss, Literal{"connection: close\r\n"});
+		sput(ss, string_view{"connection: close\r\n"});
 	} else if (req.connection_upgrade && req.upgrade_websocket) {
-		sput(ss, Literal{"connection: upgrade\r\n"});
-		sput(ss, Literal{"upgrade: websocket\r\n"});
+		sput(ss, string_view{"connection: upgrade\r\n"});
+		sput(ss, string_view{"upgrade: websocket\r\n"});
 	}
 	if (!req.transfer_encodings.empty() || req.transfer_encoding_chunked) {
-		sput(ss, Literal{"transfer-encoding:"});
+		sput(ss, string_view{"transfer-encoding:"});
 		size_t pos = 0;
 		for (const auto &te : req.transfer_encodings) {
-			sput(ss, pos++ ? Literal{", "} : Literal{" "});
+			sput(ss, pos++ ? string_view{", "} : string_view{" "});
 			sput(ss, te);
 		}
 		if (req.transfer_encoding_chunked)
-			sput(ss, pos++ ? Literal{", chunked"} : Literal{" chunked"});
-		sput(ss, Literal{"\r\n"});
+			sput(ss, pos++ ? string_view{", chunked"} : string_view{" chunked"});
+		sput(ss, string_view{"\r\n"});
 	}
 	for (auto &&h : req.headers) {
 		sput(ss, h.name);
-		sput(ss, Literal{": "});
+		sput(ss, string_view{": "});
 		sput(ss, h.value);
-		sput(ss, Literal{"\r\n"});
+		sput(ss, string_view{"\r\n"});
 	}
 }
 
@@ -270,32 +270,32 @@ CRAB_INLINE bool ResponseHeader::is_websocket_upgrade() const {
 CRAB_INLINE std::string ResponseHeader::to_string() const {
 	std::string ss;
 	//	ss.reserve(1024);
-	details::sput(ss, Literal{"HTTP/"});
+	details::sput(ss, string_view{"HTTP/"});
 	details::sput(ss, http_version_major);
-	details::sput(ss, Literal{"."});
+	details::sput(ss, string_view{"."});
 	details::sput(ss, http_version_minor);
-	details::sput(ss, Literal{" "});
+	details::sput(ss, string_view{" "});
 	details::sput(ss, status);
-	details::sput(ss, Literal{" "});
+	details::sput(ss, string_view{" "});
 	details::sput(ss, status_text.empty() ? status_to_string(status) : status_text);
-	details::sput(ss, Literal{"\r\n"});
+	details::sput(ss, string_view{"\r\n"});
 	if (!date.empty()) {
-		details::sput(ss, Literal{"date: "});
+		details::sput(ss, string_view{"date: "});
 		details::sput(ss, date);
-		details::sput(ss, Literal{"\r\n"});
+		details::sput(ss, string_view{"\r\n"});
 	}
 	if (!server.empty()) {
-		details::sput(ss, Literal{"server: "});
+		details::sput(ss, string_view{"server: "});
 		details::sput(ss, server);
-		details::sput(ss, Literal{"\r\n"});
+		details::sput(ss, string_view{"\r\n"});
 	}
 	details::to_string_common(*this, ss);
 	if (!sec_websocket_accept.empty()) {
-		details::sput(ss, Literal{"sec-websocket-accept: "});
+		details::sput(ss, string_view{"sec-websocket-accept: "});
 		details::sput(ss, sec_websocket_accept);
-		details::sput(ss, Literal{"\r\n"});
+		details::sput(ss, string_view{"\r\n"});
 	}
-	details::sput(ss, Literal{"\r\n"});
+	details::sput(ss, string_view{"\r\n"});
 	return ss;
 }
 
@@ -313,10 +313,10 @@ CRAB_INLINE std::string ResponseHeader::generate_sec_websocket_accept(const std:
 CRAB_INLINE std::unordered_map<std::string, std::string> Request::parse_query_params() const {
 	QueryParser p;
 	p.parse(header.query_string);
-	if (header.method == Literal{"GET"})  // All other methods support params in body
+	if (header.method == string_view{"GET"})  // All other methods support params in body
 		return std::move(p.parsed);
 	// TODO - multipart data
-	if (header.content_type_mime != Literal{"application/x-www-form-urlencoded"})
+	if (header.content_type_mime != string_view{"application/x-www-form-urlencoded"})
 		return std::move(p.parsed);
 	p.parse(body);
 	return std::move(p.parsed);
@@ -325,7 +325,7 @@ CRAB_INLINE std::unordered_map<std::string, std::string> Request::parse_query_pa
 CRAB_INLINE std::unordered_map<std::string, std::string> Request::parse_cookies() const {
 	CookieParser p;
 	for (const auto &h : header.headers)
-		if (h.name == Literal{"cookie"}) {
+		if (h.name == string_view{"cookie"}) {
 			p.parse(h.value);
 		}
 	return std::move(p.parsed);

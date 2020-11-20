@@ -43,8 +43,8 @@ CRAB_INLINE void add_tls_root_certificates(SSL_CTX *ctx) {
 	// We carry letsencrypt.org roots right into code, and will add more in the future
 	// https://www.happyassassin.net/2015/01/12/a-note-about-ssltls-trusted-certificate-stores-and-platforms/
 
-	static Literal certs[] = {// https://letsencrypt.org/certs/isrgrootx1.pem.txt
-	    Literal{R"(-----BEGIN CERTIFICATE-----
+	static string_view certs[] = {// https://letsencrypt.org/certs/isrgrootx1.pem.txt
+	    string_view{R"(-----BEGIN CERTIFICATE-----
 MIIFazCCA1OgAwIBAgIRAIIQz7DSQONZRGPgu2OCiwAwDQYJKoZIhvcNAQELBQAw
 TzELMAkGA1UEBhMCVVMxKTAnBgNVBAoTIEludGVybmV0IFNlY3VyaXR5IFJlc2Vh
 cmNoIEdyb3VwMRUwEwYDVQQDEwxJU1JHIFJvb3QgWDEwHhcNMTUwNjA0MTEwNDM4
@@ -76,7 +76,7 @@ mRGunUHBcnWEvgJBQl9nJEiU0Zsnvgc/ubhPgXRR4Xq37Z0j4r7g1SgEEzwxA57d
 emyPxgcYxn/eR44/KJ4EBs+lVDR3veyJm+kXQ99b21/+jh5Xos1AnX5iItreGCc=
 -----END CERTIFICATE-----)"},
 	    // https://www.identrust.com/certificates/trustid/root-download-x3.html (converted to pem)
-	    Literal{R"(-----BEGIN CERTIFICATE-----
+	    string_view{R"(-----BEGIN CERTIFICATE-----
 MIIDSjCCAjKgAwIBAgIQRK+wgNajJ7qJMDmGLvhAazANBgkqhkiG9w0BAQUFADA/
 MSQwIgYDVQQKExtEaWdpdGFsIFNpZ25hdHVyZSBUcnVzdCBDby4xFzAVBgNVBAMT
 DkRTVCBSb290IENBIFgzMB4XDTAwMDkzMDIxMTIxOVoXDTIxMDkzMDE0MDExNVow

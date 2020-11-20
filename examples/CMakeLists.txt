@@ -78,6 +78,7 @@ add_executable(api_server ${SOURCE_FILES} api_server.cpp)
 
 add_executable(http_server_simple ${SOURCE_FILES} http_server_simple.cpp)
 add_executable(http_server_longpoll ${SOURCE_FILES} http_server_longpoll.cpp)
+add_executable(http_server_new ${SOURCE_FILES} http_server_new.cpp)
 add_executable(http_server_proxy_trivial ${SOURCE_FILES} http_server_proxy_trivial.cpp)
 add_executable(http_server_stream_body ${SOURCE_FILES} http_server_stream_body.cpp)
 add_executable(http_server_multi ${SOURCE_FILES} http_server_multi.cpp)

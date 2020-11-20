@@ -332,15 +332,15 @@ private:
 		client.responses.push_back(std::move(resp));
 		client.responses_size += client.responses.back().capacity();
 		//			if (client.responses.size() != 1) return; // TODO - check if this optimization is useful
-		if (client.responses_size < 4096) {
-			if (!client.flush_timer.is_set()) {  // We set Timer only on writing the first request
-				client.flush_timer.once(0.002);  // TODO custom delay
-				if (debug)
-					std::cout << "flush_timer.once " << std::endl;
-			}
-			return;
-		}
-		client.flush_timer.cancel();
+		//		if (client.responses_size < 4096) {
+		//			if (!client.flush_timer.is_set()) {  // We set Timer only on writing the first request
+		//				client.flush_timer.once(0.002);  // TODO custom delay
+		//				if (debug)
+		//					std::cout << "flush_timer.once " << std::endl;
+		//			}
+		//			return;
+		//		}
+		//		client.flush_timer.cancel();
 		write_responses(client);
 	}
 	void write_responses(Client &client) {

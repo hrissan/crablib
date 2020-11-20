@@ -23,7 +23,8 @@
 #include <optional>
 namespace crab {
 template<typename T>
-using optional = std::optional<T>;
+using optional    = std::optional<T>;
+using string_view = std::string_view;
 }  // namespace crab
 #else
 // Simplified, only works for value types
@@ -75,6 +76,52 @@ public:
 	T &value() { return !valid ? throw std::bad_cast() : impl; }
 	const T &value() const { return !valid ? throw std::bad_cast() : impl; }
 };
+
+// Simplified subset
+class string_view {
+public:
+	string_view() = default;
+	constexpr explicit string_view(const char *value) : d(value), s(std::strlen(value)) {}
+	constexpr explicit string_view(const char *value, size_t size) : d(value), s(size - 1) {}
+
+	int compare(const char *value, size_t size) const {
+		return (s == size) ? std::memcmp(d, value, s) : s > size ? 1 : -1;
+	}
+	int compare(const std::string &b) const { return compare(b.data(), b.size()); }
+
+	const char *data() const { return d; }
+	size_t size() const { return s; }
+
+private:
+	const char *d = nullptr;  // We could save on initializing if count = 0, but seems dangerous
+	size_t s = 0;
+};
+
+inline bool operator==(const std::string &a, const string_view &b) { return b.compare(a) == 0; }
+inline bool operator!=(const std::string &a, const string_view &b) { return !(a == b); }
+inline bool operator==(const string_view &a, const std::string &b) { return a.compare(b) == 0; }
+inline bool operator!=(const string_view &a, const std::string &b) { return !(a == b); }
+
+// ==, != of string_view and std::string compile into very little # of instructions
+// and they have trivial constructor so no overhead on static initializer per function.
+// literals in C++ must be like string_view, but they are not
+// bool compare_with_content_type(const std::string & str){
+//     return str == string_view{"content-type"};
+// }
+// cmp     qword ptr [rdi + 8], 12
+// jne     .LBB0_1
+//         mov     rax, qword ptr [rdi]
+// movabs  rcx, 3275364211029340003
+// xor     rcx, qword ptr [rax]
+// mov     eax, dword ptr [rax + 8]
+// xor     rax, 1701869940
+// or      rax, rcx
+//         sete    al
+//         ret
+// .LBB0_1:
+// xor     eax, eax
+//         ret
+
 }  // namespace crab
 #endif
 
@@ -151,43 +198,6 @@ public:
 		if (!(expr))                                                                                   \
 			throw std::logic_error(crab::details::invariant_violated(#expr, __FILE__, __LINE__, msg)); \
 	} while (0)
-
-struct Literal {
-	const char *value;
-	size_t size;
-
-	template<size_t size>
-	constexpr explicit Literal(const char (&value)[size]) : value(value), size(size - 1) {}
-	int compare(const char *b, size_t bs) const {
-		return (size == bs) ? std::memcmp(value, b, size) : size > bs ? 1 : -1;
-	}
-	int compare(const std::string &b) const { return compare(b.data(), b.size()); }
-};
-
-inline bool operator==(const std::string &a, const Literal &b) { return b.compare(a) == 0; }
-inline bool operator!=(const std::string &a, const Literal &b) { return !(a == b); }
-inline bool operator==(const Literal &a, const std::string &b) { return a.compare(b) == 0; }
-inline bool operator!=(const Literal &a, const std::string &b) { return !(a == b); }
-
-// ==, != of Literal and std::string compile into very little # of instructions
-// and they have trivial constructor so no overhead on static initializer per function.
-// literals in C++ must be like Literal, but they are not
-// bool compare_with_content_type(const std::string & str){
-//     return str == Literal{"content-type"};
-// }
-// cmp     qword ptr [rdi + 8], 12
-// jne     .LBB0_1
-//         mov     rax, qword ptr [rdi]
-// movabs  rcx, 3275364211029340003
-// xor     rcx, qword ptr [rax]
-// mov     eax, dword ptr [rax + 8]
-// xor     rax, 1701869940
-// or      rax, rcx
-//         sete    al
-//         ret
-// .LBB0_1:
-// xor     eax, eax
-//         ret
 
 class Random {
 public:
