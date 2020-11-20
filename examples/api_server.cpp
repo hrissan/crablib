@@ -122,12 +122,15 @@ private:
 		crab::Buffer request_body{0};
 		std::deque<crab::Buffer> requests;
 		std::deque<crab::Buffer> responses;
+		size_t responses_size   = 0;
 		size_t requests_in_work = 0;
 		crab::IntrusiveNode<Client> request_memory_queue_node;   // Waiting turn to read request body
 		crab::IntrusiveNode<Client> read_body_queue_node;        // Waiting turn to read request body
 		crab::IntrusiveNode<Client> response_memory_queue_node;  // Waiting for memory to queue work
 		size_t total_read    = 0;
 		size_t total_written = 0;
+
+		crab::Timer flush_timer{crab::empty_handler};
 	};
 	// Reader loop, generates ready requests
 	// 1. reading header, !local_limit, !can_read  (socket) -> read_header() -> 1, 2, 3, 4
@@ -199,7 +202,6 @@ private:
 			// This condition will change after writing some bytes, TODO - retry after writing bytes
 			return true;  // Stay in READING_HEADER state, otherwise 4th state will be required
 		}
-		// TODO - check total responses size for client, if too big also return true
 		return false;
 	}
 	void read_header(Client &client) {
@@ -277,9 +279,7 @@ private:
 
 			total_requests_memory -= request.capacity();
 			total_response_memory += response.capacity();
-			responses_sent += 1;
-			client.responses.push_back(std::move(response));
-			send_responses(client);
+			add_response(client, std::move(response));
 			return true;
 		}
 		total_response_memory += max_response_length;
@@ -322,29 +322,51 @@ private:
 			}
 			total_response_memory += w.response.capacity();
 			client.requests_in_work -= 1;
-			responses_sent += 1;
-			//			const bool was_empty = w.client->responses.empty();
-			client.responses.push_back(std::move(w.response));
-			//			if (was_empty) // TODO - check if this optimization is useful
-			send_responses(client);
+			add_response(client, std::move(w.response));
 		}
 		worker_responses_taken.clear();
 		read_requests_fair();  // if we read header, we could need to read body
 	}
-	void send_responses(Client &client) {
-		//	    if (!client.socket.can_write()) // TODO - check if this optimization is useful
-		//	        return;
-		while (!client.responses.empty()) {
-			client.total_written += client.responses.front().write_to(client.socket);
-			if (!client.responses.front().empty())
-				break;
+	void add_response(Client &client, crab::Buffer &&resp) {
+		responses_sent += 1;
+		client.responses.push_back(std::move(resp));
+		client.responses_size += client.responses.back().capacity();
+		//			if (client.responses.size() != 1) return; // TODO - check if this optimization is useful
+		if (client.responses_size < 4096) {
+			if (!client.flush_timer.is_set()) {  // We set Timer only on writing the first request
+				client.flush_timer.once(0.002);  // TODO custom delay
+				if (debug)
+					std::cout << "flush_timer.once " << std::endl;
+			}
+			return;
+		}
+		client.flush_timer.cancel();
+		write_responses(client);
+	}
+	void write_responses(Client &client) {
+		auto written          = client.socket.write_some(client.responses);
+		bool removed_response = false;
+		while (!client.responses.empty() && client.responses.front().size() <= written) {
+			written -= client.responses.front().size();
+			total_response_memory -= client.responses.front().capacity();
+			client.responses_size -= client.responses.front().capacity();
+
+			client.responses.pop_front();
+			removed_response = true;
 			if (debug)
 				std::cout << "send_responses sent complete response " << std::endl;
-			total_response_memory -= client.responses.front().capacity();
-			client.responses.pop_front();
+		}
+		if (removed_response) {
 			run_workers_fair();   // because total_response_memory decreased
 			read_header(client);  // read header if we were in local limit
 		}
+	}
+	void on_flush_timer(Client &client) {
+		if (debug)
+			std::cout << "on_flush_timer " << std::endl;
+		write_responses(client);
+		read_header(client);
+		read_requests_fair();  // sending response could free global resources
 	}
 	void read_requests_fair() {
 		while (!request_memory_queue.empty()) {
@@ -365,12 +387,14 @@ private:
 	void on_client_handler(Client &client) {
 		if (!client.socket.is_open())
 			return on_client_disconnected(client);
-		send_responses(client);
+		if (!client.flush_timer.is_set())
+			write_responses(client);
 		read_header(
 		    client);  // We read header on every opportunity. sending response could also free client resources
 		read_requests_fair();  // sending response could free global resources
 	}
 	void on_client_disconnected(Client &client) {
+		client.flush_timer.cancel();
 		client.request_header.reset();
 		total_requests_memory -= client.request_body.capacity();
 		client.request_body.clear();
@@ -381,6 +405,7 @@ private:
 		client.requests_in_work = 0;
 		for (const auto &r : client.responses) {
 			total_response_memory -= r.capacity();
+			client.responses_size -= r.capacity();
 		}
 		client.responses.clear();
 		client.client_id = 0;
@@ -411,6 +436,7 @@ private:
 			allocated_clients.emplace_back();
 			Client *it = &allocated_clients.back();
 			allocated_clients.back().socket.set_handler([this, it]() { on_client_handler(*it); });
+			allocated_clients.back().flush_timer.set_handler([this, it]() { on_flush_timer(*it); });
 			disconnected_queue.push_back(allocated_clients.back());
 		}
 		Client &client = disconnected_queue.back();
@@ -449,9 +475,9 @@ class ApiServerApp {
 public:
 	static crab::TCPAcceptor::Settings setts() {
 		crab::TCPAcceptor::Settings result;
-		result.reuse_addr  = true;
-		result.reuse_port  = true;
-		result.tcp_nodelay = true;
+		result.reuse_addr = true;
+		result.reuse_port = true;
+		result.tcp_delay  = false;
 		return result;
 	}
 	explicit ApiServerApp(const crab::Address &bind_address)
@@ -472,7 +498,7 @@ private:
 			th.cancel();
 		crab::RunLoop::current()->cancel();
 	}
-	crab::SignalStop stop;  // Must be created before other threads
+	crab::Signal stop;  // Must be created before other threads
 	ApiWorkers workers;
 	ApiNetwork network;
 	std::list<crab::Thread> network_threads;

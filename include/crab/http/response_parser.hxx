@@ -264,6 +264,10 @@ CRAB_INLINE void ResponseParser::process_ready_header() {
 		req.date = header.value;
 		return;
 	}
+	if (header.name == Literal{"server"}) {
+		req.server = header.value;
+		return;
+	}
 	req.headers.emplace_back(header);  // Copy is better here
 }
 

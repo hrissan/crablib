@@ -16,35 +16,72 @@ namespace crab {
 
 namespace details {
 
-CRAB_INLINE void to_string_common(const http::RequestResponseHeader &req, std::stringstream &ss) {
+CRAB_INLINE void sput(std::string &str, const Literal &lit) { str.append(lit.value, lit.size); }
+CRAB_INLINE void sput(std::string &str, const std::string &lit) { str += lit; }
+
+CRAB_INLINE void sput(std::string &str, uint64_t value) {
+	//	const size_t max_len = max_to_string_length<uint64_t>();
+
+	char buf[128]{0};  // large enough for an int even on 64-bit
+	int i = 127;
+
+	while (true) {
+		buf[i] = (value % 10) + '0';
+		value /= 10;
+		if (value == 0)
+			break;
+		i -= 1;
+	}
+
+	str.append(buf + i, 128 - i);
+}
+
+template<typename T>
+inline T integer_cast(const char *data, size_t size) {
+	static_assert(std::is_integral<T>::value, "Target type must be integral");
+	return details::integer_parse<T>(data, data + size);
+}
+
+CRAB_INLINE void to_string_common(const http::RequestResponseHeader &req, std::string &ss) {
 	if (!req.content_type_mime.empty()) {
-		ss << "content-type: " << req.content_type_mime;
-		if (!req.content_type_suffix.empty())
-			ss << "; " << req.content_type_suffix;
-		ss << "\r\n";
+		sput(ss, Literal{"content-type: "});
+		sput(ss, req.content_type_mime);
+		if (!req.content_type_suffix.empty()) {
+			sput(ss, Literal{"; "});
+			sput(ss, req.content_type_suffix);
+		}
+		sput(ss, Literal{"\r\n"});
 	}
 	if (req.content_length) {
-		ss << "content-length: " << *req.content_length << "\r\n";
+		sput(ss, Literal{"content-length: "});
+		sput(ss, *req.content_length);
+		sput(ss, Literal{"\r\n"});
 	}
 	if (req.http_version_major == 1 && req.http_version_minor == 0 && req.keep_alive) {
-		ss << "connection: keep-alive\r\n";
+		sput(ss, Literal{"connection: keep-alive\r\n"});
 	} else if (req.http_version_major == 1 && req.http_version_minor == 1 && !req.keep_alive) {
-		ss << "connection: close\r\n";
+		sput(ss, Literal{"connection: close\r\n"});
 	} else if (req.connection_upgrade && req.upgrade_websocket) {
-		ss << "connection: upgrade\r\n";
-		ss << "upgrade: websocket\r\n";
+		sput(ss, Literal{"connection: upgrade\r\n"});
+		sput(ss, Literal{"upgrade: websocket\r\n"});
 	}
 	if (!req.transfer_encodings.empty() || req.transfer_encoding_chunked) {
-		ss << "transfer-encoding:";
+		sput(ss, Literal{"transfer-encoding:"});
 		size_t pos = 0;
-		for (const auto &te : req.transfer_encodings)
-			ss << (pos++ ? ", " : " ") << te;
+		for (const auto &te : req.transfer_encodings) {
+			sput(ss, pos++ ? Literal{", "} : Literal{" "});
+			sput(ss, te);
+		}
 		if (req.transfer_encoding_chunked)
-			ss << (pos++ ? ", chunked" : " chunked");
-		ss << "\r\n";
+			sput(ss, pos++ ? Literal{", chunked"} : Literal{" chunked"});
+		sput(ss, Literal{"\r\n"});
 	}
-	for (auto &&h : req.headers)
-		ss << h.name << ": " << h.value << "\r\n";
+	for (auto &&h : req.headers) {
+		sput(ss, h.name);
+		sput(ss, Literal{": "});
+		sput(ss, h.value);
+		sput(ss, Literal{"\r\n"});
+	}
 }
 
 CRAB_INLINE std::string simple_response(int status, const char *pf, const std::string *body, const char *sf) {
@@ -217,7 +254,7 @@ CRAB_INLINE std::string RequestHeader::to_string() const {
 		ss << "origin: " << origin << "\r\n";
 	if (!basic_authorization.empty())
 		ss << "authorization: basic " << basic_authorization << "\r\n";
-	details::to_string_common(*this, ss);
+	//	details::to_string_common(*this, ss); TODO
 	if (!sec_websocket_key.empty())
 		ss << "sec-websocket-key: " << sec_websocket_key << "\r\n";
 	if (!sec_websocket_version.empty())
@@ -231,16 +268,35 @@ CRAB_INLINE bool ResponseHeader::is_websocket_upgrade() const {
 }
 
 CRAB_INLINE std::string ResponseHeader::to_string() const {
-	std::stringstream ss;
-	ss << "HTTP/" << http_version_major << "." << http_version_minor << " " << status << " "
-	   << (status_text.empty() ? status_to_string(status) : status_text) << "\r\n";
-	if (!date.empty())
-		ss << "date: " << date << "\r\n";
+	std::string ss;
+	//	ss.reserve(1024);
+	details::sput(ss, Literal{"HTTP/"});
+	details::sput(ss, http_version_major);
+	details::sput(ss, Literal{"."});
+	details::sput(ss, http_version_minor);
+	details::sput(ss, Literal{" "});
+	details::sput(ss, status);
+	details::sput(ss, Literal{" "});
+	details::sput(ss, status_text.empty() ? status_to_string(status) : status_text);
+	details::sput(ss, Literal{"\r\n"});
+	if (!date.empty()) {
+		details::sput(ss, Literal{"date: "});
+		details::sput(ss, date);
+		details::sput(ss, Literal{"\r\n"});
+	}
+	if (!server.empty()) {
+		details::sput(ss, Literal{"server: "});
+		details::sput(ss, server);
+		details::sput(ss, Literal{"\r\n"});
+	}
 	details::to_string_common(*this, ss);
-	if (!sec_websocket_accept.empty())
-		ss << "sec-websocket-accept: " << sec_websocket_accept << "\r\n";
-	ss << "\r\n";
-	return ss.str();
+	if (!sec_websocket_accept.empty()) {
+		details::sput(ss, Literal{"sec-websocket-accept: "});
+		details::sput(ss, sec_websocket_accept);
+		details::sput(ss, Literal{"\r\n"});
+	}
+	details::sput(ss, Literal{"\r\n"});
+	return ss;
 }
 
 CRAB_INLINE std::string ResponseHeader::generate_sec_websocket_accept(const std::string &sec_websocket_key) {

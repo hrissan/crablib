@@ -109,6 +109,7 @@ struct ResponseHeader : public RequestResponseHeader {
 	bool is_websocket_upgrade() const;
 
 	std::string date;
+	std::string server;
 
 	std::string to_string() const;
 

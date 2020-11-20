@@ -183,7 +183,7 @@ namespace details {
 // We have to declare settings outside, due to
 // https://stackoverflow.com/questions/17430377/error-when-using-in-class-initialization-of-non-static-data-member-and-nested-cl
 struct TCPSocketSettings {
-	bool tcp_nodelay   = true;
+	bool tcp_delay     = false;
 	size_t sndbuf_size = 0;  // 0 is do not set
 	size_t rcvbuf_size = 0;  // 0 is do not set
 };
@@ -250,6 +250,11 @@ public:
 	// do not use write_shutdown at all
 
 	// TODO - set individual settings after connect/accept
+
+	// Experimental - will be changed in future
+	size_t read_some(uint8_t *val, size_t count, uint8_t *val2, size_t count2);
+	size_t write_some(std::deque<Buffer> &data);
+
 private:
 	Callable rwd_handler;
 

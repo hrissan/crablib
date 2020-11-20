@@ -28,7 +28,8 @@ CRAB_INLINE std::string web_message_create_close_body(const std::string &reason,
 CRAB_INLINE BufferedTCPSocket::BufferedTCPSocket(Handler &&rwd_handler)
     : rwd_handler(std::move(rwd_handler))
     , sock([this]() { sock_handler(); })
-    , shutdown_timer([this]() { shutdown_timer_handler(); }) {}
+    , shutdown_timer([this]() { shutdown_timer_handler(); })
+    , flush_timer([this]() { flush_timer_handler(); }) {}
 
 CRAB_INLINE void BufferedTCPSocket::close() {
 	data_to_write.clear();
@@ -36,12 +37,19 @@ CRAB_INLINE void BufferedTCPSocket::close() {
 	write_shutdown_asked = false;
 	sock.close();
 	shutdown_timer.cancel();
+	flush_timer.cancel();
 }
 
 CRAB_INLINE size_t BufferedTCPSocket::read_some(uint8_t *val, size_t count) {
 	if (write_shutdown_asked)
 		return 0;
 	return sock.read_some(val, count);
+}
+
+CRAB_INLINE size_t BufferedTCPSocket::read_some(uint8_t *val, size_t count, uint8_t *val2, size_t count2) {
+	if (write_shutdown_asked)
+		return 0;
+	return sock.read_some(val, count, val2, count2);
 }
 
 CRAB_INLINE size_t BufferedTCPSocket::write_some(const uint8_t *val, size_t count) {
@@ -134,6 +142,8 @@ CRAB_INLINE void BufferedTCPSocket::shutdown_timer_handler() {
 	close();
 	rwd_handler();
 }
+
+CRAB_INLINE void BufferedTCPSocket::flush_timer_handler() {}
 
 namespace http {
 
@@ -452,7 +462,7 @@ CRAB_INLINE void ServerConnection::close() {
 CRAB_INLINE bool ServerConnection::read_next(Request &req) {
 	if (state != REQUEST_READY)
 		return false;
-	req.body = http_body_parser.body.clear();
+	req.body   = http_body_parser.body.clear();
 	req.header = std::move(request_parser.req);
 	// We move req, but remember params for response. Hopefully compiler will optimize some assignments
 	request_parser.req.method                = req.header.method;
@@ -700,8 +710,17 @@ CRAB_INLINE bool ServerConnection::advance_state() {
 		return false;
 	try {
 		while (true) {
-			if (read_buffer.empty() && read_buffer.read_from(sock) == 0)
-				return false;
+			//			if (read_buffer.empty() && read_buffer.read_from(sock) == 0)
+			//				return false;
+			if (read_buffer.empty()) {
+				auto count = sock.read_some(read_buffer.write_ptr(),
+				    read_buffer.write_count(),
+				    read_buffer.write_ptr2(),
+				    read_buffer.write_count2());
+				if (count == 0)
+					return false;
+				read_buffer.did_write(count);
+			}
 			switch (state) {
 			case REQUEST_HEADER:
 				request_parser.parse(read_buffer);

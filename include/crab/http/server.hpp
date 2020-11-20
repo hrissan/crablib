@@ -15,7 +15,17 @@
 #include "query_parser.hpp"
 #include "types.hpp"
 
-namespace crab { namespace http {
+namespace crab {
+
+namespace details {
+
+struct HTTPServerSettings : public TCPAcceptorSettings {
+	size_t max_connections = 131072;
+};
+
+}  // namespace details
+
+namespace http {
 
 class ErrorAuthorization : public std::runtime_error {
 public:
@@ -75,13 +85,14 @@ private:
 
 class Server {
 public:
-	typedef std::function<void(Client *who, Request &&)> R_handler;
+	using Settings  = details::HTTPServerSettings;
+	using R_handler = std::function<void(Client *who, Request &&)>;
 	// TODO - document new server interface
 	// if you did not write response and exception is thrown, 422 will be returned
 	// if you did not write full response and no exception is thrown, you are expected
 	// to remember who and later call Client::write() to finish serving request
 
-	explicit Server(const Address &address);
+	explicit Server(const Address &address, const Settings &settings = Settings{});
 	explicit Server(uint16_t port) : Server(Address("0.0.0.0", port)) {}
 	~Server();
 	// Unlike other parts of crab, you must not destroy server in handlers
@@ -98,7 +109,8 @@ private:
 	};
 	using CurrentTimeCache = details::StaticHolderTL<TimeCache>;
 
-	TCPAcceptor la_socket;
+	Settings settings;
+	TCPAcceptor acceptor;
 
 	std::list<Client> clients;
 
@@ -110,4 +122,5 @@ private:
 	void on_client_handle_message(Client *who, WebMessage &&);
 };
 
-}}  // namespace crab::http
+}  // namespace http
+}  // namespace crab

@@ -29,6 +29,7 @@ public:
 	void accept(TCPAcceptor &acceptor, Address *accepted_addr = nullptr) { sock.accept(acceptor, accepted_addr); }
 
 	size_t read_some(uint8_t *val, size_t count) override;
+	size_t read_some(uint8_t *val, size_t count, uint8_t *val2, size_t count2);
 	using IStream::read_some;  // Version for other char types
 
 	// Efficient direct-to-socket interface
@@ -68,11 +69,13 @@ protected:
 	void write();
 	void sock_handler();
 	void shutdown_timer_handler();
+	void flush_timer_handler();
 
 	Handler rwd_handler;
 
 	TCPSocketTLS sock;
 	Timer shutdown_timer;
+	Timer flush_timer;
 };
 
 namespace http {
