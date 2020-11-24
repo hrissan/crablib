@@ -5,7 +5,6 @@
 
 #include <crab/crab.hpp>
 
-/*
 namespace crab {
 
 namespace http2 {
@@ -58,14 +57,9 @@ private:
     friend class Server;
 };
 
- struct StringView {
-    const char * value;
-    size_t size = 0;
-};
-
 struct Header {
-    StringView name;
-    StringView value;
+    string_view name;
+    string_view value;
 };
 
 struct RequestResponseHeader {
@@ -78,26 +72,26 @@ struct RequestResponseHeader {
     std::vector<Header> headers;  // names are lower-case, array is sorted
 
     bool transfer_encoding_chunked = false;
-    std::vector<StringView> transfer_encodings;  // lower-case, other than chunked, identity
+    std::vector<string_view> transfer_encodings;  // lower-case, other than chunked, identity
 
     bool connection_upgrade = false;
     bool upgrade_websocket = false;  // Upgrade: WebSocket
 
-    StringView content_type_mime;    // lower-case
-    StringView content_type_suffix;  // after ";"
+    string_view content_type_mime;    // lower-case
+    string_view content_type_suffix;  // after ";"
 };
 
 struct RequestHeader : public RequestResponseHeader {
-    StringView method;
-    StringView path;          // URL-decoded automatically on parse, encoded on send
-    StringView query_string;  // not URL-decoded (would otherwise lose separators)
+    string_view method;
+    string_view path;          // URL-decoded automatically on parse, encoded on send
+    string_view query_string;  // not URL-decoded (would otherwise lose separators)
 
-    StringView basic_authorization;
-    StringView host;
-    StringView origin;
+    string_view basic_authorization;
+    string_view host;
+    string_view origin;
 
-    StringView sec_websocket_key;
-    StringView sec_websocket_version;
+    string_view sec_websocket_key;
+    string_view sec_websocket_version;
 };
 
 class ServerConnection {
@@ -105,6 +99,10 @@ public:
     ServerConnection()
         :incoming_buffer(4096)
         , sock([this]() { sock_handler(); }) {}
+        
+	const RequestHeader & get_request() const { return req; }
+	std::pair<const uint8_t *, size_t> read_next();
+	
 private:
     Buffer incoming_buffer; // Will be modified during parsing
     RequestHeader req; // Views are into incoming_buffer
@@ -163,11 +161,68 @@ std::endl;
     }
 };
 
+using Rope = std::deque<Buffer>;
+
 }  // namespace http
 }  // namespace crab
-*/
+
 
 namespace http = crab::http;
+namespace http2 = crab::http2;
+
+struct LimitedBody : public RequestHandler {
+	virtual void on_body_read() {
+		auto chunk = who->read_body();
+	}
+	virtual void on_body_finished()=0;
+};
+
+struct LongPollProcessor : public LimitedBody {
+public:
+	virtual void on_body_finished() {
+		if (have_data()) {
+			write_status();
+			write_content_type();
+			write_body();
+		}else{
+			// Add to data structure
+			postpone_response();
+		}
+	}
+	~LongPollProcessor() override {
+		// Remove from data structure
+	}
+};
+
+struct FileUploader : public RequestHandler {
+public:
+	virtual void on_body_read() {
+		auto chunk = who->read_body(remained);
+		file.write(chunk);
+	}
+	virtual void on_body_finished() {
+		// Finish file
+		write_status();
+		write_content_type();
+		write_body();
+	}
+	~FileUploader() override {
+		// Remove file in not finished
+	}
+};
+
+struct FileDownloader : public LimitedBody {
+public:
+	virtual void on_body_finished(Rope rope) {
+		write_status();
+		write_content_type();
+		write_content_length();
+	}
+	virtual void on_body_write(size_t pos, optional<size_t> remains) {
+		write();
+	}
+};
+
 
 int main() {
 	std::cout << "crablib version " << crab::version_string() << std::endl;
@@ -176,9 +231,17 @@ int main() {
 
 	crab::RunLoop runloop;
 
-	http::Server server(7000);
+	http2::Server server(7000);
 
-	server.r_handler = [&](http::Client *who, http::Request &&request) {
+	server.r_handler = [&](http2::ServerConnection *who) {
+		if (who->get_request().path.substr(0, 5) == "/long") {
+			who->postpone_response([&](){
+			
+			});
+		}
+		if (who->get_request().path.substr(0, 5) == "/meow") {
+		
+		}
 		bool cond = false;
 		//		std::cout << "Request" << std::endl;
 		for (const auto &q : request.parse_query_params()) {
