@@ -88,6 +88,13 @@ public:
 		return (s == size) ? std::memcmp(d, value, s) : s > size ? 1 : -1;
 	}
 	int compare(const std::string &b) const { return compare(b.data(), b.size()); }
+	string_view substr(size_t pos = 0, size_t count = std::string::npos ) const {
+		if (pos > s)
+			throw std::out_of_range("string_view::substr pos out of range");
+		return string_view(d + pos, std::min(s - pos, size));
+	}
+	void remove_prefix(size_t count) { s -= count; d += count; }
+	void remove_suffix(size_t count) { s -= count; }
 
 	const char *data() const { return d; }
 	size_t size() const { return s; }
