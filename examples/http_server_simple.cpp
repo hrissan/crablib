@@ -87,6 +87,7 @@ private:
 	crab::TCPAcceptor::Settings get_settings() {
 		crab::TCPAcceptor::Settings result;
 		result.reuse_addr = true;
+		result.reuse_port = true;
 		result.tcp_delay = true;
 		return result;
 	}
@@ -172,8 +173,35 @@ private:
 	}
 };
 
-/*
-int main(int argc, const char *argv[]) {
+int test_http(size_t num, uint16_t port) {
+	std::string body = "Hello, Crab " + std::to_string(num) + "!";
+	crab::RunLoop runloop;
+
+	FastServerApp app(crab::Address("0.0.0.0", port));
+
+	runloop.run();
+	return 0;
+}
+
+int main3(int argc, char *argv[]) {
+	std::cout << "crablib version " << crab::version_string() << std::endl;
+
+	auto th_count = std::thread::hardware_concurrency();
+	std::cout << "This server uses " << th_count
+			  << " threads, your system must support binding several TCP acceptors to the same port" << std::endl;
+
+	std::vector<std::thread> ths;
+	for (size_t i = 1; i < th_count; ++i)
+		ths.emplace_back(&test_http, i, uint16_t(7000));
+	test_http(0, 7000);
+	while (!ths.empty()) {
+		ths.back().join();
+		ths.pop_back();
+	}
+	return 0;
+}
+
+int main2(int argc, const char *argv[]) {
 	std::cout << "crablib version " << crab::version_string() << std::endl;
 
 	std::cout << "This is probably fastest possible HTTP server using crablib" << std::endl;
@@ -188,7 +216,6 @@ int main(int argc, const char *argv[]) {
 	runloop.run();
 	return 0;
 }
-*/
 
 int main(int argc, const char *argv[]) {
 	std::cout << "crablib version " << crab::version_string() << std::endl;
@@ -227,4 +254,3 @@ int main(int argc, const char *argv[]) {
 	runloop.run();
 	return 0;
 }
-
