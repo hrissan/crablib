@@ -176,4 +176,11 @@ CRAB_INLINE double Random::double_value() {
 	return ldexp(hipart ^ pcg32_random_r(), -63);
 }
 
+CRAB_INLINE void memzero(void *data, size_t len) {
+	volatile unsigned char *udata = reinterpret_cast<volatile unsigned char *>(data);
+	for (size_t i = 0; i != len; ++i) {
+		udata[i] = 0;
+	}
+}
+
 }  // namespace crab

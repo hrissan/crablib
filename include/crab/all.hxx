@@ -11,10 +11,14 @@
 #include "streams.hxx"
 #include "util.hxx"
 
-#include "crab/http/crab_tls.hxx"
-#include "crab/http/crab_tls_certificates.hxx"
+#include "crypto/base64.hxx"
+#include "crypto/md5.hxx"
+#include "crypto/sha1.hxx"
+
 #include "http/client_request.hxx"
 #include "http/connection.hxx"
+#include "http/crab_tls.hxx"
+#include "http/crab_tls_certificates.hxx"
 #include "http/query_parser.hxx"
 #include "http/request_parser.hxx"
 #include "http/response_parser.hxx"

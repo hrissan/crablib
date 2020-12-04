@@ -5,10 +5,8 @@
 
 #include <crab/crab.hpp>
 
-namespace crab {
-
-namespace http2 {
-
+/*
+namespace crab { namespace http2 {
 
 class Client : protected ServerConnection {  // So the type is opaque for users
 public:
@@ -66,7 +64,7 @@ struct RequestResponseHeader {
     // Common for requests and responses
     int http_version_major = 1;
     int http_version_minor = 1;
-    bool keep_alive = true;
+    bool keep_alive        = true;
     optional<uint64_t> content_length;
 
     std::vector<Header> headers;  // names are lower-case, array is sorted
@@ -75,7 +73,7 @@ struct RequestResponseHeader {
     std::vector<string_view> transfer_encodings;  // lower-case, other than chunked, identity
 
     bool connection_upgrade = false;
-    bool upgrade_websocket = false;  // Upgrade: WebSocket
+    bool upgrade_websocket  = false;  // Upgrade: WebSocket
 
     string_view content_type_mime;    // lower-case
     string_view content_type_suffix;  // after ";"
@@ -96,16 +94,14 @@ struct RequestHeader : public RequestResponseHeader {
 
 class ServerConnection {
 public:
-    ServerConnection()
-        :incoming_buffer(4096)
-        , sock([this]() { sock_handler(); }) {}
-        
-	const RequestHeader & get_request() const { return req; }
-	std::pair<const uint8_t *, size_t> read_next();
-	
+    ServerConnection() : incoming_buffer(4096), sock([this]() { sock_handler(); }) {}
+
+    const RequestHeader &get_request() const { return req; }
+    std::pair<const uint8_t *, size_t> read_next();
+
 private:
-    Buffer incoming_buffer; // Will be modified during parsing
-    RequestHeader req; // Views are into incoming_buffer
+    Buffer incoming_buffer;  // Will be modified during parsing
+    RequestHeader req;       // Views are into incoming_buffer
 
     TCPSocket sock;
     std::deque<Buffer> outgoing_buffer;
@@ -113,9 +109,7 @@ private:
 
     Handler rwd_handler;
 
-    void sock_handler() {
-
-    }
+    void sock_handler() {}
 };
 
 class Server {
@@ -128,9 +122,9 @@ public:
     // to remember who and later call Client::write() to finish serving request
 
     explicit Server(const Address &address, const Settings &settings = Settings{})
-            : settings{settings}, acceptor{address, std::bind(&Server::accept_all, this), settings} {}
+        : settings{settings}, acceptor{address, std::bind(&Server::accept_all, this), settings} {}
 
-    ~Server(){}
+    ~Server() {}
     // Unlike other parts of crab, you must not destroy server in handlers
     // when destroying server, remove all Client * you remembered
 
@@ -142,12 +136,8 @@ private:
 
     std::list<ServerConnection> clients;
 
-    void on_client_handler(std::list<ServerConnection>::iterator it) {
-
-    }
-    void on_client_disconnected(std::list<ServerConnection>::iterator it){
-
-    }
+    void on_client_handler(std::list<ServerConnection>::iterator it) {}
+    void on_client_disconnected(std::list<ServerConnection>::iterator it) {}
 
     void accept_all() {
         while (acceptor.can_accept() && clients.size() < settings.max_connections) {
@@ -156,112 +146,108 @@ private:
             it->set_handler([this, it]() { on_client_handler(it); });
             it->accept(acceptor);
             //        std::cout << "HTTP Client accepted=" << cid << " addr=" << (*it)->get_peer_address() <<
-std::endl;
+            std::endl;
         }
     }
 };
 
 using Rope = std::deque<Buffer>;
 
-}  // namespace http
-}  // namespace crab
+}}  // namespace crab::http2
 
-
-namespace http = crab::http;
+namespace http  = crab::http;
 namespace http2 = crab::http2;
 
 struct LimitedBody : public RequestHandler {
-	virtual void on_body_read() {
-		auto chunk = who->read_body();
-	}
-	virtual void on_body_finished()=0;
+    virtual void on_body_read() { auto chunk = who->read_body(); }
+    virtual void on_body_finished() = 0;
 };
 
 struct LongPollProcessor : public LimitedBody {
 public:
-	virtual void on_body_finished() {
-		if (have_data()) {
-			write_status();
-			write_content_type();
-			write_body();
-		}else{
-			// Add to data structure
-			postpone_response();
-		}
-	}
-	~LongPollProcessor() override {
-		// Remove from data structure
-	}
+    virtual void on_body_finished() {
+        if (have_data()) {
+            write_status();
+            write_content_type();
+            write_body();
+        } else {
+            // Add to data structure
+            postpone_response();
+        }
+    }
+    ~LongPollProcessor() override {
+        // Remove from data structure
+    }
 };
 
 struct FileUploader : public RequestHandler {
 public:
-	virtual void on_body_read() {
-		auto chunk = who->read_body(remained);
-		file.write(chunk);
-	}
-	virtual void on_body_finished() {
-		// Finish file
-		write_status();
-		write_content_type();
-		write_body();
-	}
-	~FileUploader() override {
-		// Remove file in not finished
-	}
+    virtual void on_body_read() {
+        auto chunk = who->read_body(remained);
+        file.write(chunk);
+    }
+    virtual void on_body_finished() {
+        // Finish file
+        write_status();
+        write_content_type();
+        write_body();
+    }
+    ~FileUploader() override {
+        // Remove file in not finished
+    }
 };
 
 struct FileDownloader : public LimitedBody {
 public:
-	virtual void on_body_finished(Rope rope) {
-		write_status();
-		write_content_type();
-		write_content_length();
-	}
-	virtual void on_body_write(size_t pos, optional<size_t> remains) {
-		write();
-	}
+    virtual void on_body_finished(Rope rope) {
+        write_status();
+        write_content_type();
+        write_content_length();
+    }
+    virtual void on_body_write(size_t pos, optional<size_t> remains) { write(); }
 };
 
-
 int main() {
-	std::cout << "crablib version " << crab::version_string() << std::endl;
+    std::cout << "crablib version " << crab::version_string() << std::endl;
 
-	std::cout << "This is new HTTP server on port 7000" << std::endl;
+    std::cout << "This is new HTTP server on port 7000" << std::endl;
 
-	crab::RunLoop runloop;
+    crab::RunLoop runloop;
 
-	http2::Server server(7000);
+    http2::Server server(7000);
 
-	server.r_handler = [&](http2::ServerConnection *who) {
-		if (who->get_request().path.substr(0, 5) == "/long") {
-			who->postpone_response([&](){
-			
-			});
-		}
-		if (who->get_request().path.substr(0, 5) == "/meow") {
-		
-		}
-		bool cond = false;
-		//		std::cout << "Request" << std::endl;
-		for (const auto &q : request.parse_query_params()) {
-			//			std::cout << "    '" << q.first << "' => '" << q.second << "'" << std::endl;
-			if (q.first == crab::string_view{"query"})
-				cond = true;
-		}
-		//		std::cout << "Cookies" << std::endl;
-		//		for (const auto &q : request.parse_cookies())
-		//			std::cout << "    '" << q.first << "' => '" << q.second << "'" << std::endl;
-		http::Response response;
-		response.header.status = 200;
-		response.header.set_content_type("text/plain", "charset=utf-8");
-		response.set_body(cond ? "Hello, Cond!" : "Hello, Crab!");
-		who->write(std::move(response));
+    server.r_handler = [&](http2::ServerConnection *who) {
+        if (who->get_request().path.substr(0, 5) == "/long") {
+            who->postpone_response([&]() {
 
-		// Or for even simpler code paths, like error messages
-		// who->write(http::Response::simple_text(200, "Hello, Crab!"));
-	};
+            });
+        }
+        if (who->get_request().path.substr(0, 5) == "/meow") {
+        }
+        bool cond = false;
+        //		std::cout << "Request" << std::endl;
+        for (const auto &q : request.parse_query_params()) {
+            //			std::cout << "    '" << q.first << "' => '" << q.second << "'" << std::endl;
+            if (q.first == crab::string_view{"query"})
+                cond = true;
+        }
+        //		std::cout << "Cookies" << std::endl;
+        //		for (const auto &q : request.parse_cookies())
+        //			std::cout << "    '" << q.first << "' => '" << q.second << "'" << std::endl;
+        http::Response response;
+        response.header.status = 200;
+        response.header.set_content_type("text/plain", "charset=utf-8");
+        response.set_body(cond ? "Hello, Cond!" : "Hello, Crab!");
+        who->write(std::move(response));
 
-	runloop.run();
-	return 0;
+        // Or for even simpler code paths, like error messages
+        // who->write(http::Response::simple_text(200, "Hello, Crab!"));
+    };
+
+    runloop.run();
+    return 0;
 }
+
+ */
+
+int main() { return 0; }

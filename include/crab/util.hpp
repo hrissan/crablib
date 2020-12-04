@@ -88,12 +88,15 @@ public:
 		return (s == size) ? std::memcmp(d, value, s) : s > size ? 1 : -1;
 	}
 	int compare(const std::string &b) const { return compare(b.data(), b.size()); }
-	string_view substr(size_t pos = 0, size_t count = std::string::npos ) const {
+	string_view substr(size_t pos = 0, size_t count = std::string::npos) const {
 		if (pos > s)
 			throw std::out_of_range("string_view::substr pos out of range");
 		return string_view(d + pos, std::min(s - pos, count));
 	}
-	void remove_prefix(size_t count) { s -= count; d += count; }
+	void remove_prefix(size_t count) {
+		s -= count;
+		d += count;
+	}
 	void remove_suffix(size_t count) { s -= count; }
 
 	const char *data() const { return d; }
@@ -101,7 +104,7 @@ public:
 
 private:
 	const char *d = nullptr;  // We could save on initializing if count = 0, but seems dangerous
-	size_t s = 0;
+	size_t s      = 0;
 };
 
 inline bool operator==(const std::string &a, const string_view &b) { return b.compare(a) == 0; }
@@ -258,4 +261,7 @@ public:
 private:
 	std::function<void()> callback;
 };
+
+void memzero(void *data, size_t len);
+
 }  // namespace crab

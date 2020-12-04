@@ -8,17 +8,10 @@
 namespace http = crab::http;
 
 class NaiveParser {
-	enum State {
-		HEADER_TEXT,
-		HEADER_START_LF,
-		HEADER_START,
-		SECOND_LF,
-		GOOD
-	} state = HEADER_TEXT;
+	enum State { HEADER_TEXT, HEADER_START_LF, HEADER_START, SECOND_LF, GOOD } state = HEADER_TEXT;
 
 public:
 	size_t max_total_length = 8192;
-
 
 	template<typename InputIterator>
 	InputIterator parse(InputIterator begin, InputIterator end) {
@@ -64,20 +57,21 @@ public:
 			throw std::logic_error("Invalid request parser state");
 		}
 	}
-	size_t total_length    = 0;
+	size_t total_length = 0;
 };
 
 class FastServerApp {
 public:
 	explicit FastServerApp(const crab::Address &bind_address)
-	    : la_socket(bind_address, [&]() { accept_all(); }, get_settings())
+	    : la_socket(
+	          bind_address, [&]() { accept_all(); }, get_settings())
 	    , stat_timer([&]() { print_stats(); }) {
 		print_stats();
 		http::Response response;
 		response.header.status = 200;
 		response.header.set_content_type("text/plain", "charset=utf-8");
 		response.header.server = "crab";
-		response.header.date = http::Server::get_date();
+		response.header.date   = http::Server::get_date();
 		response.set_body("Hello, Crab!");
 		response_text = response.header.to_string() + response.body;
 		std::cout << "response_text: " << response_text << std::endl;
@@ -88,7 +82,7 @@ private:
 		crab::TCPAcceptor::Settings result;
 		result.reuse_addr = true;
 		result.reuse_port = true;
-		result.tcp_delay = true;
+		result.tcp_delay  = true;
 		return result;
 	}
 	crab::TCPAcceptor la_socket;
@@ -99,7 +93,7 @@ private:
 		crab::TCPSocket socket;
 		crab::Buffer incoming_buffer;
 		crab::Buffer outgoing_buffer;
-		
+
 		NaiveParser parser;
 
 		Client() : socket(crab::empty_handler), incoming_buffer(4096), outgoing_buffer(4096) {}
@@ -114,8 +108,8 @@ private:
 	void on_client_handler(ClientList::iterator it) {
 		if (!it->socket.is_open())
 			return on_client_disconnected(it);
-		Client & client = *it;
-		while(true) {
+		Client &client = *it;
+		while (true) {
 			if (!client.outgoing_buffer.empty()) {
 				client.outgoing_buffer.write_to(client.socket);
 				if (!client.outgoing_buffer.empty())
@@ -133,7 +127,7 @@ private:
 			if (client.incoming_buffer.size() == 0)
 				return;
 			client.parser.parse(client.incoming_buffer);
-			client.parser.parse(client.incoming_buffer); // TODO - remove
+			client.parser.parse(client.incoming_buffer);  // TODO - remove
 		}
 	}
 	void on_client_disconnected(ClientList::iterator it) {
@@ -159,16 +153,16 @@ private:
 	}
 	void print_stats() {
 		stat_timer.once(1);
-//		std::cout << "requests processed (during last second)=" << requests_processed << std::endl;
-//		if (!clients.empty()) {
-//			std::cout << "Client.front read=" << clients.front().total_read
-//			          << " written=" << clients.front().total_written << std::endl;
-//			//            if (requests_processed == 0 && clients.front().total_written > 2000) {
-//			//                uint8_t buf[100]{};
-//			//                clients.front().socket.write(buf, sizeof(buf));
-//			//                std::cout << "Written 100 bytes" << std::endl;
-//			//            }
-//		}
+		//		std::cout << "requests processed (during last second)=" << requests_processed << std::endl;
+		//		if (!clients.empty()) {
+		//			std::cout << "Client.front read=" << clients.front().total_read
+		//			          << " written=" << clients.front().total_written << std::endl;
+		//			//            if (requests_processed == 0 && clients.front().total_written > 2000) {
+		//			//                uint8_t buf[100]{};
+		//			//                clients.front().socket.write(buf, sizeof(buf));
+		//			//                std::cout << "Written 100 bytes" << std::endl;
+		//			//            }
+		//		}
 		requests_processed = 0;
 	}
 };
@@ -188,7 +182,7 @@ int main3(int argc, char *argv[]) {
 
 	auto th_count = std::thread::hardware_concurrency();
 	std::cout << "This server uses " << th_count
-			  << " threads, your system must support binding several TCP acceptors to the same port" << std::endl;
+	          << " threads, your system must support binding several TCP acceptors to the same port" << std::endl;
 
 	std::vector<std::thread> ths;
 	for (size_t i = 1; i < th_count; ++i)
