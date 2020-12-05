@@ -49,7 +49,7 @@ CRAB_INLINE size_t BufferedTCPSocket::read_some(uint8_t *val, size_t count) {
 CRAB_INLINE size_t BufferedTCPSocket::read_some(uint8_t *val, size_t count, uint8_t *val2, size_t count2) {
 	if (write_shutdown_asked)
 		return 0;
-	return sock.read_some(val, count, val2, count2);
+	return sock.read_some(val, count);
 }
 
 CRAB_INLINE size_t BufferedTCPSocket::write_some(const uint8_t *val, size_t count) {

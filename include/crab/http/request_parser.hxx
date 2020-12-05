@@ -47,7 +47,6 @@ CRAB_INLINE RequestParser::State RequestParser::consume(char input) {
 			throw std::runtime_error("Invalid character in method");
 		req.method.push_back(input);
 		return METHOD;
-	// TODO - collapse ./ and ../
 	case URI_START:
 		if (is_sp(input))
 			return URI_START;

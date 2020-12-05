@@ -122,7 +122,7 @@ CRAB_INLINE Random::Random() {
 	state = dist(rd);
 }
 
-CRAB_INLINE Random::Random(uint32_t seed) { state = uint64_t(seed) << 32U; }
+CRAB_INLINE Random::Random(uint32_t seed) : state(0x5EF9DE16501FD6F7), inc(uint64_t(seed) << 32U) {}
 
 CRAB_INLINE uint32_t Random::pcg32_random_r() {
 	uint64_t oldstate = state;

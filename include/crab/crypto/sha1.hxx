@@ -17,33 +17,64 @@ inline uint32_t sha1_make_word(const uint8_t *p) {
 	       ((uint32_t)p[3] << 0 * 8);
 }
 
-}  // namespace details
-
-CRAB_INLINE void sha1::add_byte_dont_count_bits(uint8_t x) {
-	buf[i++] = x;
-
-	if (i >= sizeof(buf)) {
-		i = 0;
-		process_block(buf);
-	}
+inline void sha1_put_word(uint8_t *p, uint32_t w) {
+	p[3] = uint8_t(w);
+	p[2] = uint8_t(w >> 8);
+	p[1] = uint8_t(w >> 16);
+	p[0] = uint8_t(w >> 24);
 }
 
+}  // namespace details
+
+CRAB_INLINE sha1 &sha1::add(const uint8_t *data, size_t n) {
+	size_t index = static_cast<size_t>(size % 64);
+	size += n;
+	auto partLen = 64 - index;
+
+	if (n < partLen) {
+		memcpy(buffer + index, data, n);
+		return *this;
+	}
+	memcpy(buffer + index, data, partLen);
+	process_block(buffer);
+	index += partLen;
+	data += partLen;
+	n -= partLen;
+	while (n >= 64) {
+		process_block(data);
+		data += 64;
+		n -= 64;
+	}
+	std::memcpy(buffer, data, n);
+	return *this;
+}
+
+CRAB_INLINE void sha1::finalize(uint8_t *result) {
+	// hashed text ends with 0x80, some padding 0x00 and the length in bits
+	static const uint8_t PADDING[] = {0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	    0};
+
+	size_t offset = static_cast<size_t>(size % 64);
+	size_t padLen = offset < 56 ? 56 - offset : (56 + 64) - offset;
+
+	const auto original_size = size;
+	add(PADDING, padLen);
+	details::sha1_put_word(buffer + 56, static_cast<uint32_t>((original_size * 8) >> 32));
+	details::sha1_put_word(buffer + 60, static_cast<uint32_t>(original_size * 8));
+	process_block(buffer);
+
+	for (size_t i = 0; i != 5; ++i)
+		details::sha1_put_word(result + 4 * i, state[i]);
+}
+
+CRAB_INLINE sha1::~sha1() { memzero(buffer, sizeof(buffer)); }
+
 CRAB_INLINE void sha1::process_block(const uint8_t *ptr) {
-	const uint32_t c0 = 0x5a827999;
-	const uint32_t c1 = 0x6ed9eba1;
-	const uint32_t c2 = 0x8f1bbcdc;
-	const uint32_t c3 = 0xca62c1d6;
-
-	uint32_t a = state[0];
-	uint32_t b = state[1];
-	uint32_t c = state[2];
-	uint32_t d = state[3];
-	uint32_t e = state[4];
-
-	uint32_t w[16];
-
-	for (int i = 0; i < 16; i++)
-		w[i] = details::sha1_make_word(ptr + i * 4);
+	constexpr uint32_t c0 = 0x5a827999;
+	constexpr uint32_t c1 = 0x6ed9eba1;
+	constexpr uint32_t c2 = 0x8f1bbcdc;
+	constexpr uint32_t c3 = 0xca62c1d6;
 
 #define SHA1_LOAD(i) \
 	w[i & 15] = details::sha1_rol32(w[(i + 13) & 15] ^ w[(i + 8) & 15] ^ w[(i + 2) & 15] ^ w[i & 15], 1);
@@ -62,6 +93,17 @@ CRAB_INLINE void sha1::process_block(const uint8_t *ptr) {
 #define SHA1_ROUND_4(v, u, x, y, z, i)                                          \
 	SHA1_LOAD(i) z += (u ^ x ^ y) + w[i & 15] + c3 + details::sha1_rol32(v, 5); \
 	u = details::sha1_rol32(u, 30);
+
+	uint32_t a = state[0];
+	uint32_t b = state[1];
+	uint32_t c = state[2];
+	uint32_t d = state[3];
+	uint32_t e = state[4];
+
+	uint32_t w[16];
+
+	for (int i = 0; i < 16; i++)
+		w[i] = details::sha1_make_word(ptr + i * 4);
 
 	SHA1_ROUND_0(a, b, c, d, e, 0);
 	SHA1_ROUND_0(e, a, b, c, d, 1);
@@ -144,13 +186,6 @@ CRAB_INLINE void sha1::process_block(const uint8_t *ptr) {
 	SHA1_ROUND_4(c, d, e, a, b, 78);
 	SHA1_ROUND_4(b, c, d, e, a, 79);
 
-#undef SHA1_LOAD
-#undef SHA1_ROUND_0
-#undef SHA1_ROUND_1
-#undef SHA1_ROUND_2
-#undef SHA1_ROUND_3
-#undef SHA1_ROUND_4
-
 	state[0] += a;
 	state[1] += b;
 	state[2] += c;
@@ -158,48 +193,13 @@ CRAB_INLINE void sha1::process_block(const uint8_t *ptr) {
 	state[4] += e;
 
 	memzero(w, sizeof(w));
+
+#undef SHA1_LOAD
+#undef SHA1_ROUND_0
+#undef SHA1_ROUND_1
+#undef SHA1_ROUND_2
+#undef SHA1_ROUND_3
+#undef SHA1_ROUND_4
 }
-
-CRAB_INLINE sha1 &sha1::add(uint8_t x) {
-	add_byte_dont_count_bits(x);
-	n_bits += 8;
-	return *this;
-}
-
-CRAB_INLINE sha1 &sha1::add(const uint8_t *ptr, size_t n) {
-	// fill up block if not full
-	for (; n && i % sizeof(buf); n--)
-		add(*ptr++);
-
-	// process full blocks
-	for (; n >= sizeof(buf); n -= sizeof(buf)) {
-		process_block(ptr);
-		ptr += sizeof(buf);
-		n_bits += sizeof(buf) * 8;
-	}
-
-	// process remaining part of block
-	for (; n; n--)
-		add(*ptr++);
-
-	return *this;
-}
-
-CRAB_INLINE void sha1::finalize(uint8_t *result) {
-	// hashed text ends with 0x80, some padding 0x00 and the length in bits
-	add_byte_dont_count_bits(0x80);
-	while (i % 64 != 56)
-		add_byte_dont_count_bits(0x00);
-	for (int j = 7; j >= 0; j--)
-		add_byte_dont_count_bits(static_cast<uint8_t>(n_bits >> j * 8));
-
-	for (int i = 0; i < 5; i++) {
-		for (int j = 0; j < 4; j++) {
-			result[i * 4 + j] = uint8_t(state[i] >> (24 - j * 8));
-		}
-	}
-}
-
-CRAB_INLINE sha1::~sha1() { memzero(buf, sizeof(buf)); }
 
 }  // namespace crab

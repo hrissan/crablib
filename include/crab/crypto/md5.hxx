@@ -72,20 +72,18 @@ CRAB_INLINE void md5::finalize(uint8_t *result) {
 	static const uint8_t PADDING[] = {0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 	    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 	    0};
-	const auto original_size       = size;
 
 	size_t offset = static_cast<size_t>(size % 64);
 	size_t padLen = offset < 56 ? 56 - offset : (56 + 64) - offset;
 
+	const auto original_size = size;
 	add(PADDING, padLen);
 	details::md5_put_word(buffer + 56, static_cast<uint32_t>(original_size * 8));
 	details::md5_put_word(buffer + 60, static_cast<uint32_t>((original_size * 8) >> 32));
 	process_block(buffer);
 
-	details::md5_put_word(result, state[0]);
-	details::md5_put_word(result + 4, state[1]);
-	details::md5_put_word(result + 8, state[2]);
-	details::md5_put_word(result + 12, state[3]);
+	for (size_t i = 0; i != 4; ++i)
+		details::md5_put_word(result + 4 * i, state[i]);
 }
 
 CRAB_INLINE md5::~md5() { memzero(buffer, sizeof(buffer)); }

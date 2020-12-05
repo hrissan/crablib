@@ -1,5 +1,11 @@
 ## Release Notes
 
+### Next Release
+
+- Deterministic Random starts with better values
+- Web Socket masking is now 8x faster
+- MD5 added to crypto algorithms
+
 ### 0.9.2
 
 - fixed bug when HTTP Time header was cached by server for 500 seconds, not milliseconds
