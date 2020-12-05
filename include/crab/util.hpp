@@ -212,7 +212,7 @@ public:
 class Random {
 public:
 	Random();
-	explicit Random(uint32_t seed);  // For tests. Hopefully, 2^32 test patterns is enough
+	explicit Random(uint64_t seed);  // For tests.
 
 	void bytes(uint8_t *buffer, size_t size);
 	void bytes(char *buffer, size_t size) { bytes(uint8_cast(buffer), size); }
