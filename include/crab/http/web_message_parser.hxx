@@ -90,15 +90,39 @@ CRAB_INLINE WebMessageHeaderParser::State WebMessageHeaderParser::consume(uint8_
 	}
 }
 
-// TODO - help compiler by splitting into start, mid, finish
-// start will advance data and rotate masking_key until aligned with uint64_t
-
 CRAB_INLINE void WebMessageHeaderParser::mask_data(
     size_t masking_shift, char *data, size_t size, uint32_t masking_key) {
-	auto x2 = rol(masking_key, 8 + 8 * masking_shift);
+	auto mask = crab::rol(masking_key, 8 * masking_shift);
+
+	void *next_aligned = data;
+	if (!std::align(alignof(uint64_t), sizeof(uint64_t), next_aligned, size)) {
+		// There is no such a pointer inside data:size that aligned uint64_t would fit
+		for (size_t i = 0; i != size; ++i) {
+			mask = rol(mask, 8);
+			data[i] ^= mask;
+		}
+		return;
+	}
+	while (data != next_aligned) {
+		mask = rol(mask, 8);
+		*data ^= mask;
+		data++;
+	}
+	// We originally interpreted mask bytes ABCD as a big-endian number (A << 24)+(B << 16)+(C << 8) + D
+	// We need ^A for the first byte, ^B for the second one, etc. or convert BE to native
+	uint8_t mask_bytes[4]{uint8_t(mask >> 24), uint8_t(mask >> 16), uint8_t(mask >> 8), uint8_t(mask)};
+	uint32_t mask_native;
+	std::memcpy(&mask_native, &mask_bytes, 4);
+	const uint64_t mask64_native = (uint64_t(mask_native) << 32U) | mask_native;
+
+	while (size >= sizeof(uint64_t)) {
+		*reinterpret_cast<uint64_t *>(data) ^= mask64_native;  // Cast is safe, because data is aligned
+		data += sizeof(uint64_t);
+		size -= sizeof(uint64_t);
+	}
 	for (size_t i = 0; i != size; ++i) {
-		data[i] ^= x2;
-		x2 = rol(x2, 8);
+		mask = rol(mask, 8);
+		data[i] ^= mask;
 	}
 }
 
