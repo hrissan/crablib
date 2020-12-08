@@ -1,11 +1,14 @@
 ## Release Notes
 
-### 0.9.2
+### 0.9.2 (Next Release)
 
 - fixed bug when HTTP Time header was cached by server for 500 seconds, not milliseconds
 - example of fair resource-bound API server. TODO - improve example
 - `SignalStop` renamed to `Signal` and now accepts list of signals. Empty list means to detect generic `Ctrl-C` and sorta works on `Linux`, `Mac` and `Windows`.
 - `crab::Thread` to wrap creation of `std::thread` with RunLoop and perform raceless cancellation
+- Recommended Random seeding
+- Web Socket masking is now 8x faster
+- MD5 added to crypto algorithms
 
 *Bugs fixed*
 - `sigprocmask` was changed `pthread_sigmask`, so that `Signal` work in multithreaded apps

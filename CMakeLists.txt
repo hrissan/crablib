@@ -44,7 +44,11 @@ set(SOURCE_FILES
 		include/crab/util.hxx
 
 		include/crab/crypto/base64.hpp
+		include/crab/crypto/base64.hxx
+		include/crab/crypto/md5.hpp
+		include/crab/crypto/md5.hxx
 		include/crab/crypto/sha1.hpp
+		include/crab/crypto/sha1.hxx
 
 		include/crab/http/client_request.hpp
 		include/crab/http/client_request.hxx

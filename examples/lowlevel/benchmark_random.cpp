@@ -127,6 +127,23 @@ void long_tail(uint32_t ma, uint32_t TAIL) {
 }
 
 int main() {
+	size_t bound       = 62;
+	uint32_t threshold = uint32_t(-bound) % bound;
+	//   	uint32_t LONG_TAIL   = uint32_t(0x100000000ULL % bound);
+
+	std::vector<size_t> indexes(bound);
+	for (uint64_t i = 0; i <= std::numeric_limits<uint32_t>::max(); i++) {
+		if (i < threshold)
+			continue;
+		//        if (i < LONG_TAIL)
+		//            continue;
+		indexes.at(i % bound) += 1;
+	}
+	std::cout << "Distribution delta:";
+	for (const auto &v : indexes)
+		std::cout << " " << int(v) - int(indexes.at(0));
+	std::cout << std::endl;
+
 	crab::Random rnd;
 	std::vector<int> vec{1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
 	std::shuffle(vec.begin(), vec.end(), rnd);

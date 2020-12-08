@@ -104,6 +104,7 @@ add_executable(benchmark_random ${SOURCE_FILES} lowlevel/benchmark_random.cpp)
 
 # tests
 add_executable(test_atoi ${SOURCE_FILES} ../test/test_atoi.cpp)
+add_executable(test_crypto ${SOURCE_FILES} ../test/test_crypto.cpp)
 add_executable(test_http_parsers ${SOURCE_FILES} ../test/test_http_parsers.cpp ../test/test_http_data.c)
 
 if(CRAB_FUZZ)

@@ -10,6 +10,7 @@
 #include "network.hpp"
 
 #include "crypto/base64.hpp"
+#include "crypto/md5.hpp"
 #include "crypto/sha1.hpp"
 
 namespace crab {
