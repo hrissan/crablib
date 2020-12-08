@@ -275,4 +275,35 @@ constexpr size_t max_to_string_length() {
 	    details::max_to_string_length_impl(std::numeric_limits<T>::min()));
 }
 
+template<typename T>
+class IntegerSaver {
+	enum { BUF_SIZE = max_to_string_length<T>() };
+
+public:
+	explicit IntegerSaver(T value) {
+		static_assert(std::is_integral<T>::value, "Target type must be integral");
+		size_t p = BUF_SIZE;
+		if (std::is_signed<T>::value && value < 0) {
+			do {
+				buffer[--p] = '0' - (value % 10);
+				value /= 10;
+			} while (value != 0 && p != 1);  // Last condition turns stack corruption into harmless wrong result
+			buffer[--p] = '-';
+		} else {
+			do {
+				buffer[--p] = '0' + (value % 10);
+				value /= 10;
+			} while (value != 0 && p != 0);  // Last condition turns stack corruption into harmless wrong result
+		}
+		pos = p;
+	}
+
+	const char *data() const { return buffer + pos; }
+	size_t size() const { return BUF_SIZE - pos; }
+
+private:
+	size_t pos;             // Uninitialized
+	char buffer[BUF_SIZE];  // Uninitialized
+};
+
 }  // namespace crab

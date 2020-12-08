@@ -123,8 +123,8 @@ CRAB_INLINE Random::Random() {
 }
 
 CRAB_INLINE Random::Random(uint64_t seed) : state(0), inc((seed << 1U) | 1U) {
-    pcg32_random_r();
-    pcg32_random_r();
+	pcg32_random_r();
+	pcg32_random_r();
 }
 
 CRAB_INLINE uint32_t Random::pcg32_random_r() {
@@ -161,7 +161,7 @@ CRAB_INLINE bdata Random::data(size_t size) {
 CRAB_INLINE std::string Random::printable_string(size_t size) {
 	static const char alphabet[]   = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 	constexpr size_t ALPHABET_SIZE = sizeof(alphabet) - 1;
-	constexpr uint32_t THRESHOLD   = uint32_t(-ALPHABET_SIZE) % ALPHABET_SIZE; // == (2^32) % y == (2^32 - y) % y
+	constexpr uint32_t THRESHOLD   = uint32_t(-ALPHABET_SIZE) % ALPHABET_SIZE;  // == (2^32) % y == (2^32 - y) % y
 
 	std::string result(size, '\0');
 	for (size_t i = 0; i != size; ++i) {
