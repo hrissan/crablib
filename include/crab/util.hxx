@@ -118,16 +118,19 @@ CRAB_INLINE Random::Random() {
 	std::random_device rd;
 	std::uniform_int_distribution<uint64_t> dist;  // random_device has unspecified min and max
 
-	inc   = dist(rd);
+	inc   = dist(rd) | 1U;
 	state = dist(rd);
 }
 
-CRAB_INLINE Random::Random(uint32_t seed) { state = uint64_t(seed) << 32U; }
+CRAB_INLINE Random::Random(uint64_t seed) : state(0), inc((seed << 1U) | 1U) {
+	pcg32_random_r();
+	pcg32_random_r();
+}
 
 CRAB_INLINE uint32_t Random::pcg32_random_r() {
 	uint64_t oldstate = state;
 	// Advance internal state
-	state = uint64_t(oldstate * 6364136223846793005ULL + (inc | 1));
+	state = oldstate * 6364136223846793005ULL + inc;
 	// Calculate output function (XSH RR), uses old state for max ILP
 	uint32_t xorshifted = uint32_t(((oldstate >> 18u) ^ oldstate) >> 27u);
 	uint32_t rot        = uint32_t(oldstate >> 59u);
@@ -158,14 +161,14 @@ CRAB_INLINE bdata Random::data(size_t size) {
 CRAB_INLINE std::string Random::printable_string(size_t size) {
 	static const char alphabet[]   = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
 	constexpr size_t ALPHABET_SIZE = sizeof(alphabet) - 1;
-	constexpr uint32_t LONG_TAIL   = uint32_t(0x100000000ULL - 0x100000000ULL % ALPHABET_SIZE - 1);
+	constexpr uint32_t THRESHOLD   = uint32_t(-ALPHABET_SIZE) % ALPHABET_SIZE;  // == (2^32) % y == (2^32 - y) % y
 
 	std::string result(size, '\0');
 	for (size_t i = 0; i != size; ++i) {
 		uint32_t value = 0;
 		do {
 			value = pcg32_random_r();
-		} while (value > LONG_TAIL);  // Repeats very rarely, but results in perfect distribution
+		} while (value < THRESHOLD);  // Repeats very rarely, but results in perfect distribution
 		result[i] = alphabet[value % ALPHABET_SIZE];
 	}
 	return result;
@@ -174,6 +177,13 @@ CRAB_INLINE std::string Random::printable_string(size_t size) {
 CRAB_INLINE double Random::double_value() {
 	auto hipart = uint64_t(pcg32_random_r()) << 31U;  // leave top bit zero for faster ldexp() on some platforms
 	return ldexp(hipart ^ pcg32_random_r(), -63);
+}
+
+CRAB_INLINE void memzero(void *data, size_t len) {
+	volatile unsigned char *udata = reinterpret_cast<volatile unsigned char *>(data);
+	for (size_t i = 0; i != len; ++i) {
+		udata[i] = 0;
+	}
 }
 
 }  // namespace crab

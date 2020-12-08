@@ -81,19 +81,29 @@ public:
 class string_view {
 public:
 	string_view() = default;
-	constexpr explicit string_view(const char *value) : d(value), s(std::strlen(value)) {}
+	explicit string_view(const char *value) : d(value), s(std::strlen(value)) {}
 	constexpr explicit string_view(const char *value, size_t size) : d(value), s(size - 1) {}
 
 	int compare(const char *value, size_t size) const {
 		return (s == size) ? std::memcmp(d, value, s) : s > size ? 1 : -1;
 	}
 	int compare(const std::string &b) const { return compare(b.data(), b.size()); }
+	string_view substr(size_t pos = 0, size_t count = std::string::npos) const {
+		if (pos > s)
+			throw std::out_of_range("string_view::substr pos out of range");
+		return string_view(d + pos, std::min(s - pos, count));
+	}
+	void remove_prefix(size_t count) {
+		s -= count;
+		d += count;
+	}
+	void remove_suffix(size_t count) { s -= count; }
 
 	const char *data() const { return d; }
 	size_t size() const { return s; }
 
 private:
-	const char *d = nullptr;  // Initialized for better safety and ease of debugging
+	const char *d = nullptr;  // We could save on initializing if count = 0, but seems dangerous
 	size_t s      = 0;
 };
 
@@ -202,7 +212,7 @@ public:
 class Random {
 public:
 	Random();
-	explicit Random(uint32_t seed);  // For tests. Hopefully, 2^32 test patterns is enough
+	explicit Random(uint64_t seed);  // For tests.
 
 	void bytes(uint8_t *buffer, size_t size);
 	void bytes(char *buffer, size_t size) { bytes(uint8_cast(buffer), size); }
@@ -251,4 +261,7 @@ public:
 private:
 	std::function<void()> callback;
 };
+
+void memzero(void *data, size_t len);
+
 }  // namespace crab

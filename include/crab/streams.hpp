@@ -99,6 +99,8 @@ public:
 			read_pos -= impl.size();
 			write_pos -= impl.size();
 		}
+		if (read_pos == write_pos)
+			read_pos = write_pos = 0;  // Increases chance of single-chunk reading
 	}
 
 	// circular buffer has maximum 2 parts. this gives second part
