@@ -255,6 +255,8 @@ public:
 	size_t read_some(uint8_t *val, size_t count, uint8_t *val2, size_t count2);
 	size_t write_some(std::deque<Buffer> &data);
 
+	Address local_address()const;
+	Address remote_address()const;
 private:
 	Callable rwd_handler;
 
