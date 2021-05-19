@@ -17,6 +17,8 @@
 
 #include "http/client_request.hxx"
 #include "http/connection.hxx"
+#include "http/crab_tls.hxx"
+#include "http/crab_tls_certificates.hxx"
 #include "http/query_parser.hxx"
 #include "http/request_parser.hxx"
 #include "http/response_parser.hxx"

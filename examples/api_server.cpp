@@ -94,7 +94,10 @@ public:
 	    const crab::Address &bind_address,
 	    const crab::TCPAcceptor::Settings &settings)
 	    : api_workers(api_workers)
-	    , la_socket(bind_address, [&]() { accept_all(); }, settings)
+	    , la_socket(
+	          bind_address,
+	          [&]() { accept_all(); },
+	          settings)
 	    , output_queue([&]() { on_worker_ready_ab(); })
 	    , stat_timer([&]() { print_stats(); }) {
 		print_stats();

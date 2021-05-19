@@ -103,7 +103,7 @@ Ob8VZRzI9neWagqNdwvYkQsEjgfbKbYK7p2CNTUQ
 	if (!store)
 		throw std::runtime_error("SSL_CTX_get_cert_store failed");
 	for (auto s = std::begin(certs); s != std::end(certs); ++s) {
-		BIO *b     = ::BIO_new_mem_buf(s->value, s->size);
+		BIO *b     = ::BIO_new_mem_buf(s->data(), s->size());
 		X509 *cert = ::PEM_read_bio_X509(b, nullptr, nullptr, nullptr);
 		::BIO_free(b);
 		b = nullptr;

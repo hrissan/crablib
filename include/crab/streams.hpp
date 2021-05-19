@@ -92,6 +92,10 @@ public:
 		write_pos += count;
 		invariant(write_pos <= read_pos + impl.size(), "Writing past end of Buffer");
 	}
+	void did_write_undo(size_t count) {
+		invariant(write_pos >= read_pos + count, "Writing undo past read_pos");
+		write_pos -= count;
+	}
 	void did_read(size_t count) {
 		read_pos += count;
 		invariant(read_pos <= write_pos, "Reading past end of Buffer");

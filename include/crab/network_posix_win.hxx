@@ -92,6 +92,22 @@ CRAB_INLINE bool Address::is_multicast() const {
 	}
 }
 
+CRAB_INLINE bool Address::is_local() const {
+	switch (addr.ss_family) {
+		case AF_INET: {
+			auto ap                = reinterpret_cast<const sockaddr_in *>(impl_get_sockaddr());
+			const uint8_t highbyte = *reinterpret_cast<const uint8_t *>(&ap->sin_addr);
+			return highbyte == 0x7F;
+		}
+		case AF_INET6: {
+			auto ap                = reinterpret_cast<const sockaddr_in6 *>(impl_get_sockaddr());
+			return memcmp(&ap->sin6_addr, &::in6addr_loopback, 16) == 0;
+		}
+		default:
+			return false;
+	}
+}
+
 #if !CRAB_IMPL_CF
 CRAB_INLINE std::vector<Address> DNSResolver::sync_resolve(const std::string &host_name,
     uint16_t port,
