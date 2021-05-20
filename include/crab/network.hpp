@@ -158,6 +158,7 @@ public:
 	std::string to_string() const { return get_address() + ":" + std::to_string(get_port()); }
 	bool is_multicast() const;
 	bool is_local() const;
+	uint32_t get_ip4() const;
 
 #if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL || CRAB_IMPL_LIBEV || CRAB_IMPL_WINDOWS || CRAB_IMPL_CF
 	const sockaddr *impl_get_sockaddr() const { return reinterpret_cast<const sockaddr *>(&addr); }
@@ -256,8 +257,9 @@ public:
 	size_t read_some(uint8_t *val, size_t count, uint8_t *val2, size_t count2);
 	size_t write_some(std::deque<Buffer> &data);
 
-	Address local_address()const;
-	Address remote_address()const;
+	Address local_address() const;
+	Address remote_address() const;
+
 private:
 	Callable rwd_handler;
 

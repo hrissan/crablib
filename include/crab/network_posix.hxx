@@ -569,21 +569,19 @@ CRAB_INLINE size_t TCPSocket::write_some(std::deque<Buffer> &data) {
 	return result;
 }
 
-CRAB_INLINE Address TCPSocket::local_address()const {
+CRAB_INLINE Address TCPSocket::local_address() const {
 	Address in_addr;
-	if (!fd.is_valid())
-		return in_addr;
 	socklen_t in_len = sizeof(sockaddr_storage);
-	details::check(::getsockname(fd.get_value(), in_addr.impl_get_sockaddr(), &in_len) == 0, "crab: failed to get socket local address");
+	::getsockname(
+	    fd.get_value(), in_addr.impl_get_sockaddr(), &in_len);  // Ignore errors, socket can be disconnected, etc.
 	return in_addr;
 }
 
-CRAB_INLINE Address TCPSocket::remote_address()const {
+CRAB_INLINE Address TCPSocket::remote_address() const {
 	Address in_addr;
-	if (!fd.is_valid())
-		return in_addr;
 	socklen_t in_len = sizeof(sockaddr_storage);
-	details::check(::getpeername(fd.get_value(), in_addr.impl_get_sockaddr(), &in_len) == 0, "crab: failed to get socket remote address");
+	::getpeername(
+	    fd.get_value(), in_addr.impl_get_sockaddr(), &in_len);  // Ignore errors, socket can be disconnected, etc.
 	return in_addr;
 }
 
