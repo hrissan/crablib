@@ -459,12 +459,12 @@ public:
 	}
 	explicit ApiServerApp(const crab::Address &bind_address)
 	    : stop([&]() { stop_network(); }), network(workers, bind_address, setts()) {
-		for (size_t i = 0; i != 3; ++i)
-			network_threads.emplace_back([this, bind_address]() {
-				ApiNetwork network2(workers, bind_address, setts());
-
-				crab::RunLoop::current()->run();
-			});
+//		for (size_t i = 0; i != 3; ++i)
+//			network_threads.emplace_back([this, bind_address]() {
+//				ApiNetwork network2(workers, bind_address, setts());
+//
+//				crab::RunLoop::current()->run();
+//			});
 		//		timer.once(10);
 	}
 
