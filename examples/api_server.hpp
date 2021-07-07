@@ -8,8 +8,8 @@
 // header is
 struct ApiHeader {
 	uint32_t body_len = 0;
-	uint32_t kind = 0;
-	uint64_t rid = 0;
+	uint32_t kind     = 0;
+	uint64_t rid      = 0;
 };
 
 static_assert(sizeof(ApiHeader) == 16, "On exotic platform, please add pragma pack or similar");

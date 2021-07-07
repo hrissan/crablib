@@ -182,7 +182,11 @@ CRAB_INLINE void RunLoop::run() {
 CRAB_INLINE steady_clock::time_point RunLoop::now() { return links.now; }
 
 CRAB_INLINE Thread::Thread(std::function<void()> &&fun)
-    : th([&] {
+#if __cplusplus >= 201402L
+    : th([this, fun = std::move(fun)] {
+#else
+    : th([this, fun] {
+#endif
 	    RunLoop run_loop;
 	    {
 		    std::unique_lock<std::mutex> lock(mu);

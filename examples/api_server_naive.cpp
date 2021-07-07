@@ -12,13 +12,12 @@ const bool debug = true;
 
 class ApiNetworkNaive {
 public:
-	explicit ApiNetworkNaive(const crab::Address &bind_address,
-	    const crab::TCPAcceptor::Settings &settings)
+	explicit ApiNetworkNaive(const crab::Address &bind_address, const crab::TCPAcceptor::Settings &settings)
 	    : la_socket(
 	          bind_address,
 	          [&]() { accept_all(); },
 	          settings)
-        , idle([&]() { on_idle(); })
+	    , idle([&]() { on_idle(); })
 	    , stat_timer([&]() { print_stats(); }) {
 		print_stats();
 	}
@@ -43,13 +42,13 @@ private:
 		crab::optional<ApiHeader> request_header;
 		std::deque<crab::Buffer> requests;
 		std::deque<crab::Buffer> responses;
-		size_t total_read = 0;
-		size_t total_written = 0;
+		size_t total_read       = 0;
+		size_t total_written    = 0;
 		size_t requests_in_work = 0;
-		crab::IntrusiveNode<Client> read_body_queue_node;        // Waiting turn to read request body
+		crab::IntrusiveNode<Client> read_body_queue_node;  // Waiting turn to read request body
 	};
 
-	size_t max_clients                     = 128 * 1024;
+	size_t max_clients = 128 * 1024;
 
 	size_t clients_accepted = 0;           // We assign client_id from this counter on client accept
 	std::deque<Client> allocated_clients;  // We need container that grows and does not invalidate references
@@ -62,14 +61,14 @@ private:
 	size_t responses_sent    = 0;
 
 	void on_idle() {
-			const size_t MAX_COUNTER = 1;
-	//		// we will call epoll() once per MAX_COUNTER messages, trading latency for throughput
-			size_t counter = 0;
-			while (!read_body_queue.empty() && counter++ < MAX_COUNTER) {
-				Client &c = *read_body_queue.begin();
-				read_header(c); // Will unlink and if not finished, link back
-			}
-//			accept_single();
+		const size_t MAX_COUNTER = 1;
+		//		// we will call epoll() once per MAX_COUNTER messages, trading latency for throughput
+		size_t counter = 0;
+		while (!read_body_queue.empty() && counter++ < MAX_COUNTER) {
+			Client &c = *read_body_queue.begin();
+			read_header(c);  // Will unlink and if not finished, link back
+		}
+		//			accept_single();
 	}
 	static void busy_sleep_microseconds(int msec) {
 		auto start = std::chrono::steady_clock::now();
@@ -79,18 +78,19 @@ private:
 				break;
 		}
 	}
-	void process_request(Client &client, const ApiHeader & header) {
+	void process_request(Client &client, const ApiHeader &header) {
 		client.responses.push_back(crab::Buffer(sizeof(ApiHeader) + header.body_len));
 		client.responses.back().write(reinterpret_cast<const uint8_t *>(&header), sizeof(header));
-		client.responses.back().did_write(header.body_len); // TODO - security issue, uninitialized memory
+		client.responses.back().did_write(header.body_len);  // TODO - security issue, uninitialized memory
 		send_responses(client);
 	}
 	void read_header(Client &client) {
 		client.read_body_queue_node.unlink();
-		while(true) {
+		while (true) {
 			if (client.read_buffer.size() >= sizeof(ApiHeader)) {
 				ApiHeader header;
-				invariant(client.read_buffer.peek(reinterpret_cast<uint8_t *>(&header), sizeof(header)), "Peek should succeed");
+				invariant(client.read_buffer.peek(reinterpret_cast<uint8_t *>(&header), sizeof(header)),
+				    "Peek should succeed");
 				if (client.read_buffer.size() >= sizeof(ApiHeader) + header.body_len) {
 					client.read_buffer.did_read(sizeof(header));
 					client.read_buffer.did_read(header.body_len);
@@ -107,14 +107,14 @@ private:
 		}
 	}
 	void send_responses(Client &client) {
-//		if (!client.socket.can_write()) // TODO - check if this optimization is useful
-//			return;
+		//		if (!client.socket.can_write()) // TODO - check if this optimization is useful
+		//			return;
 		while (!client.responses.empty()) {
 			client.total_written += client.responses.front().write_to(client.socket);
 			if (!client.responses.front().empty())
 				break;
-//			if (debug)
-//				std::cout << "send_responses sent complete response " << std::endl;
+			//			if (debug)
+			//				std::cout << "send_responses sent complete response " << std::endl;
 			client.responses.pop_front();
 		}
 	}
@@ -186,12 +186,13 @@ public:
 	}
 	explicit ApiServerNaiveApp(const crab::Address &bind_address, size_t threads)
 	    : stop([&]() { stop_network(); }), network(bind_address, setts()) {
-		for (size_t i = 1; i < threads; ++i)
-			network_threads.emplace_back([this, bind_address]() {
+		for (size_t i = 1; i < threads; ++i) {
+			network_threads.emplace_back([bind_address]() {
 				ApiNetworkNaive network2(bind_address, setts());
 
 				crab::RunLoop::current()->run();
 			});
+		}
 	}
 
 private:

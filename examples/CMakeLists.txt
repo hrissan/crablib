@@ -95,6 +95,7 @@ add_executable(md_client ${SOURCE_FILES} md_client.cpp)
 
 # low-level benchmarks and tests
 add_executable(reuse_addr ${SOURCE_FILES} lowlevel/reuse_addr.c)
+add_executable(mt_tcp_server ${SOURCE_FILES} lowlevel/mt_tcp_server.c)
 add_executable(udp_eagain ${SOURCE_FILES} lowlevel/udp_eagain.cpp)
 add_executable(benchmark_atomic ${SOURCE_FILES} lowlevel/benchmark_atomic.cpp)
 add_executable(benchmark_chrono ${SOURCE_FILES} lowlevel/benchmark_chrono.cpp)
