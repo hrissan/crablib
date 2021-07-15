@@ -184,6 +184,12 @@ std::ostream &operator<<(std::ostream &os, const Address &msg);
 namespace details {
 // We have to declare settings outside, due to
 // https://stackoverflow.com/questions/17430377/error-when-using-in-class-initialization-of-non-static-data-member-and-nested-cl
+struct UDPSocketSettings {
+	std::string adapter;
+	size_t sndbuf_size = 0;  // 0 is do not set
+	size_t rcvbuf_size = 0;  // 0 is do not set
+};
+
 struct TCPSocketSettings {
 	bool tcp_delay     = false;
 	size_t sndbuf_size = 0;  // 0 is do not set
@@ -330,11 +336,12 @@ private:
 };
 
 // Abstracts UDP outgoing buffer with event on buffer space available
+// Also good for client, talking to single server
 class UDPTransmitter {
 public:
 	explicit UDPTransmitter(const Address &address, Handler &&cb, const std::string &adapter = std::string{});
 	// If multicast group address is used, receiver will transmit on specified or default adapter
-	void set_handler(Handler &&cb) { w_handler.handler = std::move(cb); }
+	void set_handler(Handler &&cb) { rw_handler.handler = std::move(cb); }
 
 	bool write_datagram(const uint8_t *data, size_t count);
 	// returns false if buffer is full or a error occurs
@@ -343,14 +350,20 @@ public:
 	// write_datagram will return false if cannot write, but this is too late for clients
 	// who wish to work without buffer and need to prepare data,
 
+	// read_datagram will read replies from server, if replies are sent.
+	// expect any garbage from any host, as usual with UDP
+	optional<size_t> read_datagram(uint8_t *data, size_t count, Address *peer_addr = nullptr);
+
 	void set_multicast_ttl(int ttl);
 
 private:
-	Callable w_handler;
+	Callable rw_handler;
 
 #if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL || CRAB_IMPL_LIBEV
 	details::FileDescriptor fd;
 #if CRAB_IMPL_LIBEV
+	ev::io io_read;
+	void io_cb_read(ev::io &, int);
 	ev::io io_write;
 	void io_cb_write(ev::io &, int);
 #endif
@@ -364,26 +377,46 @@ private:
 
 class UDPReceiver {
 public:
-	explicit UDPReceiver(const Address &address, Handler &&cb, const std::string &adapter = std::string{});
+	using Settings = details::UDPSocketSettings;
+
+	explicit UDPReceiver(const Address &address, Handler &&cb, const Settings & settings = Settings{});
 	// address must be either local adapter address (127.0.0.1, 0.0.0.0) or multicast group address
 	// If multicast group address is used, receiver will join group on specified or default adapter
-	void set_handler(Handler &&cb) { r_handler.handler = std::move(cb); }
+	void set_handler(Handler &&cb) { rw_handler.handler = std::move(cb); }
 
-	static constexpr size_t MAX_DATAGRAM_SIZE = 65536;
+	static constexpr size_t MAX_DATAGRAM_SIZE = 65507; // https://stackoverflow.com/questions/42609561/udp-maximum-packet-size/42610200
 	optional<size_t> read_datagram(uint8_t *data, size_t count, Address *peer_addr = nullptr);
 	// returns () if buffer is empty
 	// returns (datagram_size) if datagram was read, even if it was truncated
 	// We do not consider truncation as an error here. Any sane protocol will detect truncated
 	// message in its own higher-level logic. We return true so clients state machine will be simpler
 
+	bool write_datagram(const uint8_t *data, size_t count, const Address &peer_addr);
+	// for sending replies
+	// returns false if buffer is full or a error occurs
+	// cannot return size_t, because datagrams of zero size are valid
+	bool can_write() const;
+	// write_datagram will return false if cannot write, but this is too late for clients
+	// who wish to work without buffer and need to prepare data,
+
+	// Experimental API
+	struct DatagramBuffer {
+		uint8_t data[MAX_DATAGRAM_SIZE]; // Uninitialized, be careful
+		size_t count = 0;
+		Address peer_addr;
+	};
+	size_t read_datagrams(DatagramBuffer *buffer, size_t buffer_len);
+
 private:
-	Callable r_handler;
+	Callable rw_handler;
 
 #if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL || CRAB_IMPL_LIBEV
 	details::FileDescriptor fd;
 #if CRAB_IMPL_LIBEV
 	ev::io io_read;
 	void io_cb_read(ev::io &, int);
+	ev::io io_write;
+	void io_cb_write(ev::io &, int);
 #endif
 #elif CRAB_IMPL_CF
 #else

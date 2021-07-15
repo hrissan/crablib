@@ -30,9 +30,6 @@ private:
 	// - waiting for client responses to be sent, so it will continue reading header
 	// - waiting for memory for requests to appear, so it will continue reading body
 
-	struct RequestHeader {
-		size_t len = 0;
-	};
 	struct Client {
 		crab::IntrusiveNode<Client> disconnected_node;
 
@@ -207,6 +204,63 @@ private:
 	std::list<crab::Thread> network_threads;
 };
 
+class ApiNetworkUDPNaive {
+public:
+	static crab::UDPReceiver::Settings settings() {
+		crab::UDPReceiver::Settings result;
+		result.rcvbuf_size = result.sndbuf_size = 50 << 20;
+		return result;
+	}
+	explicit ApiNetworkUDPNaive(const crab::Address &bind_address)
+			: socket(
+			bind_address,
+			[&]() { socket_handler(); }, settings())
+			, stat_timer([&]() { print_stats(); }) {
+		print_stats();
+	}
+
+private:
+	crab::UDPReceiver socket;
+	size_t total_read       = 0;
+	size_t total_written    = 0;
+
+	crab::Timer stat_timer;
+	size_t requests_received = 0;
+	size_t responses_sent    = 0;
+
+	static void busy_sleep_microseconds(int msec) {
+		auto start = std::chrono::steady_clock::now();
+		while (true) {
+			auto now = std::chrono::steady_clock::now();
+			if (std::chrono::duration_cast<std::chrono::microseconds>(now - start).count() > msec)
+				break;
+		}
+	}
+	void socket_handler() {
+		uint8_t data[crab::UDPReceiver::MAX_DATAGRAM_SIZE]; // uninitialized
+		crab::Address peer_addr;
+		while( auto a = socket.read_datagram(data, sizeof(data), &peer_addr)) {
+			auto data_len = *a;
+			ApiHeader header;
+			memcpy(&header, data, sizeof(header));
+			if (!socket.write_datagram(data, data_len, peer_addr)) {
+				std::cout << "socket.write_datagram failed" << std::endl;
+			}
+		}
+	}
+	void print_stats() {
+		stat_timer.once(1);
+		std::cout << "requests received/responses sent (during last second)=" << requests_received << "/"
+				  << responses_sent << std::endl;
+		//		if (!clients.empty()) {
+		//			std::cout << "Client.front read=" << clients.front().total_read
+		//			          << " written=" << clients.front().total_written << std::endl;
+		//		}
+		requests_received = 0;
+		responses_sent    = 0;
+	}
+};
+
 int main(int argc, char *argv[]) {
 	std::cout << "crablib version " << crab::version_string() << std::endl;
 
@@ -220,7 +274,9 @@ int main(int argc, char *argv[]) {
 	{
 		crab::RunLoop runloop;
 
-		ApiServerNaiveApp app(crab::Address("0.0.0.0", crab::integer_cast<uint16_t>(argv[1])), 1);
+		ApiNetworkUDPNaive udp(crab::Address("0.0.0.0", crab::integer_cast<uint16_t>(argv[1])));
+
+//		ApiServerNaiveApp app(crab::Address("0.0.0.0", crab::integer_cast<uint16_t>(argv[1])), 1);
 
 		runloop.run();
 	}

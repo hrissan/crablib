@@ -99,6 +99,77 @@ CRAB_INLINE ip_mreqn fill_ip_mreqn(const std::string &adapter) {
 	return mreq;
 }
 
+CRAB_INLINE bool write_datagram(const FileDescriptor & fd, Callable & rw_handler, const uint8_t *data, size_t count, const Address *peer_addr) {
+	if (!fd.is_valid() || !rw_handler.can_write)
+		return false;
+	RunLoop::current()->stats.UDP_SEND_count += 1;
+	RunLoop::current()->stats.push_record("sendto", fd.get_value(), int(count));
+	auto addr = peer_addr ? peer_addr->impl_get_sockaddr() : 0;
+	auto addr_len = peer_addr ? peer_addr->impl_get_sockaddr_length() : 0;
+	ssize_t result = ::sendto(fd.get_value(), data, count, details::CRAB_MSG_NOSIGNAL, addr, addr_len);
+	RunLoop::current()->stats.push_record("R(sendto)", fd.get_value(), int(result));
+	if (result < 0) {
+		if (errno == EAGAIN || errno == EWOULDBLOCK) {
+#if CRAB_IMPL_LIBEV
+			io_write.start(fd.get_value(), ev::WRITE);
+#endif
+			rw_handler.can_write = false;
+			return false;  // Will fire on_epoll_call in future automatically
+		}
+		// If no one is listening on the other side, after receiving ICMP report, error 111 is returned on Linux
+		// Error may also indicate MTU size of path too small, that will also change
+		// We will ignore all errors here, in hope they will disappear soon
+		return true;
+	}
+	RunLoop::current()->stats.UDP_SEND_size += result;
+	return true;
+}
+
+CRAB_INLINE optional<size_t> read_datagram(const FileDescriptor & fd, Callable & rw_handler, uint8_t *data, size_t count, Address *peer_addr) {
+	if (!fd.is_valid() || !rw_handler.can_read)
+		return {};
+	Address in_addr;
+	socklen_t in_len = sizeof(sockaddr_storage);
+	RunLoop::current()->stats.UDP_RECV_count += 1;
+	RunLoop::current()->stats.push_record("recvfrom", fd.get_value(), int(count));
+	// On some Linux system, passing 0 to recvfrom results in EINVAL without reading datagram
+	// (while correct behaviour is reading, truncating to 0, returning EMSGSIZE).
+	// We protect clients semantic by reading into our own small buffer
+	uint8_t workaround_buffer[1];  // Uninitialized
+	ssize_t result = recvfrom(fd.get_value(),
+							  count ? data : workaround_buffer,
+							  count ? count : sizeof(workaround_buffer),
+							  details::CRAB_MSG_NOSIGNAL,
+							  in_addr.impl_get_sockaddr(),
+							  &in_len);
+	if (result > static_cast<ssize_t>(count))  // Can only happen when reading into workaround_buffer
+		result = count;
+	RunLoop::current()->stats.push_record("R(recvfrom)", fd.get_value(), int(result));
+	if (result < 0) {
+		if (errno == EAGAIN || errno == EWOULDBLOCK) {
+#if CRAB_IMPL_LIBEV
+			io_read.start(fd.get_value(), ev::READ);
+#endif
+			rw_handler.can_read = false;
+			return {};  // Will fire on_epoll_call in future automatically
+		}
+		if (errno != EMSGSIZE) {
+			// Sometimes (for example during adding/removing network adapters), errors could be returned on Linux
+			// We will ignore all errors here, in hope they will disappear soon
+			// TODO - if we get here, we will not be woke up by epoll any more, so
+			// we need to classify all errors here, like in TCPAcceptor
+			return {};
+		}
+		// Truncation is not an error, return true so clients continue reading
+		result = count;
+	}
+	if (peer_addr) {
+		*peer_addr = in_addr;
+	}
+	RunLoop::current()->stats.UDP_RECV_size += result;
+	return result;
+}
+
 }  // namespace details
 
 #if CRAB_IMPL_KEVENT
@@ -698,7 +769,7 @@ CRAB_INLINE bool TCPAcceptor::can_accept() {
 	}
 }
 
-CRAB_INLINE bool UDPTransmitter::can_write() const { return w_handler.can_write; }
+CRAB_INLINE bool UDPTransmitter::can_write() const { return rw_handler.can_write; }
 
 CRAB_INLINE void UDPTransmitter::set_multicast_ttl(int ttl) {
 	details::check(setsockopt(fd.get_value(), IPPROTO_IP, IP_MULTICAST_TTL, &ttl, sizeof(ttl)) >= 0,
@@ -708,13 +779,13 @@ CRAB_INLINE void UDPTransmitter::set_multicast_ttl(int ttl) {
 #if CRAB_IMPL_LIBEV
 CRAB_INLINE void UDPTransmitter::io_cb_write(ev::io &, int) {
 	io_write.stop();
-	w_handler.can_write = true;
-	w_handler.handler();
+	rw_handler.can_write = true;
+	rw_handler.handler();
 }
 #endif
 
 CRAB_INLINE UDPTransmitter::UDPTransmitter(const Address &address, Handler &&cb, const std::string &adapter)
-    : w_handler(std::move(cb))
+    : rw_handler(std::move(cb))
 #if CRAB_IMPL_LIBEV
     , io_write(RunLoop::current()->get_impl()) {
 	io_write.set<UDPTransmitter, &UDPTransmitter::io_cb_write>(this);
@@ -741,38 +812,23 @@ CRAB_INLINE UDPTransmitter::UDPTransmitter(const Address &address, Handler &&cb,
 #if CRAB_IMPL_LIBEV
 	io_write.start(tmp.get_value(), ev::WRITE);
 #else
-	RunLoop::current()->impl_add_callable_fd(tmp.get_value(), &w_handler, false, true);
+	RunLoop::current()->impl_add_callable_fd(tmp.get_value(), &rw_handler, true, true);
 	if (connect_result >= 0) {
 		// On some systems if socket is connected right away, no epoll happens
-		w_handler.add_pending_callable(false, true);
+		rw_handler.add_pending_callable(true, true);
 	}
 #endif
 	fd.swap(tmp);
 }
 
 CRAB_INLINE bool UDPTransmitter::write_datagram(const uint8_t *data, size_t count) {
-	if (!fd.is_valid() || !w_handler.can_write)
-		return false;
-	RunLoop::current()->stats.UDP_SEND_count += 1;
-	RunLoop::current()->stats.push_record("sendto", fd.get_value(), int(count));
-	ssize_t result = ::sendto(fd.get_value(), data, count, details::CRAB_MSG_NOSIGNAL, nullptr, 0);
-	RunLoop::current()->stats.push_record("R(sendto)", fd.get_value(), int(result));
-	if (result < 0) {
-		if (errno == EAGAIN || errno == EWOULDBLOCK) {
-#if CRAB_IMPL_LIBEV
-			io_write.start(fd.get_value(), ev::WRITE);
-#endif
-			w_handler.can_write = false;
-			return false;  // Will fire on_epoll_call in future automatically
-		}
-		// If no one is listening on the other side, after receiving ICMP report, error 111 is returned on Linux
-		// Error may also indicate MTU size of path too small, that will also change
-		// We will ignore all errors here, in hope they will disappear soon
-		return true;
-	}
-	RunLoop::current()->stats.UDP_SEND_size += result;
-	return true;
+	return details::write_datagram(fd, rw_handler, data, count, 0);
 }
+
+CRAB_INLINE optional<size_t> UDPTransmitter::read_datagram(uint8_t *data, size_t count, Address *peer_addr) {
+	return details::read_datagram(fd, rw_handler, data, count, peer_addr);
+}
+
 
 #if CRAB_IMPL_LIBEV
 CRAB_INLINE void UDPReceiver::io_cb_read(ev::io &, int) {
@@ -782,8 +838,8 @@ CRAB_INLINE void UDPReceiver::io_cb_read(ev::io &, int) {
 }
 #endif
 
-CRAB_INLINE UDPReceiver::UDPReceiver(const Address &address, Handler &&cb, const std::string &adapter)
-    : r_handler(std::move(cb))
+CRAB_INLINE UDPReceiver::UDPReceiver(const Address &address, Handler &&cb, const Settings & settings)
+    : rw_handler(std::move(cb))
 #if CRAB_IMPL_LIBEV
     , io_read(RunLoop::current()->get_impl()) {
 	io_read.set<UDPReceiver, &UDPReceiver::io_cb_read>(this);
@@ -799,6 +855,11 @@ CRAB_INLINE UDPReceiver::UDPReceiver(const Address &address, Handler &&cb, const
 	// https://www.reddit.com/r/networking/comments/7nketv/proper_use_of_bind_for_multicast_receive_on_linux/
 	details::FileDescriptor tmp(::socket(address.impl_get_sockaddr()->sa_family, SOCK_DGRAM, IPPROTO_UDP),
 	    "crab::UDPReceiver socket() failed");
+	if (settings.sndbuf_size)
+		details::setsockopt_int(tmp.get_value(), SOL_SOCKET, SO_SNDBUF, integer_cast<int>(settings.sndbuf_size));
+	if (settings.rcvbuf_size)
+		details::setsockopt_int(tmp.get_value(), SOL_SOCKET, SO_RCVBUF, integer_cast<int>(settings.rcvbuf_size));
+
 	if (address.is_multicast()) {
 		// TODO - check flag combination on Mac
 		details::setsockopt_int(tmp.get_value(), SOL_SOCKET, SO_REUSEADDR, 1);
@@ -819,7 +880,7 @@ CRAB_INLINE UDPReceiver::UDPReceiver(const Address &address, Handler &&cb, const
 		// Compare to TCP or UDP unicast, where INADDR_ANY correctly means listening on all adapter.
 		// Sadly, same on Mac OSX
 		// So, for DDNS-like discovery apps we need UDPReceiverMultiAdapter, which automatically does that
-		auto mreq          = details::fill_ip_mreqn(adapter);
+		auto mreq          = details::fill_ip_mreqn(settings.adapter);
 		mreq.imr_multiaddr = sa->sin_addr;
 		details::check(setsockopt(tmp.get_value(), IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) >= 0,
 		    "crab::UDPReceiver: Failed to join multicast group");
@@ -827,13 +888,23 @@ CRAB_INLINE UDPReceiver::UDPReceiver(const Address &address, Handler &&cb, const
 #if CRAB_IMPL_LIBEV
 	io_read.start(tmp.get_value(), ev::READ);
 #else
-	RunLoop::current()->impl_add_callable_fd(tmp.get_value(), &r_handler, true, false);
+	RunLoop::current()->impl_add_callable_fd(tmp.get_value(), &rw_handler, true, true);
 #endif
 	fd.swap(tmp);
 }
 
+CRAB_INLINE bool UDPReceiver::write_datagram(const uint8_t *data, size_t count, const Address &peer_addr) {
+	return details::write_datagram(fd, rw_handler, data, count, &peer_addr);
+}
+
+CRAB_INLINE bool UDPReceiver::can_write() const { return rw_handler.can_write; }
+
 CRAB_INLINE optional<size_t> UDPReceiver::read_datagram(uint8_t *data, size_t count, Address *peer_addr) {
-	if (!fd.is_valid() || !r_handler.can_read)
+	return details::read_datagram(fd, rw_handler, data, count, peer_addr);
+}
+
+CRAB_INLINE size_t UDPReceiver::read_datagrams(DatagramBuffer *buffer, size_t buffer_len) {
+	if (!fd.is_valid() || !rw_handler.can_read)
 		return {};
 	Address in_addr;
 	socklen_t in_len = sizeof(sockaddr_storage);
@@ -844,11 +915,11 @@ CRAB_INLINE optional<size_t> UDPReceiver::read_datagram(uint8_t *data, size_t co
 	// We protect clients semantic by reading into our own small buffer
 	uint8_t workaround_buffer[1];  // Uninitialized
 	ssize_t result = recvfrom(fd.get_value(),
-	    count ? data : workaround_buffer,
-	    count ? count : sizeof(workaround_buffer),
-	    details::CRAB_MSG_NOSIGNAL,
-	    in_addr.impl_get_sockaddr(),
-	    &in_len);
+							  count ? data : workaround_buffer,
+							  count ? count : sizeof(workaround_buffer),
+							  details::CRAB_MSG_NOSIGNAL,
+							  in_addr.impl_get_sockaddr(),
+							  &in_len);
 	if (result > static_cast<ssize_t>(count))  // Can only happen when reading into workaround_buffer
 		result = count;
 	RunLoop::current()->stats.push_record("R(recvfrom)", fd.get_value(), int(result));
@@ -857,7 +928,7 @@ CRAB_INLINE optional<size_t> UDPReceiver::read_datagram(uint8_t *data, size_t co
 #if CRAB_IMPL_LIBEV
 			io_read.start(fd.get_value(), ev::READ);
 #endif
-			r_handler.can_read = false;
+			rw_handler.can_read = false;
 			return {};  // Will fire on_epoll_call in future automatically
 		}
 		if (errno != EMSGSIZE) {
