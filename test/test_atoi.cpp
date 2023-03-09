@@ -80,12 +80,10 @@ void test_type(size_t range, std::string lead, std::string trail) {
 void test_safe_math() {
 	for (int i = std::numeric_limits<int8_t>::min(); i <= std::numeric_limits<int8_t>::max(); ++i) {
 		for (int j = std::numeric_limits<int8_t>::min(); j <= std::numeric_limits<int8_t>::max(); ++j) {
-			int plus = i + j;
-			bool good_plus =
-			    (plus >= std::numeric_limits<int8_t>::min()) && (plus <= std::numeric_limits<int8_t>::max());
-			int minus = i - j;
-			bool good_minus =
-			    (minus >= std::numeric_limits<int8_t>::min()) && (minus <= std::numeric_limits<int8_t>::max());
+			int plus        = i + j;
+			bool good_plus  = (plus >= std::numeric_limits<int8_t>::min()) && (plus <= std::numeric_limits<int8_t>::max());
+			int minus       = i - j;
+			bool good_minus = (minus >= std::numeric_limits<int8_t>::min()) && (minus <= std::numeric_limits<int8_t>::max());
 			auto safe_plus  = crab::safe_add_opt<int8_t>(i, j);
 			auto safe_minus = crab::safe_sub_opt<int8_t>(i, j);
 			invariant(!!safe_plus == good_plus, "");

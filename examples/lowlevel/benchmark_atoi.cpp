@@ -127,8 +127,7 @@ inline T atoi_positive(char const *p, char const *e, bool &valid) noexcept {
 // false.
 // this function will not modify errno.
 template<typename T>
-inline typename std::enable_if<std::is_signed<T>::value, T>::type atoi(
-    char const *p, char const *e, bool &valid) noexcept {
+inline typename std::enable_if<std::is_signed<T>::value, T>::type atoi(char const *p, char const *e, bool &valid) noexcept {
 	//	while (p != e && is_integer_space(*begin))
 	//		p += 1;
 	if (ATOI_UNLIKELY(p == e)) {
@@ -147,8 +146,7 @@ inline typename std::enable_if<std::is_signed<T>::value, T>::type atoi(
 }
 
 template<typename T>
-inline typename std::enable_if<std::is_unsigned<T>::value, T>::type atoi(
-    char const *p, char const *e, bool &valid) noexcept {
+inline typename std::enable_if<std::is_unsigned<T>::value, T>::type atoi(char const *p, char const *e, bool &valid) noexcept {
 	//	while (p != e && is_integer_space(*begin))
 	//		p += 1;
 	if (ATOI_UNLIKELY(p == e)) {
@@ -215,15 +213,13 @@ int naive_atoi_end(const char *begin, const char *end) {
 	return num;
 }
 
-void benchmark_fun(const std::vector<std::string> &strs, int sum, const std::string &msg,
-    std::function<int(const std::string &s)> &&fun) {
+void benchmark_fun(
+    const std::vector<std::string> &strs, int sum, const std::string &msg, std::function<int(const std::string &s)> &&fun) {
 	auto start = std::chrono::high_resolution_clock::now();
 	int result = 0;
 	for (const auto &s : strs)
 		result += fun(s);
-	auto mksec =
-	    std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - start)
-	        .count();
+	auto mksec = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - start).count();
 	std::cout << msg << " mksec=" << mksec << " sum=" << result << std::endl;
 	if (result != sum)
 		std::cout << msg << " wrong sum, error while parsing" << std::endl;
@@ -281,8 +277,7 @@ int main() {
 	benchmark_fun(strs, sum, "std::stoi", [](const std::string &s) { return std::stoi(s); });
 	benchmark_fun(strs, sum, "std::atoi", [](const std::string &s) { return std::atoi(s.c_str()); });
 	benchmark_fun(strs, sum, "crab", [](const std::string &s) { return crab::integer_cast<int>(s); });
-	benchmark_fun(strs, sum, "naive_atoi_end",
-	    [](const std::string &s) { return naive_atoi_end(s.c_str(), s.c_str() + s.size()); });
+	benchmark_fun(strs, sum, "naive_atoi_end", [](const std::string &s) { return naive_atoi_end(s.c_str(), s.c_str() + s.size()); });
 	benchmark_fun(strs, sum, "jsteemann", [](const std::string &s) {
 		bool valid = false;
 		return jsteemann::atoi<int>(s.data(), s.data() + s.size(), valid);

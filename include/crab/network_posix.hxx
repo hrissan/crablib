@@ -90,8 +90,7 @@ CRAB_INLINE ip_mreqn fill_ip_mreqn(const std::string &adapter) {
 		return mreq;  // By network adapter name
 	Address adapter_address;
 	if (!Address::parse(adapter_address, adapter, 0))
-		throw std::runtime_error(
-		    "Multicast Adapter must be specified either by interface name or by interface ip-address");
+		throw std::runtime_error("Multicast Adapter must be specified either by interface name or by interface ip-address");
 	if (adapter_address.impl_get_sockaddr()->sa_family != AF_INET)
 		throw std::runtime_error("IPv6 multicast not supported yet");
 	auto adapter_sa  = reinterpret_cast<const sockaddr_in *>(adapter_address.impl_get_sockaddr());
@@ -203,8 +202,7 @@ CRAB_INLINE void RunLoop::impl_add_callable_fd(int fd, Callable *callable, bool 
 	struct kevent changes[] = {{uintptr_t(fd), EVFILT_READ, EV_ADD | EV_CLEAR, 0, 0, callable},
 	    {uintptr_t(fd), EVFILT_WRITE, EV_ADD | EV_CLEAR, 0, 0, callable}};
 	const int count         = (read ? 1 : 0) + (write ? 1 : 0);
-	details::check(kevent(efd.get_value(), changes + (read ? 0 : 1), count, 0, 0, NULL) >= 0,
-	    "crab::RunLoop impl_kevent failed");
+	details::check(kevent(efd.get_value(), changes + (read ? 0 : 1), count, 0, 0, NULL) >= 0, "crab::RunLoop impl_kevent failed");
 }
 
 CRAB_INLINE RunLoop::~RunLoop() { CurrentLoop::instance = nullptr; }
@@ -245,10 +243,8 @@ CRAB_INLINE Signal::Signal(Handler &&cb, const std::vector<int> &ss) : a_handler
 	for (auto s : this->signals)
 		signal(s, SIG_IGN);
 
-	struct kevent changes[] = {
-	    {SIGINT, EVFILT_SIGNAL, EV_ADD, 0, 0, &a_handler}, {SIGTERM, EVFILT_SIGNAL, EV_ADD, 0, 0, &a_handler}};
-	details::check(
-	    kevent(RunLoop::current()->efd.get_value(), changes, 2, 0, 0, NULL) >= 0, "crab::Signal impl_kevent failed");
+	struct kevent changes[] = {{SIGINT, EVFILT_SIGNAL, EV_ADD, 0, 0, &a_handler}, {SIGTERM, EVFILT_SIGNAL, EV_ADD, 0, 0, &a_handler}};
+	details::check(kevent(RunLoop::current()->efd.get_value(), changes, 2, 0, 0, NULL) >= 0, "crab::Signal impl_kevent failed");
 }
 
 CRAB_INLINE Signal::~Signal() {
@@ -423,8 +419,8 @@ CRAB_INLINE void TCPSocket::io_cb_write(ev::io &, int) {
 CRAB_INLINE bool TCPSocket::connect(const Address &address, const Settings &settings) {
 	close();
 	try {
-		details::FileDescriptor tmp(::socket(address.impl_get_sockaddr()->sa_family, SOCK_STREAM, IPPROTO_TCP),
-		    "crab::connect socket() failed");
+		details::FileDescriptor tmp(
+		    ::socket(address.impl_get_sockaddr()->sa_family, SOCK_STREAM, IPPROTO_TCP), "crab::connect socket() failed");
 #if defined(__MACH__)
 		details::setsockopt_int(tmp.get_value(), SOL_SOCKET, SO_NOSIGPIPE, 1);
 #endif
@@ -434,8 +430,7 @@ CRAB_INLINE bool TCPSocket::connect(const Address &address, const Settings &sett
 		if (settings.rcvbuf_size)
 			details::setsockopt_int(tmp.get_value(), SOL_SOCKET, SO_RCVBUF, integer_cast<int>(settings.rcvbuf_size));
 		details::set_nonblocking(tmp.get_value());
-		int connect_result =
-		    ::connect(tmp.get_value(), address.impl_get_sockaddr(), address.impl_get_sockaddr_length());
+		int connect_result = ::connect(tmp.get_value(), address.impl_get_sockaddr(), address.impl_get_sockaddr_length());
 		if (connect_result < 0 && errno != EINPROGRESS)
 			return false;
 		if (!settings.tcp_delay)  // For compatibility, set after connect
@@ -613,9 +608,8 @@ CRAB_INLINE size_t TCPSocket::write_some(std::deque<Buffer> &data) {
 			iovec_count += 1;
 		}
 		if (d.read_count2()) {
-			iovec[iovec_count].iov_base =
-			    const_cast<uint8_t *>(d.read_ptr2());  // sendmsg promises not to modify data
-			iovec[iovec_count].iov_len = d.read_count2();
+			iovec[iovec_count].iov_base = const_cast<uint8_t *>(d.read_ptr2());  // sendmsg promises not to modify data
+			iovec[iovec_count].iov_len  = d.read_count2();
 			iovec_count += 1;
 		}
 		if (iovec_count == IOVEC_COUNT)
@@ -651,16 +645,14 @@ CRAB_INLINE size_t TCPSocket::write_some(std::deque<Buffer> &data) {
 CRAB_INLINE Address TCPSocket::local_address() const {
 	Address in_addr;
 	socklen_t in_len = sizeof(sockaddr_storage);
-	::getsockname(
-	    fd.get_value(), in_addr.impl_get_sockaddr(), &in_len);  // Ignore errors, socket can be disconnected, etc.
+	::getsockname(fd.get_value(), in_addr.impl_get_sockaddr(), &in_len);  // Ignore errors, socket can be disconnected, etc.
 	return in_addr;
 }
 
 CRAB_INLINE Address TCPSocket::remote_address() const {
 	Address in_addr;
 	socklen_t in_len = sizeof(sockaddr_storage);
-	::getpeername(
-	    fd.get_value(), in_addr.impl_get_sockaddr(), &in_len);  // Ignore errors, socket can be disconnected, etc.
+	::getpeername(fd.get_value(), in_addr.impl_get_sockaddr(), &in_len);  // Ignore errors, socket can be disconnected, etc.
 	return in_addr;
 }
 
@@ -681,8 +673,8 @@ CRAB_INLINE TCPAcceptor::TCPAcceptor(const Address &address, Handler &&cb, const
 #else
 {
 #endif
-	details::FileDescriptor tmp(::socket(address.impl_get_sockaddr()->sa_family, SOCK_STREAM, IPPROTO_TCP),
-	    "crab::TCPAcceptor socket() failed");
+	details::FileDescriptor tmp(
+	    ::socket(address.impl_get_sockaddr()->sa_family, SOCK_STREAM, IPPROTO_TCP), "crab::TCPAcceptor socket() failed");
 #if defined(__MACH__)
 	details::setsockopt_int(tmp.get_value(), SOL_SOCKET, SO_NOSIGPIPE, 1);
 #endif
@@ -700,8 +692,8 @@ CRAB_INLINE TCPAcceptor::TCPAcceptor(const Address &address, Handler &&cb, const
 
 	if (::bind(tmp.get_value(), address.impl_get_sockaddr(), address.impl_get_sockaddr_length()) < 0) {
 		std::stringstream ss;
-		ss << "crab::TCPAcceptor bind failed, errno=" << errno << ", " << strerror(errno)
-		   << ", address=" << address.get_address() << ":" << address.get_port();
+		ss << "crab::TCPAcceptor bind failed, errno=" << errno << ", " << strerror(errno) << ", address=" << address.get_address() << ":"
+		   << address.get_port();
 		throw std::runtime_error(ss.str());
 	}
 	details::set_nonblocking(tmp.get_value());
@@ -731,8 +723,7 @@ CRAB_INLINE bool TCPAcceptor::can_accept() {
 			// On FreeBSD non-blocking flag is inherited automatically - very smart :)
 			// Even relatively modern OS X has no accept4 function, so code below cannot be used
 #else  // defined(__linux__)
-			details::FileDescriptor sd(
-			    ::accept4(fd.get_value(), in_addr.impl_get_sockaddr(), &in_len, SOCK_NONBLOCK));
+			details::FileDescriptor sd(::accept4(fd.get_value(), in_addr.impl_get_sockaddr(), &in_len, SOCK_NONBLOCK));
 #endif
 			if (!sd.is_valid()) {
 				if (errno == EAGAIN || errno == EWOULDBLOCK) {
@@ -800,8 +791,8 @@ CRAB_INLINE UDPTransmitter::UDPTransmitter(const Address &address, Handler &&cb,
 #else
 {
 #endif
-	details::FileDescriptor tmp(::socket(address.impl_get_sockaddr()->sa_family, SOCK_DGRAM, IPPROTO_UDP),
-	    "crab::UDPTransmitter socket() failed");
+	details::FileDescriptor tmp(
+	    ::socket(address.impl_get_sockaddr()->sa_family, SOCK_DGRAM, IPPROTO_UDP), "crab::UDPTransmitter socket() failed");
 	details::set_nonblocking(tmp.get_value());
 
 	if (address.is_multicast()) {
@@ -860,8 +851,8 @@ CRAB_INLINE UDPReceiver::UDPReceiver(const Address &address, Handler &&cb, const
 	// Discussion:
 	// https://stackoverflow.com/questions/10692956/what-does-it-mean-to-bind-a-multicast-udp-socket
 	// https://www.reddit.com/r/networking/comments/7nketv/proper_use_of_bind_for_multicast_receive_on_linux/
-	details::FileDescriptor tmp(::socket(address.impl_get_sockaddr()->sa_family, SOCK_DGRAM, IPPROTO_UDP),
-	    "crab::UDPReceiver socket() failed");
+	details::FileDescriptor tmp(
+	    ::socket(address.impl_get_sockaddr()->sa_family, SOCK_DGRAM, IPPROTO_UDP), "crab::UDPReceiver socket() failed");
 	if (settings.sndbuf_size)
 		details::setsockopt_int(tmp.get_value(), SOL_SOCKET, SO_SNDBUF, integer_cast<int>(settings.sndbuf_size));
 	if (settings.rcvbuf_size)
@@ -874,8 +865,8 @@ CRAB_INLINE UDPReceiver::UDPReceiver(const Address &address, Handler &&cb, const
 	}
 	details::set_nonblocking(tmp.get_value());
 
-	details::check(::bind(tmp.get_value(), address.impl_get_sockaddr(), address.impl_get_sockaddr_length()) >= 0,
-	    "crab::UDPReceiver bind() failed");
+	details::check(
+	    ::bind(tmp.get_value(), address.impl_get_sockaddr(), address.impl_get_sockaddr_length()) >= 0, "crab::UDPReceiver bind() failed");
 	if (address.is_multicast()) {
 		if (address.impl_get_sockaddr()->sa_family != AF_INET)
 			throw std::runtime_error("IPv6 multicast not supported yet");

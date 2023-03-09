@@ -24,8 +24,7 @@ private:
 		}
 		std::cout << "on_call, " << ct.size() << " calls in queue" << std::endl;
 		for (const auto &t : ct) {
-			std::cout << "latency: " << std::chrono::duration_cast<std::chrono::microseconds>(no - t).count()
-			          << " mksec" << std::endl;
+			std::cout << "latency: " << std::chrono::duration_cast<std::chrono::microseconds>(no - t).count() << " mksec" << std::endl;
 		}
 	}
 	void thread_run() {

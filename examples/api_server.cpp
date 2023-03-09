@@ -17,7 +17,7 @@ public:
 	struct WorkItem {
 		OutputQueue *output_queue = nullptr;
 		void *client              = nullptr;  // TODO - fix this crap. We never destroy clients, so pointer is safe
-		size_t client_id          = 0;  // But client ids change, so we know the work done is for disconnected one
+		size_t client_id          = 0;        // But client ids change, so we know the work done is for disconnected one
 		crab::Buffer request{0};
 		crab::Buffer response{0};
 	};
@@ -90,9 +90,7 @@ private:
 
 class ApiNetwork {
 public:
-	explicit ApiNetwork(ApiWorkers &api_workers,
-	    const crab::Address &bind_address,
-	    const crab::TCPAcceptor::Settings &settings)
+	explicit ApiNetwork(ApiWorkers &api_workers, const crab::Address &bind_address, const crab::TCPAcceptor::Settings &settings)
 	    : api_workers(api_workers)
 	    , la_socket(
 	          bind_address,
@@ -197,8 +195,7 @@ private:
 		}
 	}
 	bool is_over_local_limit(Client &client) const {
-		if (client.responses.size() + client.requests.size() + client.requests_in_work >=
-		    max_pending_requests_per_client) {
+		if (client.responses.size() + client.requests.size() + client.requests_in_work >= max_pending_requests_per_client) {
 			// This condition will change after writing some bytes, TODO - retry after writing bytes
 			return true;  // Stay in READING_HEADER state, otherwise 4th state will be required
 		}
@@ -227,8 +224,7 @@ private:
 				std::cout << "Bad Request Len" << std::endl;
 			// TODO - disconnect here
 		}
-		if (!request_memory_queue.empty() ||
-		    total_requests_memory + client.request_header->len > max_requests_memory) {
+		if (!request_memory_queue.empty() || total_requests_memory + client.request_header->len > max_requests_memory) {
 			if (debug)
 				std::cout << "WAITING_MEMORY_FOR_BODY, request_memory_queue.push " << std::endl;
 			client.state = Client::WAITING_MEMORY_FOR_BODY;
@@ -369,8 +365,7 @@ private:
 		if (!client.socket.is_open())
 			return on_client_disconnected(client);
 		send_responses(client);
-		read_header(
-		    client);  // We read header on every opportunity. sending response could also free client resources
+		read_header(client);   // We read header on every opportunity. sending response could also free client resources
 		read_requests_fair();  // sending response could free global resources
 	}
 	void on_client_disconnected(Client &client) {
@@ -437,8 +432,7 @@ private:
 	}
 	void print_stats() {
 		stat_timer.once(1);
-		std::cout << "requests received/responses sent (during last second)=" << requests_received << "/"
-		          << responses_sent << std::endl;
+		std::cout << "requests received/responses sent (during last second)=" << requests_received << "/" << responses_sent << std::endl;
 		//		if (!clients.empty()) {
 		//			std::cout << "Client.front read=" << clients.front().total_read
 		//			          << " written=" << clients.front().total_written << std::endl;
@@ -457,8 +451,7 @@ public:
 		result.tcp_delay  = false;
 		return result;
 	}
-	explicit ApiServerApp(const crab::Address &bind_address)
-	    : stop([&]() { stop_network(); }), network(workers, bind_address, setts()) {
+	explicit ApiServerApp(const crab::Address &bind_address) : stop([&]() { stop_network(); }), network(workers, bind_address, setts()) {
 		//		for (size_t i = 0; i != 3; ++i)
 		//			network_threads.emplace_back([this, bind_address]() {
 		//				ApiNetwork network2(workers, bind_address, setts());

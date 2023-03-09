@@ -47,9 +47,7 @@ CRAB_INLINE bool Address::parse(Address &address, const std::string &ip_port) {
 	return parse(address, ip_port.substr(0, pos), port);
 }
 
-CRAB_INLINE std::ostream &operator<<(std::ostream &os, const Address &msg) {
-	return os << msg.get_address() << ":" << msg.get_port();
-}
+CRAB_INLINE std::ostream &operator<<(std::ostream &os, const Address &msg) { return os << msg.get_address() << ":" << msg.get_port(); }
 
 #if !CRAB_IMPL_LIBEV && !CRAB_IMPL_CF
 
@@ -113,8 +111,7 @@ CRAB_INLINE bool RunLoopLinks::process_timer(int &timeout_ms) {
 		const auto now_plus_max_sleep = now + std::chrono::milliseconds(RunLoop::MAX_SLEEP_MS);
 		if (timer.fire_time >= now_plus_max_sleep)
 			return false;
-		timeout_ms = 1 + static_cast<int>(
-		                     std::chrono::duration_cast<std::chrono::milliseconds>(timer.fire_time - now).count());
+		timeout_ms = 1 + static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(timer.fire_time - now).count());
 		// crude way of rounding up, we do not want to wake loop up BEFORE fire_time.
 		// Moreover, 0 means "poll" and we do not want to poll for 0.9 msec waiting for timer
 		break;
@@ -227,8 +224,8 @@ CRAB_INLINE void Timer::once(double delay_seconds) {
 		once_at(now);
 		return;
 	}
-	double fsc    = delay_seconds * steady_clock::time_point::period::den / steady_clock::time_point::period::num;
-	const auto ma = steady_clock::time_point::max();
+	double fsc                   = delay_seconds * steady_clock::time_point::period::den / steady_clock::time_point::period::num;
+	const auto ma                = steady_clock::time_point::max();
 	const auto max_delay_seconds = (ma - now).count();
 
 	if (fsc >= double(max_delay_seconds))

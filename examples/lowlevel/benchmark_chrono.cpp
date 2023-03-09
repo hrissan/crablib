@@ -59,8 +59,8 @@ void benchmark2(const std::string &label, std::function<int()> &&fun) {
 	}
 	auto stop = std::chrono::high_resolution_clock::now();
 	std::cout << "Time for " << COUNT << "x " << label
-	          << " mksec=" << std::chrono::duration_cast<std::chrono::microseconds>(stop - start).count()
-	          << " result=" << result << std::endl;
+	          << " mksec=" << std::chrono::duration_cast<std::chrono::microseconds>(stop - start).count() << " result=" << result
+	          << std::endl;
 }
 
 int main() {
@@ -73,8 +73,7 @@ int main() {
 		return result - rdtscp_end();
 	});
 	benchmark2("steady_clock", []() {
-		return std::chrono::steady_clock::now().time_since_epoch().count() +
-		       std::chrono::steady_clock::now().time_since_epoch().count();
+		return std::chrono::steady_clock::now().time_since_epoch().count() + std::chrono::steady_clock::now().time_since_epoch().count();
 	});
 	benchmark2("high_resolution_clock", []() {
 		return std::chrono::high_resolution_clock::now().time_since_epoch().count() +

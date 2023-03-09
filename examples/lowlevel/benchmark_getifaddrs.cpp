@@ -75,15 +75,14 @@ int main() {
 
 		unsigned idx = if_nametoindex(ifa->ifa_name);
 
-		printf("%-12s %-8u %s (%d)\n", ifa->ifa_name, idx,
-		    (family == AF_INET) ? "AF_INET" : (family == AF_INET6) ? "AF_INET6" : "???", family);
+		printf("%-12s %-8u %s (%d)\n", ifa->ifa_name, idx, (family == AF_INET) ? "AF_INET" : (family == AF_INET6) ? "AF_INET6" : "???",
+		    family);
 
 		/* For an AF_INET* interface address, display the address */
 
 		if (family == AF_INET || family == AF_INET6) {
-			s = getnameinfo(ifa->ifa_addr,
-			    (family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6), host, NI_MAXHOST,
-			    NULL, 0, NI_NUMERICHOST);
+			s = getnameinfo(ifa->ifa_addr, (family == AF_INET) ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6), host,
+			    NI_MAXHOST, NULL, 0, NI_NUMERICHOST);
 			if (s != 0) {
 				printf("getnameinfo() failed: %s\n", gai_strerror(s));
 				exit(EXIT_FAILURE);

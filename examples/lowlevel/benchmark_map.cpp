@@ -104,13 +104,12 @@ public:
 		//		blake2b_update(&ctx, &keybuf, sizeof(keybuf));
 		//		blake2b_final(&ctx, &keybuf);
 
-		const size_t height = std::min<size_t>(LEVELS, 1 + count_zeroes(random.rnd()) / 3);  // keybuf[0]
-		Item *new_item =
-		    reinterpret_cast<Item *>(malloc(sizeof(Item) - (LEVELS - height) * sizeof(Item *)));  // new Item{};
-		new_item->prev   = insert_ptr.previous_levels.at(0);
-		next_curr->prev  = new_item;
-		new_item->height = height;
-		size_t i         = 0;
+		const size_t height = std::min<size_t>(LEVELS, 1 + count_zeroes(random.rnd()) / 3);                         // keybuf[0]
+		Item *new_item      = reinterpret_cast<Item *>(malloc(sizeof(Item) - (LEVELS - height) * sizeof(Item *)));  // new Item{};
+		new_item->prev      = insert_ptr.previous_levels.at(0);
+		next_curr->prev     = new_item;
+		new_item->height    = height;
+		size_t i            = 0;
 		for (; i != height; ++i) {
 			new_item->nexts(i)                         = insert_ptr.previous_levels.at(i)->nexts(i);
 			insert_ptr.previous_levels.at(i)->nexts(i) = new_item;
@@ -235,8 +234,7 @@ void benchmark_timers() {
 	for (size_t i = 0; it != timers.end(); ++i, ++it) {
 		it->once(durs[i]);
 	}
-	auto idea_ms =
-	    std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - idea_start);
+	auto idea_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - idea_start);
 	std::cout << "Set Timers (random delay)"
 	          << " count=" << COUNT << ", seconds=" << double(idea_ms.count()) / 1000 << std::endl;
 	idea_start = std::chrono::high_resolution_clock::now();
@@ -246,18 +244,15 @@ void benchmark_timers() {
 			it->once(durs[i] + std::chrono::steady_clock::duration{1 + j});
 		}
 	}
-	idea_ms =
-	    std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - idea_start);
+	idea_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - idea_start);
 	std::cout << "Moving Timers to the future"
-	          << " count=" << COUNT_MOVE << "*" << COUNT << ", seconds=" << double(idea_ms.count()) / 1000
-	          << std::endl;
+	          << " count=" << COUNT_MOVE << "*" << COUNT << ", seconds=" << double(idea_ms.count()) / 1000 << std::endl;
 	idea_start = std::chrono::high_resolution_clock::now();
 	it         = timers.begin();
 	for (size_t i = 0; it != timers.end(); ++i, ++it) {
 		it->cancel();
 	}
-	idea_ms =
-	    std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - idea_start);
+	idea_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - idea_start);
 	std::cout << "Cancel Timers"
 	          << " count=" << COUNT << ", seconds=" << double(idea_ms.count()) / 1000 << std::endl;
 }
@@ -268,10 +263,9 @@ void benchmark_op(const char *str, const std::vector<T> &samples, Op op) {
 	auto idea_start      = std::chrono::high_resolution_clock::now();
 	for (const auto &sample : samples)
 		found_counter += op(sample);
-	auto idea_ms =
-	    std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - idea_start);
-	std::cout << str << " count=" << samples.size() << " hits=" << found_counter
-	          << ", seconds=" << double(idea_ms.count()) / 1000 << std::endl;
+	auto idea_ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::high_resolution_clock::now() - idea_start);
+	std::cout << str << " count=" << samples.size() << " hits=" << found_counter << ", seconds=" << double(idea_ms.count()) / 1000
+	          << std::endl;
 }
 
 void benchmark_sets() {
@@ -294,10 +288,8 @@ void benchmark_sets() {
 
 	crab::IntrusiveHeap<HeapElement, &HeapElement::heap_index, std::less<HeapElement>> int_heap;
 	int_heap.reserve(1000000);
-	benchmark_op(
-	    "OurHeap insert ", el_to_insert, [&](HeapElement *sample) -> size_t { return int_heap.insert(*sample); });
-	benchmark_op(
-	    "OurHeap erase ", el_to_erase, [&](HeapElement *sample) -> size_t { return int_heap.erase(*sample); });
+	benchmark_op("OurHeap insert ", el_to_insert, [&](HeapElement *sample) -> size_t { return int_heap.insert(*sample); });
+	benchmark_op("OurHeap erase ", el_to_erase, [&](HeapElement *sample) -> size_t { return int_heap.erase(*sample); });
 	benchmark_op("OurHeap pop_front ", el_to_insert, [&](HeapElement *sample) -> size_t {
 		if (int_heap.empty())
 			return 0;
@@ -306,8 +298,7 @@ void benchmark_sets() {
 	});
 
 	std::set<uint64_t> test_set;
-	benchmark_op(
-	    "std::set insert ", to_insert, [&](uint64_t sample) -> size_t { return test_set.insert(sample).second; });
+	benchmark_op("std::set insert ", to_insert, [&](uint64_t sample) -> size_t { return test_set.insert(sample).second; });
 	benchmark_op("std::set count ", to_count, [&](uint64_t sample) -> size_t { return test_set.count(sample); });
 	benchmark_op("std::set erase ", to_erase, [&](uint64_t sample) -> size_t { return test_set.erase(sample); });
 	benchmark_op("std::set pop_front ", to_insert, [&](uint64_t sample) -> size_t {
@@ -319,8 +310,7 @@ void benchmark_sets() {
 	});
 
 	std::unordered_set<uint64_t> test_uset;
-	benchmark_op(
-	    "std::uset insert ", to_insert, [&](uint64_t sample) -> size_t { return test_uset.insert(sample).second; });
+	benchmark_op("std::uset insert ", to_insert, [&](uint64_t sample) -> size_t { return test_uset.insert(sample).second; });
 	benchmark_op("std::uset count ", to_count, [&](uint64_t sample) -> size_t { return test_uset.count(sample); });
 	benchmark_op("std::uset erase ", to_erase, [&](uint64_t sample) -> size_t { return test_uset.erase(sample); });
 	benchmark_op("std::uset pop_front ", to_insert, [&](uint64_t sample) -> size_t {
@@ -332,8 +322,7 @@ void benchmark_sets() {
 	});
 
 	SkipList<uint64_t> skip_list;
-	benchmark_op(
-	    "skip_list insert ", to_insert, [&](uint64_t sample) -> size_t { return skip_list.insert(sample).second; });
+	benchmark_op("skip_list insert ", to_insert, [&](uint64_t sample) -> size_t { return skip_list.insert(sample).second; });
 	benchmark_op("skip_list count ", to_count, [&](uint64_t sample) -> size_t { return skip_list.count(sample); });
 	benchmark_op("skip_list erase ", to_erase, [&](uint64_t sample) -> size_t { return skip_list.erase(sample); });
 
@@ -431,9 +420,7 @@ void benchmark(std::function<T(size_t)> items_gen) {
 	std::cout << "searched " << to_search.size() << ", found=" << counter << ", mksec=" << mksec << std::endl;
 }
 
-std::string string_gen(size_t c) {
-	return std::to_string(c % COUNT) + std::string("SampleSampleSampleSampleSampleSample");
-}
+std::string string_gen(size_t c) { return std::to_string(c % COUNT) + std::string("SampleSampleSampleSampleSampleSample"); }
 
 int int_gen(size_t c) { return int(c); }
 

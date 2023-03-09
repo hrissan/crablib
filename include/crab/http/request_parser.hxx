@@ -209,8 +209,7 @@ CRAB_INLINE RequestParser::State RequestParser::consume(char input) {
 		if (input != ':')
 			throw std::runtime_error("':' expected");
 		// We will add other comma-separated headers if we need them later
-		header_cms_list =
-		    (header.name == string_view{"connection"}) || (header.name == string_view{"transfer-encoding"});
+		header_cms_list = (header.name == string_view{"connection"}) || (header.name == string_view{"transfer-encoding"});
 		return SPACE_BEFORE_HEADER_VALUE;
 	case SPACE_BEFORE_HEADER_VALUE:
 		if (is_sp(input))

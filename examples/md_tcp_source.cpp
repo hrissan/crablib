@@ -83,8 +83,7 @@ private:
 			clients.back().set_handler([this, it]() { on_client_handler(it); });
 			crab::Address addr;
 			clients.back().accept(la_socket, &addr);
-			std::cout << "Client accepted #=" << clients.size() << " addr=" << addr.get_address() << ":"
-			          << addr.get_port() << std::endl;
+			std::cout << "Client accepted #=" << clients.size() << " addr=" << addr.get_address() << ":" << addr.get_port() << std::endl;
 		}
 	}
 

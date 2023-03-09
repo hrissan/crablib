@@ -84,9 +84,7 @@ public:
 	explicit string_view(const char *value) : d(value), s(std::strlen(value)) {}
 	constexpr explicit string_view(const char *value, size_t size) : d(value), s(size - 1) {}
 
-	int compare(const char *value, size_t size) const {
-		return (s == size) ? std::memcmp(d, value, s) : s > size ? 1 : -1;
-	}
+	int compare(const char *value, size_t size) const { return (s == size) ? std::memcmp(d, value, s) : s > size ? 1 : -1; }
 	int compare(const std::string &b) const { return compare(b.data(), b.size()); }
 	string_view substr(size_t pos = 0, size_t count = std::string::npos) const {
 		if (pos > s)

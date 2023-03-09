@@ -32,8 +32,7 @@ namespace crab {
 namespace details {
 
 inline uint32_t md5_make_word(const uint8_t *p) {
-	return ((uint32_t)p[3] << 3 * 8) | ((uint32_t)p[2] << 2 * 8) | ((uint32_t)p[1] << 1 * 8) |
-	       ((uint32_t)p[0] << 0 * 8);
+	return ((uint32_t)p[3] << 3 * 8) | ((uint32_t)p[2] << 2 * 8) | ((uint32_t)p[1] << 1 * 8) | ((uint32_t)p[0] << 0 * 8);
 }
 
 inline void md5_put_word(uint8_t *p, uint32_t w) {
@@ -69,9 +68,8 @@ CRAB_INLINE md5 &md5::add(const uint8_t *data, size_t n) {
 }
 
 CRAB_INLINE void md5::finalize(uint8_t *result) {
-	static const uint8_t PADDING[] = {0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-	    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-	    0};
+	static const uint8_t PADDING[] = {0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 	size_t offset = static_cast<size_t>(size % 64);
 	size_t padLen = offset < 56 ? 56 - offset : (56 + 64) - offset;

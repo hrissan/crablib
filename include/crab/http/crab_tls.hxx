@@ -32,10 +32,7 @@ CRAB_INLINE details::TLSInit::~TLSInit() {
 }
 
 CRAB_INLINE details::TLSEngine::TLSEngine(const std::string &host)
-    : ctx(SSL_CTX_new(TLS_client_method()))
-    , ssl(SSL_new(ctx))
-    , bio_in(BIO_new(BIO_s_mem()))
-    , bio_out(BIO_new(BIO_s_mem())) {
+    : ctx(SSL_CTX_new(TLS_client_method())), ssl(SSL_new(ctx)), bio_in(BIO_new(BIO_s_mem())), bio_out(BIO_new(BIO_s_mem())) {
 	SSL_set_bio(ssl, bio_in, bio_out);
 
 	details::add_tls_root_certificates(ctx);

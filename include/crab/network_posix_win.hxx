@@ -120,8 +120,7 @@ CRAB_INLINE uint32_t Address::get_ip4() const {
 }
 
 #if !CRAB_IMPL_CF
-CRAB_INLINE std::vector<Address> DNSResolver::sync_resolve(
-    const std::string &host_name, uint16_t port, bool ipv4, bool ipv6) {
+CRAB_INLINE std::vector<Address> DNSResolver::sync_resolve(const std::string &host_name, uint16_t port, bool ipv4, bool ipv6) {
 	std::vector<Address> names;
 	if (!ipv4 && !ipv6)
 		return names;

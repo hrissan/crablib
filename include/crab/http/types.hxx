@@ -67,10 +67,9 @@ CRAB_INLINE const std::string &status_to_string(int status) {
 		int code;
 		std::string text;
 	};
-	static const smapping smappings[]       = {{101, "Switching Protocols"}, {200, "OK"}, {400, "Bad request"},
-        {401, "Unauthorized"}, {403, "Forbidden"}, {404, "Not found"}, {422, "Unprocessable Entity"},
-        {500, "Internal Error"}, {501, "Not implemented"}, {502, "Service temporarily overloaded"},
-        {503, "Gateway timeout"}};
+	static const smapping smappings[]       = {{101, "Switching Protocols"}, {200, "OK"}, {400, "Bad request"}, {401, "Unauthorized"},
+        {403, "Forbidden"}, {404, "Not found"}, {422, "Unprocessable Entity"}, {500, "Internal Error"}, {501, "Not implemented"},
+        {502, "Service temporarily overloaded"}, {503, "Gateway timeout"}};
 	static const std::string unknown_status = "Unknown";
 
 	for (const auto &m : smappings)
@@ -166,9 +165,8 @@ CRAB_INLINE void parse_content_type_value(const std::string &value, std::string 
 }
 
 CRAB_INLINE bool parse_authorization_basic(const std::string &value, std::string &auth) {
-	if (value.size() < 6 || std::tolower(value[0]) != 'b' || std::tolower(value[1]) != 'a' ||
-	    std::tolower(value[2]) != 's' || std::tolower(value[3]) != 'i' || std::tolower(value[4]) != 'c' ||
-	    !is_sp(value[5]))
+	if (value.size() < 6 || std::tolower(value[0]) != 'b' || std::tolower(value[1]) != 'a' || std::tolower(value[2]) != 's' ||
+	    std::tolower(value[3]) != 'i' || std::tolower(value[4]) != 'c' || !is_sp(value[5]))
 		return false;
 	size_t start = 6;
 	while (start < value.size() && is_sp(value[start]))
@@ -187,8 +185,8 @@ CRAB_INLINE void RequestResponseHeader::set_content_type(const std::string &mime
 }
 
 CRAB_INLINE bool RequestHeader::is_websocket_upgrade() const {
-	return method == "GET" && http_version_major == 1 && http_version_minor == 1 && connection_upgrade &&
-	       upgrade_websocket && !sec_websocket_key.empty() && sec_websocket_version == "13" && keep_alive;
+	return method == "GET" && http_version_major == 1 && http_version_minor == 1 && connection_upgrade && upgrade_websocket &&
+	       !sec_websocket_key.empty() && sec_websocket_version == "13" && keep_alive;
 }
 
 CRAB_INLINE void RequestHeader::set_uri(const std::string &uri) {
@@ -201,9 +199,7 @@ CRAB_INLINE void RequestHeader::set_uri(const std::string &uri) {
 	}
 }
 
-CRAB_INLINE std::string RequestHeader::get_uri() const {
-	return query_string.empty() ? query_string : path + "?" + query_string;
-}
+CRAB_INLINE std::string RequestHeader::get_uri() const { return query_string.empty() ? query_string : path + "?" + query_string; }
 
 CRAB_INLINE std::string RequestHeader::to_string() const {
 	std::stringstream ss;
@@ -285,15 +281,11 @@ CRAB_INLINE Response Response::simple(int status, const std::string &content_typ
 }
 
 CRAB_INLINE Response Response::simple_html(int status, std::string &&text) {
-	return simple(status,
-	    "text/html; charset=utf-8",
-	    details::simple_response(status, "<html><body>", &text, "</body></html>"));
+	return simple(status, "text/html; charset=utf-8", details::simple_response(status, "<html><body>", &text, "</body></html>"));
 }
 
 CRAB_INLINE Response Response::simple_html(int status) {
-	return simple(status,
-	    "text/html; charset=utf-8",
-	    details::simple_response(status, "<html><body>", nullptr, "</body></html>"));
+	return simple(status, "text/html; charset=utf-8", details::simple_response(status, "<html><body>", nullptr, "</body></html>"));
 }
 
 CRAB_INLINE Response Response::simple_text(int status, std::string &&text) {

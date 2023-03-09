@@ -122,8 +122,7 @@ void check_uniformity(const std::string &label) {
 
 void long_tail(uint32_t ma, uint32_t TAIL) {
 	const size_t LONG_TAIL = (ma - TAIL + 1) / TAIL * TAIL + TAIL - 1;
-	std::cout << "For TAIL=" << TAIL << " LONG_TAIL=" << LONG_TAIL << " q=" << LONG_TAIL / TAIL
-	          << " r=" << LONG_TAIL % TAIL << std::endl;
+	std::cout << "For TAIL=" << TAIL << " LONG_TAIL=" << LONG_TAIL << " q=" << LONG_TAIL / TAIL << " r=" << LONG_TAIL % TAIL << std::endl;
 }
 
 int main() {

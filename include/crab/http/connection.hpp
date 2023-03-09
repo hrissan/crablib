@@ -176,7 +176,7 @@ public:
 	void write(const std::byte *val, size_t count, BufferOptions bo = WRITE) { write(uint8_cast(val), count, bo); }
 #endif
 	void write(std::string &&ss, BufferOptions bo = WRITE);  // Write body chunk
-	void write_last_chunk(BufferOptions bo = WRITE);  // for chunk encoding and multiframe web messages, finishes body
+	void write_last_chunk(BufferOptions bo = WRITE);         // for chunk encoding and multiframe web messages, finishes body
 
 	enum State {
 		REQUEST_HEADER,   // Reading header

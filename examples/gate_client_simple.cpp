@@ -93,12 +93,9 @@ int test_watcher() {
 			call_times.swap(ct);
 		}
 		for (const auto &t : ct) {
-			std::cout << "call: "
-			          << std::chrono::duration_cast<std::chrono::microseconds>(no - t).count() % 1000000000
-			          << std::endl;
+			std::cout << "call: " << std::chrono::duration_cast<std::chrono::microseconds>(no - t).count() % 1000000000 << std::endl;
 		}
-		std::cout << "on_call: "
-		          << std::chrono::duration_cast<std::chrono::microseconds>(no.time_since_epoch()).count() % 1000000000
+		std::cout << "on_call: " << std::chrono::duration_cast<std::chrono::microseconds>(no.time_since_epoch()).count() % 1000000000
 		          << std::endl;
 	});
 	std::thread th([&]() {

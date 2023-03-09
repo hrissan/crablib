@@ -92,8 +92,7 @@ private:
 				who->write_last_chunk();
 			std::cout << "Downloader finished" << std::endl;
 		} else {
-			std::cout << "Downloader buffer full, will continue writing later position=" << who->get_body_position()
-			          << std::endl;
+			std::cout << "Downloader buffer full, will continue writing later position=" << who->get_body_position() << std::endl;
 		}
 	}
 	void start_session() {
@@ -110,8 +109,7 @@ private:
 		timer.once(1);
 
 		ticks_counter += 1;
-		std::string next_line =
-		    "Next line is " + std::to_string(ticks_counter) + " out of " + std::to_string(total_lines) + "<br/>";
+		std::string next_line = "Next line is " + std::to_string(ticks_counter) + " out of " + std::to_string(total_lines) + "<br/>";
 		body_so_far += next_line;
 		for (auto who : waiting_clients) {
 			who->write(std::string(next_line));

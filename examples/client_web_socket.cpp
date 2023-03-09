@@ -32,8 +32,7 @@ private:
 				ws.write(http::WebMessage{http::WebMessageOpcode::CLOSE});
 			}
 			if (wm.is_binary()) {
-				std::cout << "Client Got Binary Message: " << crab::to_hex(wm.body.data(), wm.body.size())
-				          << std::endl;
+				std::cout << "Client Got Binary Message: " << crab::to_hex(wm.body.data(), wm.body.size()) << std::endl;
 			}
 			if (wm.is_text()) {
 				std::cout << "Client Got Text Message: " << wm.body << std::endl;

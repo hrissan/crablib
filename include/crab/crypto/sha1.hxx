@@ -13,8 +13,7 @@ namespace details {
 inline uint32_t sha1_rol32(uint32_t x, uint32_t n) { return (x << n) | (x >> (32 - n)); }
 
 inline uint32_t sha1_make_word(const uint8_t *p) {
-	return ((uint32_t)p[0] << 3 * 8) | ((uint32_t)p[1] << 2 * 8) | ((uint32_t)p[2] << 1 * 8) |
-	       ((uint32_t)p[3] << 0 * 8);
+	return ((uint32_t)p[0] << 3 * 8) | ((uint32_t)p[1] << 2 * 8) | ((uint32_t)p[2] << 1 * 8) | ((uint32_t)p[3] << 0 * 8);
 }
 
 inline void sha1_put_word(uint8_t *p, uint32_t w) {
@@ -51,9 +50,8 @@ CRAB_INLINE sha1 &sha1::add(const uint8_t *data, size_t n) {
 
 CRAB_INLINE void sha1::finalize(uint8_t *result) {
 	// hashed text ends with 0x80, some padding 0x00 and the length in bits
-	static const uint8_t PADDING[] = {0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-	    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-	    0};
+	static const uint8_t PADDING[] = {0x80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+	    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 	size_t offset = static_cast<size_t>(size % 64);
 	size_t padLen = offset < 56 ? 56 - offset : (56 + 64) - offset;
@@ -76,8 +74,7 @@ CRAB_INLINE void sha1::process_block(const uint8_t *ptr) {
 	constexpr uint32_t c2 = 0x8f1bbcdc;
 	constexpr uint32_t c3 = 0xca62c1d6;
 
-#define SHA1_LOAD(i) \
-	w[i & 15] = details::sha1_rol32(w[(i + 13) & 15] ^ w[(i + 8) & 15] ^ w[(i + 2) & 15] ^ w[i & 15], 1);
+#define SHA1_LOAD(i) w[i & 15] = details::sha1_rol32(w[(i + 13) & 15] ^ w[(i + 8) & 15] ^ w[(i + 2) & 15] ^ w[i & 15], 1);
 #define SHA1_ROUND_0(v, u, x, y, z, i)                                     \
 	z += ((u & (x ^ y)) ^ y) + w[i & 15] + c0 + details::sha1_rol32(v, 5); \
 	u = details::sha1_rol32(u, 30);

@@ -103,18 +103,7 @@ public:
 	URI uri;
 
 private:
-	enum State {
-		SCHEME,
-		SCHEME_SEP1,
-		SCHEME_SEP2,
-		HOST,
-		PORT,
-		PATH,
-		PATH_HEX1,
-		PATH_HEX2,
-		QUERY,
-		GOOD
-	} state = SCHEME;
+	enum State { SCHEME, SCHEME_SEP1, SCHEME_SEP2, HOST, PORT, PATH, PATH_HEX1, PATH_HEX2, QUERY, GOOD } state = SCHEME;
 
 	State consume(char input);
 	State consume_end();

@@ -195,8 +195,7 @@ template<typename T>
 constexpr size_t max_to_string_length_impl(T value) {
 	return (value >= 0 && value < 10)
 	           ? 1
-	           : (std::is_signed<T>::value && value < 0 && value > -10) ? 2
-	                                                                    : 1 + max_to_string_length_impl(value / 10);
+	           : (std::is_signed<T>::value && value < 0 && value > -10) ? 2 : 1 + max_to_string_length_impl(value / 10);
 }
 
 }  // namespace details

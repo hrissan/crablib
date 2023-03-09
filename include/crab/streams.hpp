@@ -81,12 +81,8 @@ public:
 
 	size_t read_count() const { return write_pos < impl.size() ? write_pos - read_pos : impl.size() - read_pos; }
 	const uint8_t *read_ptr() const { return impl.data() + read_pos; }
-	size_t write_count() const {
-		return write_pos < impl.size() ? impl.size() - write_pos : read_pos - (write_pos - impl.size());
-	}
-	uint8_t *write_ptr() {
-		return write_pos < impl.size() ? impl.data() + write_pos : impl.data() + write_pos - impl.size();
-	}
+	size_t write_count() const { return write_pos < impl.size() ? impl.size() - write_pos : read_pos - (write_pos - impl.size()); }
+	uint8_t *write_ptr() { return write_pos < impl.size() ? impl.data() + write_pos : impl.data() + write_pos - impl.size(); }
 
 	void did_write(size_t count) {
 		write_pos += count;
@@ -207,8 +203,7 @@ public:
 	VectorStream() : IVectorStream(&impl), OVectorStream(&impl) {}
 	//	explicit VectorStream(const bdata &data) : IVectorStream(&impl), OVectorStream(&impl), impl(data) {}
 	explicit VectorStream(bdata data) : IVectorStream(&impl), OVectorStream(&impl), impl(std::move(data)) {}
-	VectorStream(VectorStream &&other) noexcept
-	    : IVectorStream(&impl), OVectorStream(&impl), impl(std::move(other.impl)) {
+	VectorStream(VectorStream &&other) noexcept : IVectorStream(&impl), OVectorStream(&impl), impl(std::move(other.impl)) {
 		read_pos = other.read_pos;
 	}
 	VectorStream &operator=(VectorStream &&other) noexcept {
@@ -264,8 +259,7 @@ public:
 	StringStream() : IStringStream(&impl), OStringStream(&impl) {}
 	//	explicit StringStream(const std::string &data) : IStringStream(&impl), OStringStream(&impl), impl(data) {}
 	explicit StringStream(std::string data) : IStringStream(&impl), OStringStream(&impl), impl(std::move(data)) {}
-	StringStream(StringStream &&other) noexcept
-	    : IStringStream(&impl), OStringStream(&impl), impl(std::move(other.impl)) {
+	StringStream(StringStream &&other) noexcept : IStringStream(&impl), OStringStream(&impl), impl(std::move(other.impl)) {
 		read_pos = other.read_pos;
 	}
 	StringStream &operator=(StringStream &&other) noexcept {
@@ -292,8 +286,7 @@ class CombinedIStream : public IFiniteStream {
 	std::unique_ptr<IFiniteStream> a, b;
 
 public:
-	explicit CombinedIStream(std::unique_ptr<IFiniteStream> &&a, std::unique_ptr<IFiniteStream> &&b)
-	    : a(std::move(a)), b(std::move(b)) {}
+	explicit CombinedIStream(std::unique_ptr<IFiniteStream> &&a, std::unique_ptr<IFiniteStream> &&b) : a(std::move(a)), b(std::move(b)) {}
 	size_t size() const override { return a->size() + b->size(); }
 	size_t read_some(uint8_t *val, size_t count) override {
 		if (!a->empty())

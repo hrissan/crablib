@@ -384,8 +384,7 @@ public:
 	// If multicast group address is used, receiver will join group on specified or default adapter
 	void set_handler(Handler &&cb) { rw_handler.handler = std::move(cb); }
 
-	static constexpr size_t MAX_DATAGRAM_SIZE =
-	    65507;  // https://stackoverflow.com/questions/42609561/udp-maximum-packet-size/42610200
+	static constexpr size_t MAX_DATAGRAM_SIZE = 65507;  // https://stackoverflow.com/questions/42609561/udp-maximum-packet-size/42610200
 	optional<size_t> read_datagram(uint8_t *data, size_t count, Address *peer_addr = nullptr);
 	// returns () if buffer is empty
 	// returns (datagram_size) if datagram was read, even if it was truncated

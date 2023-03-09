@@ -86,8 +86,7 @@ private:
 		while (true) {
 			if (client.read_buffer.size() >= sizeof(ApiHeader)) {
 				ApiHeader header;
-				invariant(client.read_buffer.peek(reinterpret_cast<uint8_t *>(&header), sizeof(header)),
-				    "Peek should succeed");
+				invariant(client.read_buffer.peek(reinterpret_cast<uint8_t *>(&header), sizeof(header)), "Peek should succeed");
 				if (client.read_buffer.size() >= sizeof(ApiHeader) + header.body_len) {
 					client.read_buffer.did_read(sizeof(header));
 					client.read_buffer.did_read(header.body_len);
@@ -161,8 +160,7 @@ private:
 	}
 	void print_stats() {
 		stat_timer.once(1);
-		std::cout << "requests received/responses sent (during last second)=" << requests_received << "/"
-		          << responses_sent << std::endl;
+		std::cout << "requests received/responses sent (during last second)=" << requests_received << "/" << responses_sent << std::endl;
 		//		if (!clients.empty()) {
 		//			std::cout << "Client.front read=" << clients.front().total_read
 		//			          << " written=" << clients.front().total_written << std::endl;
@@ -251,8 +249,7 @@ private:
 	}
 	void print_stats() {
 		stat_timer.once(1);
-		std::cout << "requests received/responses sent (during last second)=" << requests_received << "/"
-		          << responses_sent << std::endl;
+		std::cout << "requests received/responses sent (during last second)=" << requests_received << "/" << responses_sent << std::endl;
 		//		if (!clients.empty()) {
 		//			std::cout << "Client.front read=" << clients.front().total_read
 		//			          << " written=" << clients.front().total_written << std::endl;

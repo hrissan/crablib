@@ -72,8 +72,7 @@ private:
 	}
 	void print_stats() {
 		stat_timer.once(1);
-		std::cout << "responses received (during last second)=" << requests_received
-		          << ", requests in transit=" << send_time.size();
+		std::cout << "responses received (during last second)=" << requests_received << ", requests in transit=" << send_time.size();
 		if (requests_received != 0) {
 			double average_lat = double(latency_sum_mksec.count()) / requests_received;
 			std::cout << " lat(av)=" << average_lat << " lat(max)=" << latency_max_mksec.count() << std::endl;
@@ -105,9 +104,7 @@ private:
 int main(int argc, char *argv[]) {
 	std::cout << "crablib version " << crab::version_string() << std::endl;
 
-	std::cout
-	    << "This client send requests (1 byte) via TCP to fair_server and measures latency of responses (16 bytes)"
-	    << std::endl;
+	std::cout << "This client send requests (1 byte) via TCP to fair_server and measures latency of responses (16 bytes)" << std::endl;
 	if (argc < 2) {
 		std::cout << "Usage: fair_client <ip>:<port> <requests> <instances> [Default: 20000 1]" << std::endl;
 		std::cout << "    fair_client will keep that number of requests in transit to server" << std::endl;

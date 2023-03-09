@@ -33,7 +33,7 @@ CRAB_INLINE void Timer::once(double after_seconds) {
 	cancel();
 	CFRunLoopTimerContext TimerContext = {0, this, nullptr, nullptr, nullptr};
 	CFAbsoluteTime FireTime            = CFAbsoluteTimeGetCurrent() + after_seconds;
-	impl = CFRunLoopTimerCreate(kCFAllocatorDefault, FireTime, 0, 0, 0, &Timer::static_cb, &TimerContext);
+	impl                               = CFRunLoopTimerCreate(kCFAllocatorDefault, FireTime, 0, 0, 0, &Timer::static_cb, &TimerContext);
 	CFRunLoopAddTimer(CFRunLoopGetCurrent(), impl, kCFRunLoopDefaultMode);
 }
 
@@ -85,8 +85,8 @@ CRAB_INLINE void Idle::set_active(bool a) {
 	}
 	if (!loop->idle_handlers.empty() && !loop->idle_observer) {
 		CFRunLoopObserverContext context{0, loop, 0, 0, 0};
-		loop->idle_observer = CFRunLoopObserverCreate(
-		    kCFAllocatorDefault, kCFRunLoopBeforeWaiting, true, 0, &RunLoop::on_idle_observer, &context);
+		loop->idle_observer =
+		    CFRunLoopObserverCreate(kCFAllocatorDefault, kCFRunLoopBeforeWaiting, true, 0, &RunLoop::on_idle_observer, &context);
 		CFRunLoopAddObserver(CFRunLoopGetCurrent(), loop->idle_observer, kCFRunLoopDefaultMode);
 	}
 }
@@ -146,8 +146,7 @@ CRAB_INLINE uint16_t Address::get_port() const { return port; }
 CRAB_INLINE bool Address::is_multicast() const { return false; } // TODO
 */
 
-CRAB_INLINE TCPSocket::TCPSocket(Handler &&cb)
-    : rwd_handler(std::move(cb)), closed_event([&] { rwd_handler.handler(); }) {}
+CRAB_INLINE TCPSocket::TCPSocket(Handler &&cb) : rwd_handler(std::move(cb)), closed_event([&] { rwd_handler.handler(); }) {}
 
 CRAB_INLINE TCPSocket::~TCPSocket() { close(); }
 
@@ -169,14 +168,12 @@ CRAB_INLINE bool TCPSocket::is_open() const { return read_stream || closed_event
 
 CRAB_INLINE bool TCPSocket::finish_connect() {
 	CFStreamClientContext my_context{0, this, 0, 0, 0};
-	if (!CFReadStreamSetClient(read_stream,
-	        kCFStreamEventHasBytesAvailable | kCFStreamEventErrorOccurred | kCFStreamEventEndEncountered,
+	if (!CFReadStreamSetClient(read_stream, kCFStreamEventHasBytesAvailable | kCFStreamEventErrorOccurred | kCFStreamEventEndEncountered,
 	        &TCPSocket::read_cb, &my_context)) {
 		close();
 		return false;
 	}
-	if (!CFWriteStreamSetClient(write_stream,
-	        kCFStreamEventCanAcceptBytes | kCFStreamEventErrorOccurred | kCFStreamEventEndEncountered,
+	if (!CFWriteStreamSetClient(write_stream, kCFStreamEventCanAcceptBytes | kCFStreamEventErrorOccurred | kCFStreamEventEndEncountered,
 	        &TCPSocket::write_cb, &my_context)) {
 		close();
 		return false;
@@ -191,9 +188,8 @@ CRAB_INLINE bool TCPSocket::finish_connect() {
 CRAB_INLINE bool TCPSocket::connect(const Address &address, const Settings &) {
 	close();
 	// TODO - implement settings
-	CFStringRef hname =
-	    CFStringCreateWithCString(kCFAllocatorDefault, address.get_address().c_str(), kCFStringEncodingUTF8);
-	CFHostRef host = CFHostCreateWithName(kCFAllocatorDefault, hname);
+	CFStringRef hname = CFStringCreateWithCString(kCFAllocatorDefault, address.get_address().c_str(), kCFStringEncodingUTF8);
+	CFHostRef host    = CFHostCreateWithName(kCFAllocatorDefault, hname);
 	CFRelease(hname);
 	hname = nullptr;
 	CFStreamCreatePairWithSocketToCFHost(kCFAllocatorDefault, host, address.get_port(), &read_stream, &write_stream);
@@ -227,8 +223,7 @@ CRAB_INLINE size_t TCPSocket::write_some(const uint8_t *val, size_t count) {
 CRAB_INLINE void TCPSocket::write_shutdown() {
 	if (!is_open())
 		return;
-	CFDataRef da =
-	    static_cast<CFDataRef>(CFWriteStreamCopyProperty(write_stream, kCFStreamPropertySocketNativeHandle));
+	CFDataRef da = static_cast<CFDataRef>(CFWriteStreamCopyProperty(write_stream, kCFStreamPropertySocketNativeHandle));
 	if (!da)
 		return;
 	CFSocketNativeHandle handle;
@@ -265,14 +260,13 @@ CRAB_INLINE void TCPSocket::write_cb(CFWriteStreamRef stream, CFStreamEventType 
 	}
 }
 
-CRAB_INLINE TCPAcceptor::TCPAcceptor(const Address &address, Handler &&cb, const Settings &settings)
-    : a_handler(std::move(cb)) {
+CRAB_INLINE TCPAcceptor::TCPAcceptor(const Address &address, Handler &&cb, const Settings &settings) : a_handler(std::move(cb)) {
 	CFSocketContext context = {0, this, 0, 0, 0};
-	CFSocketRef impl        = CFSocketCreate(kCFAllocatorDefault, address.impl_get_sockaddr()->sa_family, SOCK_STREAM,
-        IPPROTO_TCP, kCFSocketAcceptCallBack, accept_cb, &context);
+	CFSocketRef impl        = CFSocketCreate(kCFAllocatorDefault, address.impl_get_sockaddr()->sa_family, SOCK_STREAM, IPPROTO_TCP,
+        kCFSocketAcceptCallBack, accept_cb, &context);
 
-	CFDataRef sincfd = CFDataCreate(kCFAllocatorDefault,
-	    reinterpret_cast<const uint8_t *>(address.impl_get_sockaddr()), address.impl_get_sockaddr_length());
+	CFDataRef sincfd = CFDataCreate(
+	    kCFAllocatorDefault, reinterpret_cast<const uint8_t *>(address.impl_get_sockaddr()), address.impl_get_sockaddr_length());
 
 	CFSocketError sockErr = CFSocketSetAddress(impl, sincfd);
 	if (sockErr != kCFSocketSuccess)
@@ -313,8 +307,7 @@ CRAB_INLINE TCPAcceptor::~TCPAcceptor() {
 	socket_source = nullptr;
 }
 
-CRAB_INLINE void TCPAcceptor::accept_cb(
-    CFSocketRef, CFSocketCallBackType type, CFDataRef address, const void *data, void *info) {
+CRAB_INLINE void TCPAcceptor::accept_cb(CFSocketRef, CFSocketCallBackType type, CFDataRef address, const void *data, void *info) {
 	if (type != kCFSocketAcceptCallBack)
 		return;
 	auto *owner = reinterpret_cast<TCPAcceptor *>(info);
@@ -324,27 +317,22 @@ CRAB_INLINE void TCPAcceptor::accept_cb(
 		owner->a_handler.handler();
 }
 
-CRAB_INLINE std::vector<Address> DNSResolver::sync_resolve(
-    const std::string &host_name, uint16_t port, bool ipv4, bool ipv6) {
+CRAB_INLINE std::vector<Address> DNSResolver::sync_resolve(const std::string &host_name, uint16_t port, bool ipv4, bool ipv6) {
 	// TODO DNS lookups
 	return std::vector<Address>{};
 }
 
-CRAB_INLINE UDPTransmitter::UDPTransmitter(const Address &address, Handler &&cb, const std::string &adapter)
-    : w_handler(std::move(cb)) {
+CRAB_INLINE UDPTransmitter::UDPTransmitter(const Address &address, Handler &&cb, const std::string &adapter) : w_handler(std::move(cb)) {
 	throw std::runtime_error("UDPTransmitter not yet implemented on Windows");
 }
 
 CRAB_INLINE bool UDPTransmitter::write_datagram(const uint8_t *data, size_t count) { return 0; }
 
-CRAB_INLINE UDPReceiver::UDPReceiver(const Address &address, Handler &&cb, const std::string &adapter)
-    : r_handler(std::move(cb)) {
+CRAB_INLINE UDPReceiver::UDPReceiver(const Address &address, Handler &&cb, const std::string &adapter) : r_handler(std::move(cb)) {
 	throw std::runtime_error("UDPReceiver not yet implemented on Windows");
 }
 
-CRAB_INLINE optional<size_t> UDPReceiver::read_datagram(uint8_t *data, size_t count, Address *peer_addr) {
-	return {};
-}
+CRAB_INLINE optional<size_t> UDPReceiver::read_datagram(uint8_t *data, size_t count, Address *peer_addr) { return {}; }
 
 }  // namespace crab
 

@@ -79,8 +79,7 @@ public:
 				auto it = --connected_sockets.end();
 				who->web_socket_upgrade([this, it, who](http::WebMessage &&message) {
 					if (message.is_close()) {
-						std::cout << "Server Got Close Message: " << message.body << " from who=" << size_t(who)
-						          << std::endl;
+						std::cout << "Server Got Close Message: " << message.body << " from who=" << size_t(who) << std::endl;
 						connected_sockets.erase(it);
 						return;
 					}
@@ -103,11 +102,9 @@ public:
 						connected_stream_sockets.erase(it);
 						return;
 					}
-					std::cout << "Server Got Big Message: " << message.body << " from who=" << size_t(who)
-					          << std::endl;
+					std::cout << "Server Got Big Message: " << message.body << " from who=" << size_t(who) << std::endl;
 					uint64_t len = 100 * 1000 * 1000;
-					who->start_write_stream(
-					    http::WebMessageOpcode::TEXT, [who, len]() { write_stream_data(who, len); });
+					who->start_write_stream(http::WebMessageOpcode::TEXT, [who, len]() { write_stream_data(who, len); });
 				});
 				who->write(http::WebMessage("Server-initiated on connect message!"));
 				return;
@@ -149,13 +146,13 @@ private:
 		stat_timer.once(1);
 
 		const auto &st = crab::RunLoop::current()->stats;
-		std::cout << " ---- req_counter=" << req_counter << " EPOLL_count=" << st.EPOLL_count
-		          << " EPOLL_size=" << st.EPOLL_size << std::endl;
+		std::cout << " ---- req_counter=" << req_counter << " EPOLL_count=" << st.EPOLL_count << " EPOLL_size=" << st.EPOLL_size
+		          << std::endl;
 		std::cout << "RECV_count=" << st.RECV_count << " RECV_size=" << st.RECV_size << std::endl;
 		std::cout << "SEND_count=" << st.SEND_count << " SEND_size=" << st.SEND_size << std::endl;
 		for (auto *who : connected_sockets)
-			who->write(http::WebMessage("RECV_count=" + std::to_string(st.RECV_count) +
-			                            " connected_clients=" + std::to_string(connected_sockets.size())));
+			who->write(http::WebMessage(
+			    "RECV_count=" + std::to_string(st.RECV_count) + " connected_clients=" + std::to_string(connected_sockets.size())));
 	}
 	http::Server server;
 	crab::Timer stat_timer;

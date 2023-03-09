@@ -11,8 +11,7 @@
 
 namespace crab { namespace http {
 
-CRAB_INLINE WebMessageHeaderSaver::WebMessageHeaderSaver(
-    bool fin, int opcode, uint64_t payload_len, optional<uint32_t> masking_key) {
+CRAB_INLINE WebMessageHeaderSaver::WebMessageHeaderSaver(bool fin, int opcode, uint64_t payload_len, optional<uint32_t> masking_key) {
 	buffer[pos++] = (fin ? 0x80 : 0) | static_cast<int>(opcode);
 	if (payload_len < 126) {
 		buffer[pos++] = static_cast<uint8_t>(payload_len | (masking_key ? 0x80 : 0));
@@ -90,8 +89,7 @@ CRAB_INLINE WebMessageHeaderParser::State WebMessageHeaderParser::consume(uint8_
 	}
 }
 
-CRAB_INLINE void WebMessageHeaderParser::mask_data(
-    size_t masking_shift, char *data, size_t size, uint32_t masking_key) {
+CRAB_INLINE void WebMessageHeaderParser::mask_data(size_t masking_shift, char *data, size_t size, uint32_t masking_key) {
 	auto mask = crab::rol(masking_key, 8 * masking_shift);
 
 	void *next_aligned = data;

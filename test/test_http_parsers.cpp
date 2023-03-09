@@ -106,10 +106,8 @@ void test_query_parser() {
 void test_cookie_parser() {
 	auto p0 = http::parse_cookie_string("simple=test;oh=my=god;it=works");
 	auto p1 = http::parse_cookie_string("_session=lqJlEC9ypWiEX3OB;another=value;=");
-	auto p2 =
-	    http::parse_cookie_string("  _session  =  lqJlEC9ypWiEX3OB  ; another = value  ;keyonly =  ;=valueonly");
-	auto p3 = http::parse_cookie_string(
-	    " _se$$ss1 n = lqJlEC, 9y,pWi , EX3OB ; another = v=a,l! #$ue  ;hren,123; last key with spaces ");
+	auto p2 = http::parse_cookie_string("  _session  =  lqJlEC9ypWiEX3OB  ; another = value  ;keyonly =  ;=valueonly");
+	auto p3 = http::parse_cookie_string(" _se$$ss1 n = lqJlEC, 9y,pWi , EX3OB ; another = v=a,l! #$ue  ;hren,123; last key with spaces ");
 	auto p4 = http::parse_cookie_string(" test =  last value with spaces   ");
 
 	assert(p1.count("_session"));
@@ -150,17 +148,17 @@ void test_cookie_parser() {
 	print_params(p4, "cookies p4");
 }
 
-static void test_uri(std::string uri_str, std::string scheme, std::string user_info, std::string host,
-    std::string port, std::string path, std::string query = "") {
+static void test_uri(std::string uri_str, std::string scheme, std::string user_info, std::string host, std::string port, std::string path,
+    std::string query = "") {
 	crab::http::URI uri = crab::http::parse_uri(uri_str);
-	invariant(uri.scheme == scheme && uri.user_info == user_info && uri.host == host && uri.port == port &&
-	              uri.path == path && uri.query == query,
+	invariant(uri.scheme == scheme && uri.user_info == user_info && uri.host == host && uri.port == port && uri.path == path &&
+	              uri.query == query,
 	    "");
 	std::cout << "<-- " << uri_str << std::endl;
 	std::cout << "--> " << uri.to_string() << std::endl;
 	crab::http::URI uri2 = crab::http::parse_uri(uri.to_string());
-	invariant(uri2.scheme == scheme && uri2.user_info == user_info && uri2.host == host && uri2.port == port &&
-	              uri2.path == path && uri2.query == query,
+	invariant(uri2.scheme == scheme && uri2.user_info == user_info && uri2.host == host && uri2.port == port && uri2.path == path &&
+	              uri2.query == query,
 	    "");
 }
 
@@ -178,24 +176,17 @@ void test_uri_parser() {
 	test_uri("http://crab.com/", "http", "", "crab.com", "", "/");
 	test_uri("http://crab.com/chat", "http", "", "crab.com", "", "/chat");
 	test_bad_uri("https://getschwifty.ltd/.././../hello");
-	test_uri("https://getschwifty.ltd/mega/giga/../hello/test/../ok", "https", "", "getschwifty.ltd", "",
-	    "/mega/hello/ok");
+	test_uri("https://getschwifty.ltd/mega/giga/../hello/test/../ok", "https", "", "getschwifty.ltd", "", "/mega/hello/ok");
 	test_bad_uri("");
-	test_uri(
-	    "http://getschwifty.ltd:8080/test?Fran%C3%A7ois=%D1%82%D0%B5%D1%81%D1%82+123+%D0%BD%D0%B0%D1%84%D0%B8%D0%B3",
-	    "http", "", "getschwifty.ltd", "8080", "/test",
-	    "Fran%C3%A7ois=%D1%82%D0%B5%D1%81%D1%82+123+%D0%BD%D0%B0%D1%84%D0%B8%D0%B3");
-	test_uri("https://192.168.0.1/Fran%C3%A7ois/%D1%82%D0%B5%D1%81%D1%82%1", "https", "", "192.168.0.1", "",
-	    "/François/тест%1");
-	test_uri("https://192.168.0.1:8080/%hello%/world?mega=123", "https", "", "192.168.0.1", "8080", "/%hello%/world",
-	    "mega=123");
+	test_uri("http://getschwifty.ltd:8080/test?Fran%C3%A7ois=%D1%82%D0%B5%D1%81%D1%82+123+%D0%BD%D0%B0%D1%84%D0%B8%D0%B3", "http", "",
+	    "getschwifty.ltd", "8080", "/test", "Fran%C3%A7ois=%D1%82%D0%B5%D1%81%D1%82+123+%D0%BD%D0%B0%D1%84%D0%B8%D0%B3");
+	test_uri("https://192.168.0.1/Fran%C3%A7ois/%D1%82%D0%B5%D1%81%D1%82%1", "https", "", "192.168.0.1", "", "/François/тест%1");
+	test_uri("https://192.168.0.1:8080/%hello%/world?mega=123", "https", "", "192.168.0.1", "8080", "/%hello%/world", "mega=123");
 	test_uri("https://test.com:8090", "https", "", "test.com", "8090", "/");
-	test_uri(
-	    "https://https://Fran%C3%A7ois:%D1%82%D0%B5%D1%81%D1%82+123+%D0%BD%D0%B0%D1%84%D0%B8%D0%B3@192.168.0.1:8090",
-	    "https", "", "https", "", "//François:тест+123+нафиг@192.168.0.1:8090");
-	test_uri(
-	    "https://https:Fran%C3%A7ois:%D1%82%D0%B5%D1%81%D1%82+123+%D0%BD%D0%B0%D1%84%D0%B8%D0%B3@192.168.0.1:8090",
-	    "https", "https:François:тест+123+нафиг", "192.168.0.1", "8090", "/");
+	test_uri("https://https://Fran%C3%A7ois:%D1%82%D0%B5%D1%81%D1%82+123+%D0%BD%D0%B0%D1%84%D0%B8%D0%B3@192.168.0.1:8090", "https", "",
+	    "https", "", "//François:тест+123+нафиг@192.168.0.1:8090");
+	test_uri("https://https:Fran%C3%A7ois:%D1%82%D0%B5%D1%81%D1%82+123+%D0%BD%D0%B0%D1%84%D0%B8%D0%B3@192.168.0.1:8090", "https",
+	    "https:François:тест+123+нафиг", "192.168.0.1", "8090", "/");
 }
 
 void message_eq(const Message &msg, const http::ResponseHeader &req, const std::string &body) {
@@ -302,7 +293,7 @@ int main2() {
 	double bw      = total / elapsed;
 
 	std::cout << "---" << std::endl << "Benchmark result:" << std::endl;
-	std::cout << total / (1024 * 1024) << " mb | " << bw / (1024 * 1024) << " mb/s | " << iterations / elapsed
-	          << " req/sec | " << elapsed << " s" << std::endl;
+	std::cout << total / (1024 * 1024) << " mb | " << bw / (1024 * 1024) << " mb/s | " << iterations / elapsed << " req/sec | " << elapsed
+	          << " s" << std::endl;
 	return static_cast<int>(result);
 }

@@ -32,8 +32,8 @@ int main(int argc, char *argv[]) {
 	std::cout << "crablib version " << crab::version_string() << std::endl;
 
 	auto th_count = std::thread::hardware_concurrency();
-	std::cout << "This server uses " << th_count
-	          << " threads, your system must support binding several TCP acceptors to the same port" << std::endl;
+	std::cout << "This server uses " << th_count << " threads, your system must support binding several TCP acceptors to the same port"
+	          << std::endl;
 
 	std::vector<std::thread> ths;
 	for (size_t i = 1; i < th_count; ++i)

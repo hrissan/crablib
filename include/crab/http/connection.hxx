@@ -26,9 +26,7 @@ CRAB_INLINE std::string web_message_create_close_body(const std::string &reason,
 }  // namespace details
 
 CRAB_INLINE BufferedTCPSocket::BufferedTCPSocket(Handler &&rwd_handler)
-    : rwd_handler(std::move(rwd_handler))
-    , sock([this]() { sock_handler(); })
-    , shutdown_timer([this]() { shutdown_timer_handler(); }) {}
+    : rwd_handler(std::move(rwd_handler)), sock([this]() { sock_handler(); }), shutdown_timer([this]() { shutdown_timer_handler(); }) {}
 
 CRAB_INLINE void BufferedTCPSocket::close() {
 	data_to_write.clear();
@@ -230,8 +228,8 @@ CRAB_INLINE void ClientConnection::write(Request &&req) {
 CRAB_INLINE void ClientConnection::write(WebMessage &&message) {
 	if (!is_open())
 		return;  // This NOP simplifies state machines of connection users
-	invariant(state == WEB_MESSAGE_HEADER || state == WEB_MESSAGE_BODY || state == WEB_MESSAGE_READY ||
-	              state == WEB_UPGRADE_RESPONSE_HEADER,
+	invariant(
+	    state == WEB_MESSAGE_HEADER || state == WEB_MESSAGE_BODY || state == WEB_MESSAGE_READY || state == WEB_UPGRADE_RESPONSE_HEADER,
 	    "Connection unexpected write");
 
 	uint32_t masking_key = rnd.pod<uint32_t>();
@@ -328,9 +326,8 @@ CRAB_INLINE bool ClientConnection::advance_state() {
 					continue;
 				if (response_parser.req.is_websocket_upgrade())
 					throw std::runtime_error("Unexpected web upgrade header");
-				http_body_parser =
-				    BodyParser{response_parser.req.content_length, response_parser.req.transfer_encoding_chunked};
-				state = RESPONSE_BODY;
+				http_body_parser = BodyParser{response_parser.req.content_length, response_parser.req.transfer_encoding_chunked};
+				state            = RESPONSE_BODY;
 				// Fall through (to correctly handle zero-length body). Next line is understood by GCC
 				// Fall through
 			case RESPONSE_BODY:
@@ -347,8 +344,7 @@ CRAB_INLINE bool ClientConnection::advance_state() {
 					throw std::runtime_error("Expecting web upgrade header");
 				if (response_parser.req.content_length || response_parser.req.transfer_encoding_chunked)
 					throw std::runtime_error("Web upgrade reponse cannot have body");
-				if (response_parser.req.sec_websocket_accept !=
-				    ResponseHeader::generate_sec_websocket_accept(sec_websocket_key))
+				if (response_parser.req.sec_websocket_accept != ResponseHeader::generate_sec_websocket_accept(sec_websocket_key))
 					throw std::runtime_error("Wrong value of 'Sec-WebSocket-Accept' header");
 				wm_header_parser = WebMessageHeaderParser{};
 				wm_body_parser   = WebMessageBodyParser{};
@@ -394,8 +390,7 @@ CRAB_INLINE bool ClientConnection::advance_state() {
 				if (!web_message) {
 					if (wm_header_parser.opcode == 0)
 						throw std::runtime_error("Continuation in the first chunk");
-					web_message.emplace(
-					    static_cast<WebMessageOpcode>(wm_header_parser.opcode), wm_body_parser.body.clear());
+					web_message.emplace(static_cast<WebMessageOpcode>(wm_header_parser.opcode), wm_body_parser.body.clear());
 				} else {
 					if (wm_header_parser.opcode != 0)
 						throw std::runtime_error("Non-continuation in the subsequent chunk");
@@ -488,11 +483,10 @@ CRAB_INLINE void ServerConnection::web_socket_upgrade() {
 
 	ResponseHeader response;  // HTTP/1.1, keep-alive
 
-	response.connection_upgrade = true;
-	response.upgrade_websocket  = true;
-	response.sec_websocket_accept =
-	    ResponseHeader::generate_sec_websocket_accept(request_parser.req.sec_websocket_key);
-	response.status = 101;
+	response.connection_upgrade   = true;
+	response.upgrade_websocket    = true;
+	response.sec_websocket_accept = ResponseHeader::generate_sec_websocket_accept(request_parser.req.sec_websocket_key);
+	response.status               = 101;
 
 	sock.write(response.to_string());
 
@@ -519,8 +513,7 @@ CRAB_INLINE void ServerConnection::write(ResponseHeader &resp, BufferOptions bo)
 		return;  // This NOP simplifies state machines of connection users
 	invariant(state == RESPONSE_HEADER, "Connection unexpected write");
 	invariant(!resp.is_websocket_upgrade(), "Please use web_socket_upgrade() function for web socket upgrade");
-	invariant(resp.transfer_encoding_chunked || resp.content_length,
-	    "Please set either chunked encoding or content_length");
+	invariant(resp.transfer_encoding_chunked || resp.content_length, "Please set either chunked encoding or content_length");
 
 	resp.http_version_major = request_parser.req.http_version_major;
 	resp.http_version_minor = request_parser.req.http_version_minor;
@@ -565,8 +558,7 @@ CRAB_INLINE void ServerConnection::write(WebMessageOpcode opcode) {
 	if (!is_open())
 		return;  // This NOP simplifies state machines of connection users
 	invariant(is_state_websocket(), "Connection unexpected write");
-	invariant(opcode == WebMessageOpcode::TEXT || opcode == WebMessageOpcode::BINARY,
-	    "Control frames must not be fragmented");
+	invariant(opcode == WebMessageOpcode::TEXT || opcode == WebMessageOpcode::BINARY, "Control frames must not be fragmented");
 	invariant(!writing_web_message_body, "Sending new message before previous one finished");
 	writing_web_message_body = true;
 
@@ -707,8 +699,7 @@ CRAB_INLINE bool ServerConnection::advance_state() {
 				request_parser.parse(read_buffer);
 				if (!request_parser.is_good())
 					continue;
-				http_body_parser =
-				    BodyParser{request_parser.req.content_length, request_parser.req.transfer_encoding_chunked};
+				http_body_parser = BodyParser{request_parser.req.content_length, request_parser.req.transfer_encoding_chunked};
 				request_parser.req.transfer_encoding_chunked = false;  // Hide from clients
 				state                                        = REQUEST_BODY;
 				// Fall through (to correctly handle zero-length body). Next line is understood by GCC
@@ -759,8 +750,7 @@ CRAB_INLINE bool ServerConnection::advance_state() {
 				if (!web_message) {
 					if (wm_header_parser.opcode == 0)
 						throw std::runtime_error("Continuation in the first chunk");
-					web_message.emplace(
-					    static_cast<WebMessageOpcode>(wm_header_parser.opcode), wm_body_parser.body.clear());
+					web_message.emplace(static_cast<WebMessageOpcode>(wm_header_parser.opcode), wm_body_parser.body.clear());
 				} else {
 					if (wm_header_parser.opcode != 0)
 						throw std::runtime_error("Non-continuation in the subsequent chunk");

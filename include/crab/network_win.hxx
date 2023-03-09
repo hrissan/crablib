@@ -101,8 +101,7 @@ CRAB_INLINE RunLoop::RunLoop() : impl(new RunLoopImpl([this]() { links.trigger_c
 }
 
 CRAB_INLINE RunLoop::~RunLoop() {
-	while (
-	    impl->pending_counter != 0) {  // This cleanup cannot be in ~Impl because there would be no current_loop then
+	while (impl->pending_counter != 0) {  // This cleanup cannot be in ~Impl because there would be no current_loop then
 		std::cout << "RunLoop::~Impl() stepping through pending_counter=" << impl->pending_counter << std::endl;
 		step();
 	}
@@ -116,9 +115,8 @@ CRAB_INLINE void RunLoop::step(int timeout_ms) {
 		OVERLAPPED *ovl         = nullptr;
 		DWORD transferred       = 0;
 		ULONG_PTR completionKey = 0;
-		bool result =
-		    GetQueuedCompletionStatus(impl->completion_queue.value, &transferred, &completionKey, &ovl, timeout_ms);
-		DWORD last = GetLastError();
+		bool result             = GetQueuedCompletionStatus(impl->completion_queue.value, &transferred, &completionKey, &ovl, timeout_ms);
+		DWORD last              = GetLastError();
 		if (ovl == nullptr)  // General problem with queue
 		{
 			if (last != ERROR_TIMEOUT && last != STATUS_TIMEOUT)  // Microsoft URODI
@@ -132,9 +130,8 @@ CRAB_INLINE void RunLoop::step(int timeout_ms) {
 		return;
 	}
 	OVERLAPPED_ENTRY events[details::MAX_EVENTS];
-	DWORD n = 0;
-	bool result =
-	    GetQueuedCompletionStatusEx(impl->completion_queue.value, events, details::MAX_EVENTS, &n, timeout_ms, false);
+	DWORD n     = 0;
+	bool result = GetQueuedCompletionStatusEx(impl->completion_queue.value, events, details::MAX_EVENTS, &n, timeout_ms, false);
 	if (!result) {
 		DWORD last = GetLastError();
 		if (last != ERROR_TIMEOUT && last != STATUS_TIMEOUT)  // Microsoft URODI
@@ -234,8 +231,7 @@ struct TCPSocketImpl {
 			}
 			if (setsockopt(fd.get_value(), SOL_SOCKET, SO_UPDATE_CONNECT_CONTEXT, NULL, 0) != 0) {
 				if (details::DETAILED_DEBUG)
-					std::cout << "tcp_id=" << tcp_id << " setsockopt SO_UPDATE_CONNECT_CONTEXT error"
-					          << WSAGetLastError() << std::endl;
+					std::cout << "tcp_id=" << tcp_id << " setsockopt SO_UPDATE_CONNECT_CONTEXT error" << WSAGetLastError() << std::endl;
 				close(true);
 				return;
 			}
@@ -265,8 +261,7 @@ struct TCPSocketImpl {
 			DWORD dwFlags     = 0;
 			DWORD last        = 0;
 			read_overlapped.zero_overlapped();
-			if (WSARecv(fd.get_value(), pWsaBuf, write_buf.write_count2() != 0 ? 2 : 1, NULL, &dwFlags,
-			        &read_overlapped, nullptr) == 0 ||
+			if (WSARecv(fd.get_value(), pWsaBuf, write_buf.write_count2() != 0 ? 2 : 1, NULL, &dwFlags, &read_overlapped, nullptr) == 0 ||
 			    (last = WSAGetLastError()) == ERROR_IO_PENDING) {
 				pending_read = true;
 				loop->get_impl()->pending_counter += 1;
@@ -293,8 +288,7 @@ struct TCPSocketImpl {
 			pWsaBuf[1].len    = static_cast<ULONG>(write_buf.read_count2());
 			DWORD last        = 0;
 			write_overlapped.zero_overlapped();
-			if (WSASend(fd.get_value(), pWsaBuf, write_buf.read_count2() != 0 ? 2 : 1, NULL, 0, &write_overlapped,
-			        nullptr) == 0 ||
+			if (WSASend(fd.get_value(), pWsaBuf, write_buf.read_count2() != 0 ? 2 : 1, NULL, 0, &write_overlapped, nullptr) == 0 ||
 			    (last = WSAGetLastError()) == ERROR_IO_PENDING) {
 				pending_write = true;
 				loop->get_impl()->pending_counter += 1;
@@ -355,9 +349,7 @@ CRAB_INLINE void TCPSocket::write_shutdown() {
 	}
 }
 
-CRAB_INLINE bool TCPSocket::is_open() const {
-	return (impl && impl->fd.get_value() >= 0) || rwd_handler.is_pending_callable();
-}
+CRAB_INLINE bool TCPSocket::is_open() const { return (impl && impl->fd.get_value() >= 0) || rwd_handler.is_pending_callable(); }
 
 CRAB_INLINE bool TCPSocket::connect(const Address &address, const Settings &) {
 	close();
@@ -366,8 +358,8 @@ CRAB_INLINE bool TCPSocket::connect(const Address &address, const Settings &) {
 	details::SocketDescriptor tmp(socket(address.impl_get_sockaddr()->sa_family, SOCK_STREAM, IPPROTO_TCP));
 	if (tmp.get_value() == -1)
 		return false;
-	if (CreateIoCompletionPort(tmp.handle_value(), RunLoop::current()->get_impl()->completion_queue.value,
-	        details::OverlappedKey, 0) == NULL)
+	if (CreateIoCompletionPort(tmp.handle_value(), RunLoop::current()->get_impl()->completion_queue.value, details::OverlappedKey, 0) ==
+	    NULL)
 		return false;
 	// TODO - implement settings
 	impl->read_overlapped.zero_overlapped();
@@ -375,8 +367,8 @@ CRAB_INLINE bool TCPSocket::connect(const Address &address, const Settings &) {
 	DWORD last                  = 0;
 	GUID guid                   = WSAID_CONNECTEX;
 	LPFN_CONNECTEX ConnectExPtr = NULL;
-	if (::WSAIoctl(tmp.get_value(), SIO_GET_EXTENSION_FUNCTION_POINTER, &guid, sizeof(guid), &ConnectExPtr,
-	        sizeof(ConnectExPtr), &numBytes, NULL, NULL) != 0) {
+	if (::WSAIoctl(tmp.get_value(), SIO_GET_EXTENSION_FUNCTION_POINTER, &guid, sizeof(guid), &ConnectExPtr, sizeof(ConnectExPtr),
+	        &numBytes, NULL, NULL) != 0) {
 		last = WSAGetLastError();
 		return false;
 	}
@@ -437,28 +429,26 @@ struct TCPAcceptorImpl {
 		pending_accept = false;
 		loop->get_impl()->pending_counter -= 1;
 		if (details::DETAILED_DEBUG)
-			std::cout << "pending_accept=" << pending_accept
-			          << " pending_counter=" << loop->get_impl()->pending_counter << std::endl;
+			std::cout << "pending_accept=" << pending_accept << " pending_counter=" << loop->get_impl()->pending_counter << std::endl;
 		if (!owner) {
 			delete this;  // Muhaha, last pending overlapped call
 			return;
 		}
-		if (CreateIoCompletionPort(accepted_fd.handle_value(), RunLoop::current()->get_impl()->completion_queue.value,
-		        details::OverlappedKey, 0) == NULL)
+		if (CreateIoCompletionPort(
+		        accepted_fd.handle_value(), RunLoop::current()->get_impl()->completion_queue.value, details::OverlappedKey, 0) == NULL)
 			throw std::runtime_error("crab::TCPAcceptor::TCPAcceptor CreateIoCompletionPort failed");
 
 		DWORD last = 0;
 		SOCKET val = fd.get_value();
-		if (setsockopt(accepted_fd.get_value(), SOL_SOCKET, SO_UPDATE_ACCEPT_CONTEXT,
-		        reinterpret_cast<const char *>(&val), sizeof(val)) != 0) {
+		if (setsockopt(
+		        accepted_fd.get_value(), SOL_SOCKET, SO_UPDATE_ACCEPT_CONTEXT, reinterpret_cast<const char *>(&val), sizeof(val)) != 0) {
 			last = WSAGetLastError();
 		}
 		sockaddr *ap = nullptr;
 		int aplen    = 0;
 		sockaddr *la = nullptr;
 		int lalen    = 0;
-		GetAcceptExSockaddrs(
-		    read_buf.write_ptr(), 0, sizeof(sockaddr_in6) + 16, sizeof(sockaddr_in6) + 16, &la, &lalen, &ap, &aplen);
+		GetAcceptExSockaddrs(read_buf.write_ptr(), 0, sizeof(sockaddr_in6) + 16, sizeof(sockaddr_in6) + 16, &la, &lalen, &ap, &aplen);
 		if (aplen <= sizeof(sockaddr_storage)) {
 			std::memcpy(accepted_addr.impl_get_sockaddr(), ap, aplen);
 		}
@@ -479,8 +469,7 @@ struct TCPAcceptorImpl {
 		pending_accept     = true;
 		loop->get_impl()->pending_counter += 1;
 		if (details::DETAILED_DEBUG)
-			std::cout << "pending_accept=" << pending_accept
-			          << " pending_counter=" << loop->get_impl()->pending_counter << std::endl;
+			std::cout << "pending_accept=" << pending_accept << " pending_counter=" << loop->get_impl()->pending_counter << std::endl;
 		while (true) {
 			accept_overlapped.zero_overlapped();
 			if (AcceptEx(fd.get_value(),
@@ -513,8 +502,8 @@ CRAB_INLINE void TCPSocket::accept(TCPAcceptor &acceptor, Address *accepted_addr
 	if (!impl)
 		impl.reset(new TCPSocketImpl(this));
 	if (details::DETAILED_DEBUG)
-		std::cout << "tcp_id=" << impl->tcp_id << " Accepted from addr=" << acceptor.impl->accepted_addr.get_address()
-		          << ":" << acceptor.impl->accepted_addr.get_port() << std::endl;
+		std::cout << "tcp_id=" << impl->tcp_id << " Accepted from addr=" << acceptor.impl->accepted_addr.get_address() << ":"
+		          << acceptor.impl->accepted_addr.get_port() << std::endl;
 	if (accepted_addr)
 		*accepted_addr = acceptor.impl->accepted_addr;
 	acceptor.impl->accepted_addr = Address();
@@ -531,8 +520,8 @@ CRAB_INLINE TCPAcceptor::TCPAcceptor(const Address &address, Handler &&a_handler
 		std::runtime_error("crab::TCPAcceptor::TCPAcceptor socket() failed");
 	// TODO - implement more settings
 	int set = 1;  // Microsoft URODI
-	if (settings.reuse_addr && setsockopt(tmp.get_value(), SOL_SOCKET, SO_REUSEADDR,
-	                               reinterpret_cast<const char *>(&set), sizeof(set)) != 0) {
+	if (settings.reuse_addr &&
+	    setsockopt(tmp.get_value(), SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char *>(&set), sizeof(set)) != 0) {
 		throw std::runtime_error("crab::TCPAcceptor::TCPAcceptor setsockopt SO_REUSEADDR failed");
 	}
 	impl->ai_family   = address.impl_get_sockaddr()->sa_family;
@@ -540,8 +529,8 @@ CRAB_INLINE TCPAcceptor::TCPAcceptor(const Address &address, Handler &&a_handler
 	impl->ai_protocol = IPPROTO_TCP;
 	if (bind(tmp.get_value(), address.impl_get_sockaddr(), address.impl_get_sockaddr_length()) != 0)
 		throw std::runtime_error("crab::TCPAcceptor::TCPAcceptor bind(s) failed");
-	if (CreateIoCompletionPort(tmp.handle_value(), RunLoop::current()->get_impl()->completion_queue.value,
-	        details::OverlappedKey, 0) == NULL)
+	if (CreateIoCompletionPort(tmp.handle_value(), RunLoop::current()->get_impl()->completion_queue.value, details::OverlappedKey, 0) ==
+	    NULL)
 		throw std::runtime_error("crab::TCPAcceptor::TCPAcceptor CreateIoCompletionPort failed");
 	if (listen(tmp.get_value(), SOMAXCONN) == -1)
 		throw std::runtime_error("crab::TCPAcceptor::TCPAcceptor listen failed");
@@ -559,21 +548,17 @@ CRAB_INLINE TCPAcceptor::~TCPAcceptor() {
 
 CRAB_INLINE bool TCPAcceptor::can_accept() { return !impl->pending_accept; }
 
-CRAB_INLINE UDPTransmitter::UDPTransmitter(const Address &address, Handler &&cb, const std::string &adapter)
-    : w_handler(std::move(cb)) {
+CRAB_INLINE UDPTransmitter::UDPTransmitter(const Address &address, Handler &&cb, const std::string &adapter) : w_handler(std::move(cb)) {
 	throw std::runtime_error("UDPTransmitter not yet implemented on Windows");
 }
 
 CRAB_INLINE bool UDPTransmitter::write_datagram(const uint8_t *data, size_t count) { return 0; }
 
-CRAB_INLINE UDPReceiver::UDPReceiver(const Address &address, Handler &&cb, const std::string &adapter)
-    : r_handler(std::move(cb)) {
+CRAB_INLINE UDPReceiver::UDPReceiver(const Address &address, Handler &&cb, const std::string &adapter) : r_handler(std::move(cb)) {
 	throw std::runtime_error("UDPReceiver not yet implemented on Windows");
 }
 
-CRAB_INLINE optional<size_t> UDPReceiver::read_datagram(uint8_t *data, size_t count, Address *peer_addr) {
-	return {};
-}
+CRAB_INLINE optional<size_t> UDPReceiver::read_datagram(uint8_t *data, size_t count, Address *peer_addr) { return {}; }
 
 }  // namespace crab
 

@@ -10,8 +10,7 @@
 
 class MDClientApp {
 public:
-	explicit MDClientApp(const MDSettings &settings)
-	    : settings(settings), udp_a(settings.md_gate_udp_a(), [&]() { on_udp_a(); }) {}
+	explicit MDClientApp(const MDSettings &settings) : settings(settings), udp_a(settings.md_gate_udp_a(), [&]() { on_udp_a(); }) {}
 
 private:
 	void on_udp_a() {
@@ -38,8 +37,7 @@ private:
 int main(int argc, char *argv[]) {
 	std::cout << "crablib version " << crab::version_string() << std::endl;
 
-	std::cout << "This client listens to financial messages via UDP multicast and requests retransmits via TCP"
-	          << std::endl;
+	std::cout << "This client listens to financial messages via UDP multicast and requests retransmits via TCP" << std::endl;
 	crab::RunLoop runloop;
 
 	MDSettings settings;

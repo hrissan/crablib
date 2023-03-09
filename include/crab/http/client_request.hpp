@@ -68,8 +68,7 @@ public:
 		};
 		std::map<HostPortProtocol, std::list<Entry>> entries;
 	};
-	ClientRequestPooled(
-	    Pool *pool, ClientRequestSimple::R_handler &&r_handler, ClientRequestSimple::E_handler &&e_handler) {}
+	ClientRequestPooled(Pool *pool, ClientRequestSimple::R_handler &&r_handler, ClientRequestSimple::E_handler &&e_handler) {}
 	~ClientRequestPooled() {}
 
 private:

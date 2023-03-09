@@ -147,8 +147,8 @@ struct TimerImpl {
 	void start_timer(double after_seconds) {
 		// assert(pending_wait == false);
 		pending_wait = true;
-		timer.expires_from_now(boost::posix_time::milliseconds(
-		    static_cast<int>(after_seconds * 1000)));  // int because we do not know exact type
+		timer.expires_from_now(
+		    boost::posix_time::milliseconds(static_cast<int>(after_seconds * 1000)));  // int because we do not know exact type
 		timer.async_wait([&](boost::system::error_code e) { handle_timeout(e); });
 	}
 };
@@ -244,8 +244,7 @@ struct TCPSocketImpl {
 		if (incoming_buffer.full() || pending_read || !connected || !owner)
 			return;
 		pending_read = true;
-		boost::array<boost::asio::mutable_buffer, 2> bufs{
-		    boost::asio::buffer(incoming_buffer.write_ptr(), incoming_buffer.write_count()),
+		boost::array<boost::asio::mutable_buffer, 2> bufs{boost::asio::buffer(incoming_buffer.write_ptr(), incoming_buffer.write_count()),
 		    boost::asio::buffer(incoming_buffer.write_ptr2(), incoming_buffer.write_count2())};
 		socket.async_read_some(bufs, [&](boost::system::error_code e, std::size_t b) { handle_read(e, b); });
 	}
@@ -273,8 +272,7 @@ struct TCPSocketImpl {
 			return;
 		}
 		pending_write = true;
-		boost::array<boost::asio::const_buffer, 2> bufs{
-		    boost::asio::buffer(outgoing_buffer.read_ptr(), outgoing_buffer.read_count()),
+		boost::array<boost::asio::const_buffer, 2> bufs{boost::asio::buffer(outgoing_buffer.read_ptr(), outgoing_buffer.read_count()),
 		    boost::asio::buffer(outgoing_buffer.read_ptr2(), outgoing_buffer.read_count2())};
 		socket.async_write_some(bufs, [&](boost::system::error_code e, std::size_t b) { handle_write(e, b); });
 	}
@@ -345,9 +343,7 @@ CRAB_INLINE void TCPSocket::write_shutdown() {
 struct TCPAcceptorImpl {
 	TCPAcceptor *owner;
 	explicit TCPAcceptorImpl(TCPAcceptor *owner)
-	    : owner(owner)
-	    , acceptor(RunLoop::current()->get_impl()->io)
-	    , socket_being_accepted(RunLoop::current()->get_impl()->io) {}
+	    : owner(owner), acceptor(RunLoop::current()->get_impl()->io), socket_being_accepted(RunLoop::current()->get_impl()->io) {}
 	boost::asio::ip::tcp::acceptor acceptor;
 	boost::asio::ip::tcp::socket socket_being_accepted;
 	bool socket_ready   = false;
@@ -482,8 +478,7 @@ bdata DNSResolver::parse_ipaddress(const std::string &str) {
 }
 */
 
-CRAB_INLINE std::vector<Address> DNSResolver::sync_resolve(
-    const std::string &host_name, uint16_t port, bool ipv4, bool ipv6) {
+CRAB_INLINE std::vector<Address> DNSResolver::sync_resolve(const std::string &host_name, uint16_t port, bool ipv4, bool ipv6) {
 	boost::system::error_code ec;
 
 	boost::asio::ip::tcp::resolver resolver(RunLoop::current()->get_impl()->io);
@@ -500,21 +495,17 @@ CRAB_INLINE std::vector<Address> DNSResolver::sync_resolve(
 	return names;
 }
 
-CRAB_INLINE UDPTransmitter::UDPTransmitter(const Address &address, Handler &&cb, const std::string &adapter)
-    : w_handler(std::move(cb)) {
+CRAB_INLINE UDPTransmitter::UDPTransmitter(const Address &address, Handler &&cb, const std::string &adapter) : w_handler(std::move(cb)) {
 	throw std::runtime_error("UDPTransmitter not yet implemented on Windows");
 }
 
 CRAB_INLINE bool UDPTransmitter::write_datagram(const uint8_t *data, size_t count) { return 0; }
 
-CRAB_INLINE UDPReceiver::UDPReceiver(const Address &address, Handler &&cb, const std::string &adapter)
-    : r_handler(std::move(cb)) {
+CRAB_INLINE UDPReceiver::UDPReceiver(const Address &address, Handler &&cb, const std::string &adapter) : r_handler(std::move(cb)) {
 	throw std::runtime_error("UDPReceiver not yet implemented on Windows");
 }
 
-CRAB_INLINE optional<size_t> UDPReceiver::read_datagram(uint8_t *data, size_t count, Address *peer_addr) {
-	return {};
-}
+CRAB_INLINE optional<size_t> UDPReceiver::read_datagram(uint8_t *data, size_t count, Address *peer_addr) { return {}; }
 
 }  // namespace crab
 

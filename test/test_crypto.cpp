@@ -55,15 +55,13 @@ int main() {
 	check_digest<crab::md5>("abc", "900150983cd24fb0d6963f7d28e17f72");
 	check_digest<crab::md5>("message digest", "f96b697d7cb7938d525a2f31aaf161d0");
 	check_digest<crab::md5>("abcdefghijklmnopqrstuvwxyz", "c3fcd3d76192e4007dfb496cca67e13b");
+	check_digest<crab::md5>("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789", "d174ab98d277d9f5a5611c2c9f419d9f");
 	check_digest<crab::md5>(
-	    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789", "d174ab98d277d9f5a5611c2c9f419d9f");
-	check_digest<crab::md5>("12345678901234567890123456789012345678901234567890123456789012345678901234567890",
-	    "57edf4a22be3c955ac49da2e2107b67a");
+	    "12345678901234567890123456789012345678901234567890123456789012345678901234567890", "57edf4a22be3c955ac49da2e2107b67a");
 
 	check_digest<crab::sha1>("", "da39a3ee5e6b4b0d3255bfef95601890afd80709");
 	check_digest<crab::sha1>("abc", "a9993e364706816aba3e25717850c26c9cd0d89d");
-	check_digest<crab::sha1>(
-	    "abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq", "84983e441c3bd26ebaae4aa1f95129e5e54670f1");
+	check_digest<crab::sha1>("abcdbcdecdefdefgefghfghighijhijkijkljklmklmnlmnomnopnopq", "84983e441c3bd26ebaae4aa1f95129e5e54670f1");
 
 	check_digest<crab::sha1>(
 	    "abcdefghbcdefghicdefghijdefghijkefghijklfghijklmghijklmnhijklmnoijklmnopjklmnopqklmnopqrlmnopqrsmnopqrstnopqrstu",

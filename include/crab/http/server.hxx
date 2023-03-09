@@ -165,8 +165,7 @@ CRAB_INLINE void Server::on_client_handle_request(Client *who, Request &&request
 			r_handler(who, std::move(request));
 	} catch (const ErrorAuthorization &ex) {
 		Response response;
-		response.header.headers.push_back(
-		    {"WWW-Authenticate", "Basic realm=\"" + ex.realm + "\", charset=\"UTF-8\""});
+		response.header.headers.push_back({"WWW-Authenticate", "Basic realm=\"" + ex.realm + "\", charset=\"UTF-8\""});
 		response.header.status = 401;
 		who->write(std::move(response));
 		return;

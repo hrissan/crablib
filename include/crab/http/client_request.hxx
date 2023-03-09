@@ -8,8 +8,7 @@
 
 namespace crab { namespace http {
 
-CRAB_INLINE ClientRequestSimple::ClientRequestSimple()
-    : ClientRequestSimple([](Response &&) {}, [](std::string &&) {}) {}
+CRAB_INLINE ClientRequestSimple::ClientRequestSimple() : ClientRequestSimple([](Response &&) {}, [](std::string &&) {}) {}
 
 CRAB_INLINE ClientRequestSimple::ClientRequestSimple(R_handler &&r_handler, E_handler &&e_handler)
     : r_handler(std::move(r_handler))
@@ -23,8 +22,8 @@ CRAB_INLINE void ClientRequestSimple::set_handlers(R_handler &&r_h, E_handler &&
 }
 
 CRAB_INLINE void ClientRequestSimple::send(Request &&request, uint16_t port, const std::string &protocol) {
-	if (connection.is_open() && (request.header.host != connection.get_host() || port != connection.get_port() ||
-	                                protocol != connection.get_protocol()))
+	if (connection.is_open() &&
+	    (request.header.host != connection.get_host() || port != connection.get_port() || protocol != connection.get_protocol()))
 		connection.close();
 	timeout_timer.cancel();
 	if (!connection.is_open())

@@ -13,9 +13,7 @@ int main() {
 	for (size_t i = 0; i != 1000000; ++i) {
 		global_counter += 1;
 	}
-	auto mksec =
-	    std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - start)
-	        .count();
+	auto mksec = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - start).count();
 	std::cout << "1 million atomic adds mksec=" << mksec << std::endl;
 	return 0;
 }

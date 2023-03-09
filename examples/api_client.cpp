@@ -8,8 +8,7 @@
 
 class ApiClientApp {
 public:
-	explicit ApiClientApp(const crab::Address &address, int64_t &external_duration, size_t &external_count,
-	    int64_t &external_max_latency)
+	explicit ApiClientApp(const crab::Address &address, int64_t &external_duration, size_t &external_count, int64_t &external_max_latency)
 	    : external_duration(external_duration)
 	    , external_count(external_count)
 	    , external_max_latency(external_max_latency)
@@ -29,8 +28,7 @@ private:
 			std::cout << "Unexpected response" << std::endl;
 			return;
 		}
-		auto dur = std::chrono::duration_cast<std::chrono::microseconds>(
-		    std::chrono::high_resolution_clock::now() - *send_time);
+		auto dur = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - *send_time);
 		send_time.reset();
 		external_duration += dur.count();
 		external_count += 1;
@@ -53,8 +51,7 @@ private:
 		while (true) {
 			if (socket_incoming_buffer.size() >= sizeof(ApiHeader)) {
 				ApiHeader header;
-				invariant(socket_incoming_buffer.peek(reinterpret_cast<uint8_t *>(&header), sizeof(header)),
-				    "Peek should succeed");
+				invariant(socket_incoming_buffer.peek(reinterpret_cast<uint8_t *>(&header), sizeof(header)), "Peek should succeed");
 				if (socket_incoming_buffer.size() >= sizeof(ApiHeader) + header.body_len) {
 					socket_incoming_buffer.did_read(sizeof(header));
 					socket_incoming_buffer.did_read(header.body_len);
@@ -148,8 +145,8 @@ private:
 
 class ApiClientAppUDP {
 public:
-	explicit ApiClientAppUDP(const crab::Address &address, int64_t &external_duration, size_t &external_count,
-	    int64_t &external_max_latency)
+	explicit ApiClientAppUDP(
+	    const crab::Address &address, int64_t &external_duration, size_t &external_count, int64_t &external_max_latency)
 	    : external_duration(external_duration)
 	    , external_count(external_count)
 	    , external_max_latency(external_max_latency)
@@ -170,8 +167,7 @@ private:
 			std::cout << "Response id is different from request id" << std::endl;
 			return false;
 		}
-		auto dur = std::chrono::duration_cast<std::chrono::microseconds>(
-		    std::chrono::high_resolution_clock::now() - *send_time);
+		auto dur = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::high_resolution_clock::now() - *send_time);
 		receive_timeout_timer.cancel();
 		send_time.reset();
 		external_duration += dur.count();
@@ -287,8 +283,8 @@ int main(int argc, char *argv[]) {
 		if (external_count != 0) {
 			lat = external_duration / external_count;
 		}
-		std::cout << "msg sent/avg latency/max latency=" << external_count << "/" << lat << " microsec/"
-		          << external_max_latency << " microsec" << std::endl;
+		std::cout << "msg sent/avg latency/max latency=" << external_count << "/" << lat << " microsec/" << external_max_latency
+		          << " microsec" << std::endl;
 		external_duration    = 0;
 		external_count       = 0;
 		external_max_latency = 0;

@@ -152,8 +152,7 @@ private:
 		stat_timer.once(1);
 		std::cout << "requests processed (during last second)=" << requests_processed << std::endl;
 		if (!clients.empty()) {
-			std::cout << "Client.front read=" << clients.front().total_read
-			          << " written=" << clients.front().total_written << std::endl;
+			std::cout << "Client.front read=" << clients.front().total_read << " written=" << clients.front().total_written << std::endl;
 			//            if (requests_processed == 0 && clients.front().total_written > 2000) {
 			//                uint8_t buf[100]{};
 			//                clients.front().socket.write(buf, sizeof(buf));
