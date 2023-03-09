@@ -272,8 +272,7 @@ CRAB_INLINE TCPAcceptor::TCPAcceptor(const Address &address, Handler &&cb, const
         IPPROTO_TCP, kCFSocketAcceptCallBack, accept_cb, &context);
 
 	CFDataRef sincfd = CFDataCreate(kCFAllocatorDefault,
-	    reinterpret_cast<const uint8_t *>(address.impl_get_sockaddr()),
-	    address.impl_get_sockaddr_length());
+	    reinterpret_cast<const uint8_t *>(address.impl_get_sockaddr()), address.impl_get_sockaddr_length());
 
 	CFSocketError sockErr = CFSocketSetAddress(impl, sincfd);
 	if (sockErr != kCFSocketSuccess)

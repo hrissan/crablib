@@ -37,7 +37,7 @@ class optional {
 public:
 	optional() = default;
 	optional(const optional<T> &other) : impl(other.impl), valid(other.valid) {}
-	optional(optional<T> &&other) : impl(std::move(other.impl)), valid(other.valid) {}
+	optional(optional<T> &&other) noexcept : impl(std::move(other.impl)), valid(other.valid) {}
 	optional(const T &other) : impl(other), valid(true) {}
 	optional(T &&other) : impl(std::move(other)), valid(true) {}
 	optional<T> &operator=(const optional<T> &other) {
@@ -45,7 +45,7 @@ public:
 		valid = other.valid;
 		return *this;
 	}
-	optional<T> &operator=(optional<T> &&other) {
+	optional<T> &operator=(optional<T> &&other) noexcept {
 		impl  = std::move(other.impl);
 		valid = other.valid;
 		return *this;

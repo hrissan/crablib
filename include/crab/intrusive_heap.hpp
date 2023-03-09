@@ -13,13 +13,13 @@ namespace crab {
 
 // Intrusive heap has O(ln2(N)) complexity of pop_front, insert, delete
 // and coefficient is small
-// for critical latency apps reserve() must be called to avoid reallocations
+// for critical latency apps reserve() must be called to avoid reallocation
 
 // Intrusive heap stores index in stored object field
 // index == 0 is special value and means "not in a heap"
 // Unlike intrusive list, it does not allow unlinking object without reference to heap
 
-// This is max heap (like in std::), so if less is used, front will be largest element
+// This is max heap (like in std::), so if less is used, front will be the largest element
 
 class IntrusiveHeapIndex : public Nocopy {
 public:

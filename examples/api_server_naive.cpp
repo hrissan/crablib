@@ -212,17 +212,18 @@ public:
 		return result;
 	}
 	explicit ApiNetworkUDPNaive(const crab::Address &bind_address)
-			: socket(
-			bind_address,
-			[&]() { socket_handler(); }, settings())
-			, stat_timer([&]() { print_stats(); }) {
+	    : socket(
+	          bind_address,
+	          [&]() { socket_handler(); },
+	          settings())
+	    , stat_timer([&]() { print_stats(); }) {
 		print_stats();
 	}
 
 private:
 	crab::UDPReceiver socket;
-	size_t total_read       = 0;
-	size_t total_written    = 0;
+	size_t total_read    = 0;
+	size_t total_written = 0;
 
 	crab::Timer stat_timer;
 	size_t requests_received = 0;
@@ -237,9 +238,9 @@ private:
 		}
 	}
 	void socket_handler() {
-		uint8_t data[crab::UDPReceiver::MAX_DATAGRAM_SIZE]; // uninitialized
+		uint8_t data[crab::UDPReceiver::MAX_DATAGRAM_SIZE];  // uninitialized
 		crab::Address peer_addr;
-		while( auto a = socket.read_datagram(data, sizeof(data), &peer_addr)) {
+		while (auto a = socket.read_datagram(data, sizeof(data), &peer_addr)) {
 			auto data_len = *a;
 			ApiHeader header;
 			memcpy(&header, data, sizeof(header));
@@ -251,7 +252,7 @@ private:
 	void print_stats() {
 		stat_timer.once(1);
 		std::cout << "requests received/responses sent (during last second)=" << requests_received << "/"
-				  << responses_sent << std::endl;
+		          << responses_sent << std::endl;
 		//		if (!clients.empty()) {
 		//			std::cout << "Client.front read=" << clients.front().total_read
 		//			          << " written=" << clients.front().total_written << std::endl;
@@ -276,7 +277,7 @@ int main(int argc, char *argv[]) {
 
 		ApiNetworkUDPNaive udp(crab::Address("0.0.0.0", crab::integer_cast<uint16_t>(argv[1])));
 
-//		ApiServerNaiveApp app(crab::Address("0.0.0.0", crab::integer_cast<uint16_t>(argv[1])), 1);
+		//		ApiServerNaiveApp app(crab::Address("0.0.0.0", crab::integer_cast<uint16_t>(argv[1])), 1);
 
 		runloop.run();
 	}

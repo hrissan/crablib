@@ -58,7 +58,7 @@ CRAB_INLINE void Idle::set_active(bool a) {
 		impl.stop();
 }
 
-CRAB_INLINE bool Idle::is_active() { return impl.is_active(); }
+CRAB_INLINE bool Idle::is_active() const { return impl.is_active(); }
 
 CRAB_INLINE Signal::Signal(Handler &&cb, const std::vector<int> &) : a_handler(std::move(cb)) {}
 

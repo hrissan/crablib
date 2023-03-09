@@ -63,7 +63,7 @@ public:
 	~Watcher();
 
 	void cancel();
-	// after cancel no callback is guaranted till next time call() is called
+	// after cancel no callback is guaranteed till next time call() is called
 	void call();
 	// The only method to be called from other threads when work is ready
 private:
@@ -95,7 +95,7 @@ public:
 	// Active after construction, only handlers of active Idles will run
 
 	void set_active(bool a);
-	bool is_active();
+	bool is_active() const;
 
 private:
 	Handler a_handler;
@@ -379,12 +379,13 @@ class UDPReceiver {
 public:
 	using Settings = details::UDPSocketSettings;
 
-	explicit UDPReceiver(const Address &address, Handler &&cb, const Settings & settings = Settings{});
+	explicit UDPReceiver(const Address &address, Handler &&cb, const Settings &settings = Settings{});
 	// address must be either local adapter address (127.0.0.1, 0.0.0.0) or multicast group address
 	// If multicast group address is used, receiver will join group on specified or default adapter
 	void set_handler(Handler &&cb) { rw_handler.handler = std::move(cb); }
 
-	static constexpr size_t MAX_DATAGRAM_SIZE = 65507; // https://stackoverflow.com/questions/42609561/udp-maximum-packet-size/42610200
+	static constexpr size_t MAX_DATAGRAM_SIZE =
+	    65507;  // https://stackoverflow.com/questions/42609561/udp-maximum-packet-size/42610200
 	optional<size_t> read_datagram(uint8_t *data, size_t count, Address *peer_addr = nullptr);
 	// returns () if buffer is empty
 	// returns (datagram_size) if datagram was read, even if it was truncated
@@ -401,7 +402,7 @@ public:
 
 	// Experimental API
 	struct DatagramBuffer {
-		uint8_t data[MAX_DATAGRAM_SIZE]; // Uninitialized, be careful
+		uint8_t data[MAX_DATAGRAM_SIZE];  // Uninitialized, be careful
 		size_t count = 0;
 		Address peer_addr;
 	};
@@ -470,7 +471,8 @@ public:
 
 	PerformanceStats stats;  // User stats can also be recorded here
 
-	enum { MAX_SLEEP_MS = 30 * 60 * 1000 };  // 30 minutes
+	enum { MAX_SLEEP_MS = 30 * 60 * 1000 };
+	// 30 minutes
 	// On some systems, epoll_wait() timeouts greater than 35.79 minutes are treated as infinity.
 	// Spurious wakeup once every 30 minutes is harmless, timeout can be reduced further if needed.
 

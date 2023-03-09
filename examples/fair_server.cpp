@@ -117,7 +117,8 @@ private:
 	void on_client_disconnected(ClientList::iterator it) {
 		clients.erase(it);  // automatically unlinks from fair_queue
 		                    //		std::cout << "Fair Client " << clients.back().client_id
-		//		          << " disconnected, current number of clients is=" << clients.size() << std::endl;
+		                    //		          << " disconnected, current number of clients is=" << clients.size() <<
+		                    // std::endl;
 	}
 	void accept_all() {
 		std::cout << "accept socket event, current number of clients is=" << clients.size() << std::endl;
@@ -164,7 +165,8 @@ private:
 };
 
 int main(int argc, char *argv[]) {
-	std::cout << "crablib version " << crab::version_string() << std::endl;
+	std::cout << "crablib version "
+	          << " " << crab::version_string() << std::endl;
 
 	std::cout << "This server responds to requests from bunch of fair_client via TCP in fair manner -" << std::endl;
 	std::cout << "    clients who send batches are served in round-robin fashion, while those" << std::endl;

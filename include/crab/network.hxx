@@ -74,7 +74,7 @@ CRAB_INLINE void Callable::add_pending_callable(bool can_read, bool can_write) {
 
 #else
 
-CRAB_INLINE bool Idle::is_active() { return idle_node.in_list(); }
+CRAB_INLINE bool Idle::is_active() const { return idle_node.in_list(); }
 
 #endif
 

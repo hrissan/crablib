@@ -149,13 +149,13 @@ private:
 class ApiClientAppUDP {
 public:
 	explicit ApiClientAppUDP(const crab::Address &address, int64_t &external_duration, size_t &external_count,
-						  int64_t &external_max_latency)
-			: external_duration(external_duration)
-			, external_count(external_count)
-			, external_max_latency(external_max_latency)
-			, address(address)
-			, socket(address, [&]() { socket_handler(); })
-			, receive_timeout_timer([&]() { on_receive_timeout(); }) {
+	    int64_t &external_max_latency)
+	    : external_duration(external_duration)
+	    , external_count(external_count)
+	    , external_max_latency(external_max_latency)
+	    , address(address)
+	    , socket(address, [&]() { socket_handler(); })
+	    , receive_timeout_timer([&]() { on_receive_timeout(); }) {
 		print_stats();
 		send_request();
 	}
@@ -171,7 +171,7 @@ private:
 			return false;
 		}
 		auto dur = std::chrono::duration_cast<std::chrono::microseconds>(
-				std::chrono::high_resolution_clock::now() - *send_time);
+		    std::chrono::high_resolution_clock::now() - *send_time);
 		receive_timeout_timer.cancel();
 		send_time.reset();
 		external_duration += dur.count();
@@ -187,9 +187,9 @@ private:
 		return true;
 	}
 	void socket_handler() {
-		uint8_t data[crab::UDPReceiver::MAX_DATAGRAM_SIZE]; // uninitialized
-		while( auto a = socket.read_datagram(data, sizeof(data))) {
-//			auto data_len = *a;
+		uint8_t data[crab::UDPReceiver::MAX_DATAGRAM_SIZE];  // uninitialized
+		while (auto a = socket.read_datagram(data, sizeof(data))) {
+			//			auto data_len = *a;
 			ApiHeader header;
 			memcpy(&header, data, sizeof(header));
 			if (process_request(header)) {
@@ -202,9 +202,9 @@ private:
 		header.body_len = 17;  // TODO constant
 		sent_id         = rnd.pod<uint64_t>();
 		header.rid      = sent_id;
-		uint8_t data[crab::UDPReceiver::MAX_DATAGRAM_SIZE]; // uninitialized
+		uint8_t data[crab::UDPReceiver::MAX_DATAGRAM_SIZE];  // uninitialized
 		memcpy(data, &header, sizeof(header));
-		memset(data + sizeof(header), 0, header.body_len); // TODO - check range
+		memset(data + sizeof(header), 0, header.body_len);  // TODO - check range
 
 		if (!socket.write_datagram(data, sizeof(header) + header.body_len)) {
 			std::cout << "socket.write_datagram failed" << std::endl;
@@ -278,7 +278,7 @@ int main(int argc, char *argv[]) {
 	if (std::string(argv[1]) == "udp") {
 		for (size_t i = 0; i != count; ++i)
 			udp_apps.emplace_back(crab::Address(argv[2]), external_duration, external_count, external_max_latency);
-	}else {
+	} else {
 		for (size_t i = 0; i != count; ++i)
 			apps.emplace_back(crab::Address(argv[2]), external_duration, external_count, external_max_latency);
 	}

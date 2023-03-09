@@ -74,7 +74,7 @@ inline bool is_integer_space(char c) { return isspace(c); }  //  c == ' ' || c =
 
 // C++ committee cannot do anything of quality...
 // std::stoull will parse -5 to binary representation without exception, uh-oh
-// there is not way to convert to (u)short, (u)char with overflow checks
+// there is no way to convert to (u)short, (u)char with overflow checks
 
 // Parser focus here is on correctness, not raw speed. We allow +0 and -0, but not 00 or 000012
 // PEG
