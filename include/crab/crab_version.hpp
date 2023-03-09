@@ -49,7 +49,7 @@
     #define CRAB_INLINE inline
 #endif
 
-#define CRAB_BRANCH "(branch dev)"
+#define CRAB_BRANCH ""
 // No tricks, we wish to be easily includable in header-only mode
 
 #define CRAB_VERSION "0.9.2"
