@@ -902,50 +902,15 @@ CRAB_INLINE optional<size_t> UDPReceiver::read_datagram(uint8_t *data, size_t co
 }
 
 CRAB_INLINE size_t UDPReceiver::read_datagrams(DatagramBuffer *buffer, size_t buffer_len) {
-	return 0;
-	/*
-	if (!fd.is_valid() || !rw_handler.can_read)
-	    return {};
-	Address in_addr;
-	socklen_t in_len = sizeof(sockaddr_storage);
-	RunLoop::current()->stats.UDP_RECV_count += 1;
-	RunLoop::current()->stats.push_record("recvfrom", fd.get_value(), int(count));
-	// On some Linux system, passing 0 to recvfrom results in EINVAL without reading datagram
-	// (while correct behaviour is reading, truncating to 0, returning EMSGSIZE).
-	// We protect clients semantic by reading into our own small buffer
-	uint8_t workaround_buffer[1];  // Uninitialized
-	ssize_t result = recvfrom(fd.get_value(),
-	                          count ? data : workaround_buffer,
-	                          count ? count : sizeof(workaround_buffer),
-	                          details::CRAB_MSG_NOSIGNAL,
-	                          in_addr.impl_get_sockaddr(),
-	                          &in_len);
-	if (result > static_cast<ssize_t>(count))  // Can only happen when reading into workaround_buffer
-	    result = count;
-	RunLoop::current()->stats.push_record("R(recvfrom)", fd.get_value(), int(result));
-	if (result < 0) {
-	    if (errno == EAGAIN || errno == EWOULDBLOCK) {
-#if CRAB_IMPL_LIBEV
-	        io_read.start(fd.get_value(), ev::READ);
-#endif
-	        rw_handler.can_read = false;
-	        return {};  // Will fire on_epoll_call in future automatically
-	    }
-	    if (errno != EMSGSIZE) {
-	        // Sometimes (for example during adding/removing network adapters), errors could be returned on Linux
-	        // We will ignore all errors here, in hope they will disappear soon
-	        // TODO - if we get here, we will not be woke up by epoll any more, so
-	        // we need to classify all errors here, like in TCPAcceptor
-	        return {};
-	    }
-	    // Truncation is not an error, return true so clients continue reading
-	    result = count;
+	// TODO - optimize with readmmsg
+	if (buffer_len == 0)
+	    return 0;
+	auto result = details::read_datagram(fd, rw_handler, buffer->data, MAX_DATAGRAM_SIZE, &buffer->peer_addr);
+	if (!result) {
+		return 0;
 	}
-	if (peer_addr) {
-	    *peer_addr = in_addr;
-	}
-	RunLoop::current()->stats.UDP_RECV_size += result;
-	return result;*/
+	buffer->count = *result;
+	return 1;
 }
 
 }  // namespace crab

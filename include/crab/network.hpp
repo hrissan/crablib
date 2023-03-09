@@ -404,6 +404,7 @@ public:
 		uint8_t data[MAX_DATAGRAM_SIZE];  // Uninitialized, be careful
 		size_t count = 0;
 		Address peer_addr;
+		// TODO - add per datagram adapter information so replies can be sent via correct interfaces
 	};
 	size_t read_datagrams(DatagramBuffer *buffer, size_t buffer_len);
 
