@@ -146,8 +146,7 @@ CRAB_INLINE void RunLoop::cancel() {
 }
 
 CRAB_INLINE void RunLoop::run() {
-	links.quit = false;
-	links.now  = steady_clock::now();
+	links.now = steady_clock::now();
 	while (!links.quit) {
 		if (!links.triggered_callables.empty()) {
 			Callable &callable = links.triggered_callables.front();
@@ -216,11 +215,11 @@ CRAB_INLINE void Thread::cancel() {
 
 CRAB_INLINE void Timer::once(double delay_seconds) {
 	const auto now = RunLoop::current()->links.now;
-	// We do not wish to overflow time point. Observation - chrono is a disaster, will do manually
+	// We do not wish to overflow time point. Observation - std::chrono is a disaster, will do manually
 	// once(double) is slower anyway, than once(duration), so couple extra checks
 	// Normally this code would be enough
 	// once_at(now + std::chrono::duration_cast<steady_clock::duration>(
-	//               std::chrono::duration<double>(after_seconds)));
+	//               std::chrono::duration<double>(delay_seconds)));
 	if (delay_seconds <= 0) {
 		once_at(now);
 		return;

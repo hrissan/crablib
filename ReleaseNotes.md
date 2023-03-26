@@ -4,9 +4,11 @@
 
 ### 0.9.3
 
-- close with event for TCPSocket is now publicly accessible
-- RunLoop instance now contains (easily accessible) rnd
+- close with event for `TCPSocket` is now publicly accessible
+- `RunLoop` instance now contains public instance of `Random` with the name `rnd`
+- now if you run `RunLoop` again after `cancel`, it will quit immediately
 - some linter warnings removed from code
+- CRC32 and CRC32C added to crypto algorithm
 
 ### 0.9.2
 
@@ -14,7 +16,7 @@
 - example of fair resource-bound API server. TODO - improve example
 - `SignalStop` renamed to `Signal` and now accepts list of signals. Empty list means to detect generic `Ctrl-C` and sorta works on `Linux`, `Mac` and `Windows`.
 - `crab::Thread` to wrap creation of `std::thread` with RunLoop and perform raceless cancellation
-- Recommended Random seeding
+- Recommended `Random` seeding
 - Web Socket masking is now 8x faster
 - MD5 added to crypto algorithms
 
