@@ -29,7 +29,7 @@ namespace http {
 
 class ErrorAuthorization : public std::runtime_error {
 public:
-	explicit ErrorAuthorization(std::string realm) : std::runtime_error("Error Authorization Required"), realm(std::move(realm)) {}
+	explicit ErrorAuthorization(std::string realm) : std::runtime_error{"Error Authorization Required"}, realm(std::move(realm)) {}
 	std::string realm;
 };
 

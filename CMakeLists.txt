@@ -22,6 +22,9 @@ else()
     add_compile_options(-Wno-noexcept-type)
 endif()
 
+# when crc32c instructions are enabled, uncomment
+# set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -msse4.2")
+# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -msse4.2")
 
 set(SOURCE_FILES
 		include/crab/crab_version.hpp
@@ -45,6 +48,8 @@ set(SOURCE_FILES
 
 		include/crab/crypto/base64.hpp
 		include/crab/crypto/base64.hxx
+		include/crab/crypto/crc32.hpp
+		include/crab/crypto/crc32.hxx
 		include/crab/crypto/md5.hpp
 		include/crab/crypto/md5.hxx
 		include/crab/crypto/sha1.hpp

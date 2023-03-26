@@ -84,9 +84,8 @@ private:
 	void read_header(Client &client) {
 		client.read_body_queue_node.unlink();
 		while (true) {
-			if (client.read_buffer.size() >= sizeof(ApiHeader)) {
-				ApiHeader header;
-				invariant(client.read_buffer.peek(reinterpret_cast<uint8_t *>(&header), sizeof(header)), "Peek should succeed");
+			ApiHeader header;
+			if (client.read_buffer.peek(reinterpret_cast<uint8_t *>(&header), sizeof(header))) {
 				if (client.read_buffer.size() >= sizeof(ApiHeader) + header.body_len) {
 					client.read_buffer.did_read(sizeof(header));
 					client.read_buffer.did_read(header.body_len);

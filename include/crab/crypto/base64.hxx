@@ -72,7 +72,7 @@ CRAB_INLINE void encode(char *out, size_t out_len, const uint8_t *in, size_t in_
 		break;
 	}
 	if (out != out_start + out_len)
-		throw std::logic_error("base64 encode size mismatch");
+		throw std::logic_error{"base64 encode size mismatch"};
 }
 
 CRAB_INLINE size_t decode(uint8_t *out, size_t out_len, const char *in, std::size_t in_len) {
@@ -152,7 +152,7 @@ CRAB_INLINE size_t decode(uint8_t *out, size_t out_len, const char *in, std::siz
 		return std::string::npos;
 	}
 	if (static_cast<size_t>(out - out_start) > out_len)
-		throw std::logic_error("base64 decode size mismatch");
+		throw std::logic_error{"base64 decode size mismatch"};
 	return out - out_start;
 }
 

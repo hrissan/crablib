@@ -21,7 +21,7 @@ public:
 	explicit BufferedTCPSocket(Handler &&rwd_handler);
 	void set_handler(Handler &&cb) { rwd_handler = std::move(cb); }
 
-	void close();  // after close you are guaranteed that no handlers will be called
+	void close(bool with_event = false);
 	bool is_open() const { return sock.is_open(); }
 
 	bool connect(const Address &address) { return sock.connect(address); }
@@ -128,7 +128,6 @@ protected:
 	WebMessageBodyParser wm_body_parser;      // Chunk body
 	optional<WebMessage> web_message;         // Built from chunks
 	std::string sec_websocket_key;
-	Random rnd;  // for masking_key, dns name selection, web socket secret key
 
 	void dns_handler(const std::vector<Address> &names);
 	void sock_handler();

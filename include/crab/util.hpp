@@ -204,7 +204,7 @@ public:
 #define invariant(expr, msg)                                                                           \
 	do {                                                                                               \
 		if (!(expr))                                                                                   \
-			throw std::logic_error(crab::details::invariant_violated(#expr, __FILE__, __LINE__, msg)); \
+			throw std::logic_error{crab::details::invariant_violated(#expr, __FILE__, __LINE__, msg)}; \
 	} while (0)
 
 class Random {

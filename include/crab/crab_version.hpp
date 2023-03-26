@@ -50,10 +50,10 @@
 #endif
 
 #define CRAB_BRANCH "(branch dev)"
-// No tricks, we wish to be easily includable in header-only mode
+// No tricks, we wish to be easily included in header-only mode
 
 #define CRAB_VERSION "0.9.3"
-// Not in cmake, we wish to be easily includable in header-only mode
+// Not in cmake, we wish to be easily included in header-only mode
 #if CRAB_TLS
 #define CRAB_TLS_STRING "with TLS"
 #else

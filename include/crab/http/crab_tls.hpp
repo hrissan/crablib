@@ -150,7 +150,7 @@ class TCPSocketTLS : public TCPSocket {
 public:
 	using TCPSocket::TCPSocket;
 	bool connect_tls(const Address &address, const std::string &host) {
-		throw std::runtime_error("crablib was build without TLS support");
+		throw std::runtime_error{"crablib was build without TLS support"};
 	}
 };
 

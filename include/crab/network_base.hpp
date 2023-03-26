@@ -17,7 +17,7 @@
 #include "streams.hpp"
 #include "util.hpp"
 
-// We use address_storage structucre in crab::Address
+// We use address_storage structure in crab::Address
 #if CRAB_IMPL_WINDOWS
 #include <winsock2.h>
 #include <ws2tcpip.h>

@@ -1,6 +1,12 @@
 ## Release Notes
 
-### 0.9.3 (Next Release)
+### (Next Release)
+
+### 0.9.3
+
+- close with event for TCPSocket is now publicly accessible
+- RunLoop instance now contains (easily accessible) rnd
+- some linter warnings removed from code
 
 ### 0.9.2
 

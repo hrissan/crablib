@@ -99,7 +99,7 @@ CRAB_INLINE bool Signal::running_under_debugger() { return false; }
 
 CRAB_INLINE RunLoop::RunLoop() {
 	if (CurrentLoop::instance)
-		throw std::runtime_error("RunLoop::RunLoop Only single RunLoop per thread is allowed");
+		throw std::runtime_error{"RunLoop::RunLoop Only single RunLoop per thread is allowed"};
 	CurrentLoop::instance = this;
 }
 
@@ -150,7 +150,9 @@ CRAB_INLINE TCPSocket::TCPSocket(Handler &&cb) : rwd_handler(std::move(cb)), clo
 
 CRAB_INLINE TCPSocket::~TCPSocket() { close(); }
 
-CRAB_INLINE void TCPSocket::close() {
+CRAB_INLINE void TCPSocket::close(bool with_event) {
+	if (!is_open())
+		return;
 	closed_event.cancel();
 	if (read_stream) {
 		CFReadStreamClose(read_stream);
@@ -162,6 +164,9 @@ CRAB_INLINE void TCPSocket::close() {
 		CFRelease(write_stream);
 		write_stream = nullptr;
 	}
+	rwd_handler.cancel_callable();
+	if (with_events)
+		closed_event.once(0);
 }
 
 CRAB_INLINE bool TCPSocket::is_open() const { return read_stream || closed_event.is_set(); }
@@ -270,7 +275,7 @@ CRAB_INLINE TCPAcceptor::TCPAcceptor(const Address &address, Handler &&cb, const
 
 	CFSocketError sockErr = CFSocketSetAddress(impl, sincfd);
 	if (sockErr != kCFSocketSuccess)
-		throw std::runtime_error("crab::TCPAcceptor error");
+		throw std::runtime_error{"crab::TCPAcceptor error"};
 	CFRelease(sincfd);
 	sincfd = nullptr;
 	// TODO - set options here
@@ -285,7 +290,7 @@ CRAB_INLINE bool TCPAcceptor::can_accept() { return !accepted_sockets.empty(); }
 
 CRAB_INLINE void TCPSocket::accept(TCPAcceptor &acceptor, Address *accepted_addr) {
 	if (acceptor.accepted_sockets.empty())
-		throw std::logic_error("TCPAcceptor::accept error, forgot if(can_accept())?");
+		throw std::logic_error{"TCPAcceptor::accept error, forgot if(can_accept())?"};
 	close();
 	int fd = acceptor.accepted_sockets.front();
 	acceptor.accepted_sockets.pop_front();
@@ -323,13 +328,13 @@ CRAB_INLINE std::vector<Address> DNSResolver::sync_resolve(const std::string &ho
 }
 
 CRAB_INLINE UDPTransmitter::UDPTransmitter(const Address &address, Handler &&cb, const std::string &adapter) : w_handler(std::move(cb)) {
-	throw std::runtime_error("UDPTransmitter not yet implemented on Windows");
+	throw std::runtime_error{"UDPTransmitter not yet implemented on Windows"};
 }
 
 CRAB_INLINE bool UDPTransmitter::write_datagram(const uint8_t *data, size_t count) { return 0; }
 
 CRAB_INLINE UDPReceiver::UDPReceiver(const Address &address, Handler &&cb, const std::string &adapter) : r_handler(std::move(cb)) {
-	throw std::runtime_error("UDPReceiver not yet implemented on Windows");
+	throw std::runtime_error{"UDPReceiver not yet implemented on Windows"};
 }
 
 CRAB_INLINE optional<size_t> UDPReceiver::read_datagram(uint8_t *data, size_t count, Address *peer_addr) { return {}; }

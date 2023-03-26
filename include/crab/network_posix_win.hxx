@@ -6,7 +6,7 @@
 
 #if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL || CRAB_IMPL_LIBEV || CRAB_IMPL_WINDOWS || CRAB_IMPL_CF
 
-// Surprisngly, some code compiles without changes on all 3 systems
+// Surprisingly, some code compiles without changes on all 3 systems
 
 namespace crab {
 

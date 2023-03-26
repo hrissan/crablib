@@ -45,7 +45,7 @@ CRAB_INLINE void ClientRequestSimple::send(const std::string &uri_str, Request &
 		else if (uri.scheme == string_view{"https"})
 			uri.port = "443";
 		else
-			throw std::runtime_error("port is empty, while scheme unknown - impossible to guess");
+			throw std::runtime_error{"port is empty, while scheme unknown - impossible to guess"};
 	}
 	send(std::move(request), integer_cast<uint16_t>(uri.port), uri.scheme);
 }

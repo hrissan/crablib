@@ -12,6 +12,7 @@
 #include "util.hxx"
 
 #include "crypto/base64.hxx"
+#include "crypto/crc32.hxx"
 #include "crypto/md5.hxx"
 #include "crypto/sha1.hxx"
 

@@ -122,7 +122,7 @@ private:
 // application components destructors to close/flush/commit all held resources.
 class Signal {
 public:
-	explicit Signal(Handler &&cb, const std::vector<int> &signals = std::vector<int>{});
+	explicit Signal(Handler &&cb, std::vector<int> signals = std::vector<int>{});
 	void set_handler(Handler &&cb) { a_handler.handler = std::move(cb); }
 	~Signal();
 
@@ -215,9 +215,11 @@ public:
 	void set_handler(Handler &&cb) { rwd_handler.handler = std::move(cb); }
 
 	~TCPSocket() override;
-	void close();
-	// after close you are guaranteed that no handlers will be called
-	bool is_open() const;  // Connecting or connected
+	void close(bool with_events = false);
+	// after close(false), you are guaranteed that no handlers will be called
+	// close(true) is for paths with exceptions and errors, will call handler single time in the near future
+
+	bool is_open() const;  // Connecting, connected or closed, but close event not delivered yet
 
 	bool connect(const Address &address, const Settings &settings = Settings{});
 	// either returns false or returns true and will call rwd_handler in future
@@ -465,9 +467,11 @@ public:
 	void run();     // run until cancel
 	void cancel();  // The only fun allowed to be called from different threads (except Watcher::call)
 
-	steady_clock::time_point now();
+	steady_clock::time_point now() const;
 	// will update max 1 per loop iteration. This saves a lot on syscalls, when moving 500
 	// timers of tcp socket per iteration under heavy load
+
+	Random rnd;  // Only small penalty of reading from system random device
 
 	PerformanceStats stats;  // User stats can also be recorded here
 
