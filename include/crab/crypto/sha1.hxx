@@ -1,6 +1,6 @@
 // Licensed under the Unlicense. See https://github.com/983/SHA1/blob/master/LICENSE for details.
 
-// Copyright (c) 2007-2020, Grigory Buteyko aka Hrissan
+// Copyright (c) 2007-2023, Grigory Buteyko aka Hrissan
 // Licensed under the MIT License. See LICENSE for details.
 
 #include <string.h>

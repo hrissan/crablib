@@ -1,4 +1,4 @@
-// Copyright (c) 2007-2020, Grigory Buteyko aka Hrissan
+// Copyright (c) 2007-2023, Grigory Buteyko aka Hrissan
 // Licensed under the MIT License. See LICENSE for details.
 
 #pragma once
@@ -262,6 +262,7 @@ public:
 	// TODO - set individual settings after connect/accept
 
 	// Experimental - will be changed in future
+	// TODO - we need to switch back to FastData rope or implement this method for all containers
 	size_t read_some(uint8_t *val, size_t count, uint8_t *val2, size_t count2);
 	size_t write_some(std::deque<Buffer> &data);
 

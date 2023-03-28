@@ -19,7 +19,7 @@
  * IN THE SOFTWARE.
  */
 
-// Copyright (c) 2007-2020, Grigory Buteyko aka Hrissan
+// Copyright (c) 2007-2023, Grigory Buteyko aka Hrissan
 // Licensed under the MIT License. See LICENSE for details.
 
 #include "test_http_data.h"
