@@ -1,7 +1,5 @@
 ## Release Notes
 
-### (Next Release)
-
 ### 0.9.3
 
 - close with event for `TCPSocket` is now publicly accessible
