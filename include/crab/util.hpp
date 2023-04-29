@@ -1,4 +1,4 @@
-// Copyright (c) 2007-2020, Grigory Buteyko aka Hrissan
+// Copyright (c) 2007-2023, Grigory Buteyko aka Hrissan
 // Licensed under the MIT License. See LICENSE for details.
 
 // *Really* minimal PCG32 code / (c) 2014 M.E. O'Neill / pcg-random.org
@@ -204,7 +204,7 @@ public:
 #define invariant(expr, msg)                                                                           \
 	do {                                                                                               \
 		if (!(expr))                                                                                   \
-			throw std::logic_error(crab::details::invariant_violated(#expr, __FILE__, __LINE__, msg)); \
+			throw std::logic_error{crab::details::invariant_violated(#expr, __FILE__, __LINE__, msg)}; \
 	} while (0)
 
 class Random {

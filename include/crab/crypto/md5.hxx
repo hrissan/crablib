@@ -20,7 +20,7 @@ These notices must be retained in any copies of any part of this
 documentation and/or software.
 */
 
-// Copyright (c) 2007-2020, Grigory Buteyko aka Hrissan
+// Copyright (c) 2007-2023, Grigory Buteyko aka Hrissan
 // Licensed under the MIT License. See LICENSE for details.
 
 // Code based on https://tools.ietf.org/html/rfc1321

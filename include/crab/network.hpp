@@ -1,4 +1,4 @@
-// Copyright (c) 2007-2020, Grigory Buteyko aka Hrissan
+// Copyright (c) 2007-2023, Grigory Buteyko aka Hrissan
 // Licensed under the MIT License. See LICENSE for details.
 
 #pragma once
@@ -71,7 +71,7 @@ private:
 	Callable a_handler;
 
 #if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL || CRAB_IMPL_WINDOWS
-	IntrusiveNode<Watcher> fired_objects_node;  // protected by runloop mutex
+	IntrusiveNode<Watcher> fired_objects_node;  // protected by RunLoop mutex
 	friend struct details::RunLoopLinks;
 #elif CRAB_IMPL_LIBEV
 	ev::async impl;
@@ -122,7 +122,7 @@ private:
 // application components destructors to close/flush/commit all held resources.
 class Signal {
 public:
-	explicit Signal(Handler &&cb, const std::vector<int> &signals = std::vector<int>{});
+	explicit Signal(Handler &&cb, std::vector<int> signals = std::vector<int>{});
 	void set_handler(Handler &&cb) { a_handler.handler = std::move(cb); }
 	~Signal();
 
@@ -215,9 +215,11 @@ public:
 	void set_handler(Handler &&cb) { rwd_handler.handler = std::move(cb); }
 
 	~TCPSocket() override;
-	void close();
-	// after close you are guaranteed that no handlers will be called
-	bool is_open() const;  // Connecting or connected
+	void close(bool with_events = false);
+	// after close(false), you are guaranteed that no handlers will be called
+	// close(true) is for paths with exceptions and errors, will call handler single time in the near future
+
+	bool is_open() const;  // Connecting, connected or closed, but close event not delivered yet
 
 	bool connect(const Address &address, const Settings &settings = Settings{});
 	// either returns false or returns true and will call rwd_handler in future
@@ -260,6 +262,7 @@ public:
 	// TODO - set individual settings after connect/accept
 
 	// Experimental - will be changed in future
+	// TODO - we need to switch back to FastData rope or implement this method for all containers
 	size_t read_some(uint8_t *val, size_t count, uint8_t *val2, size_t count2);
 	size_t write_some(std::deque<Buffer> &data);
 
@@ -435,7 +438,7 @@ struct RunLoopLinks : private Nocopy {  // Common structure when implementing ov
 
 	IntrusiveList<Callable, &Callable::triggered_callables_node> triggered_callables;
 	steady_clock::time_point now = steady_clock::now();
-	std::atomic<bool> quit{true};  // Before running for the first time, RunLoop is in quit state
+	std::atomic<bool> quit{false};
 
 	bool process_timer(int &timeout_ms);
 
@@ -462,12 +465,18 @@ public:
 
 	static RunLoop *current() { return CurrentLoop::instance; }
 
-	void run();     // run until cancel
-	void cancel();  // The only fun allowed to be called from different threads (except Watcher::call)
+	void run();
+	// run until cancel. quit flag is not reset, so subsequent runs will quit immediately. This is to avoid race with cancel.
 
-	steady_clock::time_point now();
+	void cancel();
+	// The only fun allowed to be called from different threads (except Watcher::call)
+	// to call it the other thread will need RunLoop pointer, you can use crab::Thread for that
+
+	steady_clock::time_point now() const;
 	// will update max 1 per loop iteration. This saves a lot on syscalls, when moving 500
 	// timers of tcp socket per iteration under heavy load
+
+	Random rnd;  // Only small penalty of reading from system random device
 
 	PerformanceStats stats;  // User stats can also be recorded here
 
@@ -526,9 +535,10 @@ private:
 // Not movable/copyable so use std::list<Thread> instead of std::vector
 class Thread : private Nocopy {
 public:
-	// forwarding to thread constructor requires strong magic, we use simple lambda, but beware captured lifetimes!
-	explicit Thread(std::function<void()> &&fun);
-	void cancel();  // It is faster to cancel a bunch of Threads, then wait them one by one
+	// forwarding to thread constructor requires strong magic, we use simple lambda for now
+	// TODO: https://stackoverflow.com/questions/41757938/pass-parameters-to-stdthread-wrapper
+	explicit Thread(std::function<void()> &&fun);  // waits for RunLoop constructor in the started thread
+	void cancel();  // It is faster to first cancel a bunch of Threads, then join them one by one in ~Thread()
 	~Thread();      // cancels RunLoop, then joins thread
 private:
 	RunLoop *run_loop_ptr = nullptr;

@@ -1,4 +1,4 @@
-// Copyright (c) 2007-2020, Grigory Buteyko aka Hrissan
+// Copyright (c) 2007-2023, Grigory Buteyko aka Hrissan
 // Licensed under the MIT License. See LICENSE for details.
 
 #pragma once
@@ -101,7 +101,7 @@ Ob8VZRzI9neWagqNdwvYkQsEjgfbKbYK7p2CNTUQ
 
 	X509_STORE *store = ::SSL_CTX_get_cert_store(ctx);
 	if (!store)
-		throw std::runtime_error("SSL_CTX_get_cert_store failed");
+		throw std::runtime_error{"SSL_CTX_get_cert_store failed"};
 	for (auto s = std::begin(certs); s != std::end(certs); ++s) {
 		BIO *b     = ::BIO_new_mem_buf(s->data(), s->size());
 		X509 *cert = ::PEM_read_bio_X509(b, nullptr, nullptr, nullptr);

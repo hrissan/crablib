@@ -1,4 +1,4 @@
-// Copyright (c) 2007-2020, Grigory Buteyko aka Hrissan
+// Copyright (c) 2007-2023, Grigory Buteyko aka Hrissan
 // Licensed under the MIT License. See LICENSE for details.
 
 // This code is based on work of https://gist.github.com/alessandro40/7e24df0a17803b71bbdf

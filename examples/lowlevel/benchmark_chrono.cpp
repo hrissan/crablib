@@ -1,4 +1,4 @@
-// Copyright (c) 2007-2020, Grigory Buteyko aka Hrissan
+// Copyright (c) 2007-2023, Grigory Buteyko aka Hrissan
 // Licensed under the MIT License. See LICENSE for details.
 
 #include <chrono>
@@ -30,22 +30,22 @@ void benchmark() {
 
 inline uint64_t rdtscp_begin() {
 	unsigned lo = 0, hi = 0;
-	//    asm volatile(
-	//        "CPUID\n\t"
-	//        "RDTSC\n\t"
-	//        "mov %%edx, %0\n\t"
-	//        "mov %%eax, %1\n\t"
-	//        : "=r"(hi), "=r"(lo)::"%rax", "%rbx", "%rcx", "%rdx");
+//	    asm volatile(
+//	        "CPUID\n\t" // Only for old CPUs
+//	        "RDTSC\n\t"
+//	        "mov %%edx, %0\n\t"
+//	        "mov %%eax, %1\n\t"
+//	        : "=r"(hi), "=r"(lo)::"%rax", "%rbx", "%rcx", "%rdx");
 	return (static_cast<uint64_t>(lo) | ((static_cast<uint64_t>(hi)) << 32U));
 }
 
 inline uint64_t rdtscp_end() {
 	unsigned lo = 0, hi = 0;
-	//    asm volatile(
-	//        "RDTSCP\n\t"
-	//        "mov %%edx, %0\n\t"
-	//        "mov %%eax, %1\n\t"
-	//        : "=r"(hi), "=r"(lo)::"%rax", "%rbx", "%rcx", "%rdx");
+//	    asm volatile(
+//	        "RDTSCP\n\t"
+//	        "mov %%edx, %0\n\t"
+//	        "mov %%eax, %1\n\t"
+//	        : "=r"(hi), "=r"(lo)::"%rax", "%rbx", "%rcx", "%rdx");
 	return (static_cast<uint64_t>(lo) | ((static_cast<uint64_t>(hi)) << 32U));
 }
 
@@ -58,7 +58,7 @@ void benchmark2(const std::string &label, std::function<int()> &&fun) {
 		result += fun();
 	}
 	auto stop = std::chrono::high_resolution_clock::now();
-	std::cout << "Time for " << COUNT << "x " << label
+	std::cout << "Time for " << COUNT << "x " << label << " ns=" << std::chrono::duration<double>(stop - start).count()*1000000000 / COUNT
 	          << " mksec=" << std::chrono::duration_cast<std::chrono::microseconds>(stop - start).count() << " result=" << result
 	          << std::endl;
 }
@@ -74,6 +74,12 @@ int main() {
 	});
 	benchmark2("steady_clock", []() {
 		return std::chrono::steady_clock::now().time_since_epoch().count() + std::chrono::steady_clock::now().time_since_epoch().count();
+	});
+	benchmark2("system_clock", []() {
+		return std::chrono::system_clock::now().time_since_epoch().count() + std::chrono::system_clock::now().time_since_epoch().count();
+	});
+	benchmark2("std::time", []() {
+		return std::chrono::seconds(std::time(NULL)).count() + std::chrono::seconds(std::time(NULL)).count();
 	});
 	benchmark2("high_resolution_clock", []() {
 		return std::chrono::high_resolution_clock::now().time_since_epoch().count() +

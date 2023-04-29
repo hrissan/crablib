@@ -1,4 +1,4 @@
-// Copyright (c) 2007-2020, Grigory Buteyko aka Hrissan
+// Copyright (c) 2007-2023, Grigory Buteyko aka Hrissan
 // Licensed under the MIT License. See LICENSE for details.
 
 #pragma once
@@ -49,11 +49,11 @@
     #define CRAB_INLINE inline
 #endif
 
-#define CRAB_BRANCH ""
-// No tricks, we wish to be easily includable in header-only mode
+#define CRAB_BRANCH "(branch dev)"
+// No tricks, we wish to be easily included in header-only mode
 
-#define CRAB_VERSION "0.9.2"
-// Not in cmake, we wish to be easily includable in header-only mode
+#define CRAB_VERSION "0.9.3"
+// Not in cmake, we wish to be easily included in header-only mode
 #if CRAB_TLS
 #define CRAB_TLS_STRING "with TLS"
 #else

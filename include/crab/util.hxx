@@ -1,4 +1,4 @@
-// Copyright (c) 2007-2020, Grigory Buteyko aka Hrissan
+// Copyright (c) 2007-2023, Grigory Buteyko aka Hrissan
 // Licensed under the MIT License. See LICENSE for details.
 
 // *Really* minimal PCG32 code / (c) 2014 M.E. O'Neill / pcg-random.org
@@ -8,8 +8,8 @@
 // See http://bjoern.hoehrmann.de/utf-8/decoder/dfa/ for details.
 // Included with tiny modifcations
 
-#include <string.h>
 #include <algorithm>
+#include <cstring>
 #include <iostream>
 #include <limits>
 #include <random>
@@ -132,8 +132,8 @@ CRAB_INLINE uint32_t Random::pcg32_random_r() {
 	// Advance internal state
 	state = oldstate * 6364136223846793005ULL + inc;
 	// Calculate output function (XSH RR), uses old state for max ILP
-	uint32_t xorshifted = uint32_t(((oldstate >> 18u) ^ oldstate) >> 27u);
-	uint32_t rot        = uint32_t(oldstate >> 59u);
+	auto xorshifted = uint32_t(((oldstate >> 18u) ^ oldstate) >> 27u);
+	auto rot        = uint32_t(oldstate >> 59u);
 	return (xorshifted >> rot) | (xorshifted << ((32 - rot) & 31));
 }
 
@@ -172,15 +172,15 @@ CRAB_INLINE std::string Random::printable_string(size_t size) {
 		result[i] = alphabet[value % ALPHABET_SIZE];
 	}
 	return result;
-};
+}
 
 CRAB_INLINE double Random::double_value() {
 	auto hipart = uint64_t(pcg32_random_r()) << 31U;  // leave top bit zero for faster ldexp() on some platforms
-	return ldexp(hipart ^ pcg32_random_r(), -63);
+	return ldexp(double(hipart ^ pcg32_random_r()), -63);
 }
 
 CRAB_INLINE void memzero(void *data, size_t len) {
-	volatile unsigned char *udata = reinterpret_cast<volatile unsigned char *>(data);
+	auto udata = reinterpret_cast<volatile unsigned char *>(data);
 	for (size_t i = 0; i != len; ++i) {
 		udata[i] = 0;
 	}

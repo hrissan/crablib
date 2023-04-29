@@ -1,4 +1,4 @@
-// Copyright (c) 2007-2020, Grigory Buteyko aka Hrissan
+// Copyright (c) 2007-2023, Grigory Buteyko aka Hrissan
 // Licensed under the MIT License. See LICENSE for details.
 
 #include <algorithm>
@@ -86,17 +86,17 @@ struct RunLoopImpl {
 	explicit RunLoopImpl(Handler &&cb) : wake_handler([mcb = std::move(cb)](DWORD bytes, bool result) { mcb(); }) {
 		completion_queue.value = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
 		if (completion_queue.value == NULL)  // Microsoft URODI, this fun returns NULL on error, not an INVALID_HANDLE
-			throw std::runtime_error("RunLoop::RunLoop CreateIoCompletionPort failed");
+			throw std::runtime_error{"RunLoop::RunLoop CreateIoCompletionPort failed"};
 		WSADATA wsaData;
 		if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
-			throw std::runtime_error("RunLoop::RunLoop WSAStartup failed");
+			throw std::runtime_error{"RunLoop::RunLoop WSAStartup failed"};
 	}
 	~RunLoopImpl() { WSACleanup(); }
 };
 
 CRAB_INLINE RunLoop::RunLoop() : impl(new RunLoopImpl([this]() { links.trigger_called_watchers(); })) {
 	if (CurrentLoop::instance)
-		throw std::runtime_error("RunLoop::RunLoop Only single RunLoop per thread is allowed");
+		throw std::runtime_error{"RunLoop::RunLoop Only single RunLoop per thread is allowed"};
 	CurrentLoop::instance = this;
 }
 
@@ -120,7 +120,7 @@ CRAB_INLINE void RunLoop::step(int timeout_ms) {
 		if (ovl == nullptr)  // General problem with queue
 		{
 			if (last != ERROR_TIMEOUT && last != STATUS_TIMEOUT)  // Microsoft URODI
-				throw std::runtime_error("GetQueuedCompletionStatus error");
+				throw std::runtime_error{"GetQueuedCompletionStatus error"};
 			return;  // Timeout is ok
 		}
 		if (completionKey != details::OverlappedKey)
@@ -135,7 +135,7 @@ CRAB_INLINE void RunLoop::step(int timeout_ms) {
 	if (!result) {
 		DWORD last = GetLastError();
 		if (last != ERROR_TIMEOUT && last != STATUS_TIMEOUT)  // Microsoft URODI
-			throw std::runtime_error("GetQueuedCompletionStatusEx error");
+			throw std::runtime_error{"GetQueuedCompletionStatusEx error"};
 		return;  // n is garbage in this case
 	}
 	stats.push_record("GetQueuedCompletionStatusEx", 0, n);
@@ -152,7 +152,7 @@ CRAB_INLINE void RunLoop::step(int timeout_ms) {
 
 CRAB_INLINE void RunLoop::wakeup() {
 	if (PostQueuedCompletionStatus(impl->completion_queue.value, 0, details::OverlappedKey, &impl->wake_handler) == 0)
-		throw std::runtime_error("crab::Watcher::call PostQueuedCompletionStatus failed");
+		throw std::runtime_error{"crab::Watcher::call PostQueuedCompletionStatus failed"};
 }
 
 CRAB_INLINE void RunLoop::cancel() {
@@ -436,7 +436,7 @@ struct TCPAcceptorImpl {
 		}
 		if (CreateIoCompletionPort(
 		        accepted_fd.handle_value(), RunLoop::current()->get_impl()->completion_queue.value, details::OverlappedKey, 0) == NULL)
-			throw std::runtime_error("crab::TCPAcceptor::TCPAcceptor CreateIoCompletionPort failed");
+			throw std::runtime_error{"crab::TCPAcceptor::TCPAcceptor CreateIoCompletionPort failed"};
 
 		DWORD last = 0;
 		SOCKET val = fd.get_value();
@@ -463,7 +463,7 @@ struct TCPAcceptorImpl {
 			return;
 		details::SocketDescriptor tmp(socket(ai_family, ai_socktype, ai_protocol));
 		if (tmp.get_value() == -1)
-			throw std::runtime_error("crab::TCPAcceptor::TCPAcceptor afd = socket failed");
+			throw std::runtime_error{"crab::TCPAcceptor::TCPAcceptor afd = socket failed"};
 		accepted_fd.swap(tmp);
 		DWORD dwBytesRecvd = 0;
 		pending_accept     = true;
@@ -490,14 +490,14 @@ struct TCPAcceptorImpl {
 				continue;               // TODO - test wether async call will be made in this situation
 			if (last == ERROR_IO_PENDING)
 				return;  // Success
-			throw std::runtime_error("crab::TCPAcceptor::TCPAcceptor AcceptEx failed");
+			throw std::runtime_error{"crab::TCPAcceptor::TCPAcceptor AcceptEx failed"};
 		}
 	}
 };
 
 CRAB_INLINE void TCPSocket::accept(TCPAcceptor &acceptor, Address *accepted_addr) {
 	if (acceptor.impl->pending_accept)
-		throw std::logic_error("TCPAcceptor::accept error, forgot if(can_accept())?");
+		throw std::logic_error{"TCPAcceptor::accept error, forgot if(can_accept())?"};
 	close();
 	if (!impl)
 		impl.reset(new TCPSocketImpl(this));
@@ -517,23 +517,23 @@ CRAB_INLINE TCPAcceptor::TCPAcceptor(const Address &address, Handler &&a_handler
     : a_handler(std::move(a_handler)), impl(new TCPAcceptorImpl(this)) {
 	details::SocketDescriptor tmp(socket(address.impl_get_sockaddr()->sa_family, SOCK_STREAM, IPPROTO_TCP));
 	if (tmp.get_value() == -1)
-		std::runtime_error("crab::TCPAcceptor::TCPAcceptor socket() failed");
+		std::runtime_error{"crab::TCPAcceptor::TCPAcceptor socket() failed"};
 	// TODO - implement more settings
 	int set = 1;  // Microsoft URODI
 	if (settings.reuse_addr &&
 	    setsockopt(tmp.get_value(), SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char *>(&set), sizeof(set)) != 0) {
-		throw std::runtime_error("crab::TCPAcceptor::TCPAcceptor setsockopt SO_REUSEADDR failed");
+		throw std::runtime_error{"crab::TCPAcceptor::TCPAcceptor setsockopt SO_REUSEADDR failed"};
 	}
 	impl->ai_family   = address.impl_get_sockaddr()->sa_family;
 	impl->ai_socktype = SOCK_STREAM;
 	impl->ai_protocol = IPPROTO_TCP;
 	if (bind(tmp.get_value(), address.impl_get_sockaddr(), address.impl_get_sockaddr_length()) != 0)
-		throw std::runtime_error("crab::TCPAcceptor::TCPAcceptor bind(s) failed");
+		throw std::runtime_error{"crab::TCPAcceptor::TCPAcceptor bind(s) failed"};
 	if (CreateIoCompletionPort(tmp.handle_value(), RunLoop::current()->get_impl()->completion_queue.value, details::OverlappedKey, 0) ==
 	    NULL)
-		throw std::runtime_error("crab::TCPAcceptor::TCPAcceptor CreateIoCompletionPort failed");
+		throw std::runtime_error{"crab::TCPAcceptor::TCPAcceptor CreateIoCompletionPort failed"};
 	if (listen(tmp.get_value(), SOMAXCONN) == -1)
-		throw std::runtime_error("crab::TCPAcceptor::TCPAcceptor listen failed");
+		throw std::runtime_error{"crab::TCPAcceptor::TCPAcceptor listen failed"};
 	tmp.swap(impl->fd);
 	impl->start_accept();
 }
@@ -549,13 +549,13 @@ CRAB_INLINE TCPAcceptor::~TCPAcceptor() {
 CRAB_INLINE bool TCPAcceptor::can_accept() { return !impl->pending_accept; }
 
 CRAB_INLINE UDPTransmitter::UDPTransmitter(const Address &address, Handler &&cb, const std::string &adapter) : w_handler(std::move(cb)) {
-	throw std::runtime_error("UDPTransmitter not yet implemented on Windows");
+	throw std::runtime_error{"UDPTransmitter not yet implemented on Windows"};
 }
 
 CRAB_INLINE bool UDPTransmitter::write_datagram(const uint8_t *data, size_t count) { return 0; }
 
 CRAB_INLINE UDPReceiver::UDPReceiver(const Address &address, Handler &&cb, const std::string &adapter) : r_handler(std::move(cb)) {
-	throw std::runtime_error("UDPReceiver not yet implemented on Windows");
+	throw std::runtime_error{"UDPReceiver not yet implemented on Windows"};
 }
 
 CRAB_INLINE optional<size_t> UDPReceiver::read_datagram(uint8_t *data, size_t count, Address *peer_addr) { return {}; }

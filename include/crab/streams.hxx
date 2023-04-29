@@ -1,4 +1,4 @@
-// Copyright (c) 2007-2020, Grigory Buteyko aka Hrissan
+// Copyright (c) 2007-2023, Grigory Buteyko aka Hrissan
 // Licensed under the MIT License. See LICENSE for details.
 
 #include <algorithm>
@@ -14,7 +14,7 @@ CRAB_INLINE void IStream::read(uint8_t *val, size_t count) {
 	while (count != 0) {
 		size_t rc = read_some(val, count);
 		if (rc == 0)
-			throw std::runtime_error("crab::IStream reading from empty stream");
+			throw std::runtime_error{"crab::IStream reading from empty stream"};
 		val += rc;
 		count -= rc;
 	}
@@ -24,7 +24,7 @@ CRAB_INLINE void OStream::write(const uint8_t *val, size_t count) {
 	while (count != 0) {
 		size_t wc = write_some(val, count);
 		if (wc == 0)
-			throw std::runtime_error("crab::OStream writing to full stream");
+			throw std::runtime_error{"crab::OStream writing to full stream"};
 		val += wc;
 		count -= wc;
 	}
@@ -83,17 +83,17 @@ CRAB_INLINE bool Buffer::read_enough_data(IStream &in, size_t count) {
 
 CRAB_INLINE bool Buffer::peek(uint8_t *val, size_t count) const {
 	// Compiler thinks memcpy can affect "this", local vars greatly help
-	auto rc  = read_count();
-	auto rc2 = read_count2();
-	if (rc + rc2 < count)
+	if (size() < count)
 		return false;
+	auto rc = read_count();
 	auto rp = read_ptr();
 	if (rc >= count) {
 		std::memcpy(val, rp, count);
 		return true;
 	}
+	auto rp2 = read_ptr2();
 	std::memcpy(val, rp, rc);
-	std::memcpy(val + rc, read_ptr2(), count - rc);
+	std::memcpy(val + rc, rp2, count - rc);
 	return true;
 }
 
@@ -179,7 +179,7 @@ size_t Rope::write_to(OStream &out, size_t max_count) {
     count -= rc;
     if (count == 0)
         return;
-    throw std::runtime_error("Buffer overflow");
+    throw std::runtime_error{"Buffer overflow"};
 }
 
 void Buffer::write(const char *val, size_t count) {
@@ -306,7 +306,7 @@ public:
         if (size < BUFFER_SIZE / 4) {  // Often
             buffer_size = raw_stream->read_some(buffer, BUFFER_SIZE);
             if (buffer_size == 0)
-                throw std::runtime_error("IStreamRaw underflow");
+                throw std::runtime_error{"IStreamRaw underflow"};
             std::memcpy(data, buffer, size);
             buffer += size;
             buffer_size -= size;
@@ -316,7 +316,7 @@ public:
         while (true) {
             size_t cou = raw_stream->read_some(data, size);
             if (cou == 0)
-                throw std::runtime_error("IStreamRaw underflow");
+                throw std::runtime_error{"IStreamRaw underflow"};
             size -= cou;
             data += cou;
             if (size == 0)

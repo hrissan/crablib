@@ -3,7 +3,7 @@
 // Distributed under the Boost Software License, Version 1.0. (See accompanying
 // file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
 
-// Copyright (c) 2007-2020, Grigory Buteyko aka Hrissan
+// Copyright (c) 2007-2023, Grigory Buteyko aka Hrissan
 // Licensed under the MIT License. See LICENSE for details.
 
 #include <cctype>
@@ -65,7 +65,7 @@ CRAB_INLINE QueryParser::State QueryParser::consume_end() {
 		persist_pair();
 		return KEY;
 	default:
-		throw std::logic_error("Invalid query parser state");
+		throw std::logic_error{"Invalid query parser state"};
 	}
 }
 
@@ -157,7 +157,7 @@ CRAB_INLINE QueryParser::State QueryParser::consume(char input) {
 		return VALUE;
 	}
 	default:
-		throw std::logic_error("Invalid query parser state");
+		throw std::logic_error{"Invalid query parser state"};
 	}
 }
 
@@ -212,7 +212,7 @@ CRAB_INLINE CookieParser::State CookieParser::consume(char input) {
 		value_.push_back(input);
 		return VALUE;
 	default:
-		throw std::logic_error("Invalid cookie parser state");
+		throw std::logic_error{"Invalid cookie parser state"};
 	}
 }
 
@@ -260,16 +260,16 @@ CRAB_INLINE URIParser::State URIParser::consume(char input) {
 		return SCHEME;
 	case SCHEME_SEP1:
 		if (input != '/')
-			throw std::runtime_error("Invalid URI parser state: '/' expected after scheme");
+			throw std::runtime_error{"Invalid URI parser state: '/' expected after scheme"};
 		return SCHEME_SEP2;
 	case SCHEME_SEP2:
 		if (input != '/')
-			throw std::runtime_error("Invalid URI parser state: '//' expected after scheme");
+			throw std::runtime_error{"Invalid URI parser state: '//' expected after scheme"};
 		return HOST;
 	case HOST:
 		if (input == '@') {
 			if (user_info_assigned)
-				throw std::runtime_error("URI parser - second @ is prohibited");
+				throw std::runtime_error{"URI parser - second @ is prohibited"};
 			user_info_assigned = true;
 			uri.user_info      = url_decode(uri.host);
 			uri.host.clear();
@@ -284,7 +284,7 @@ CRAB_INLINE URIParser::State URIParser::consume(char input) {
 	case PORT:
 		if (input == '@') {
 			if (user_info_assigned)
-				throw std::runtime_error("URI parser - second @ is prohibited");
+				throw std::runtime_error{"URI parser - second @ is prohibited"};
 			user_info_assigned = true;
 			uri.user_info      = url_decode(uri.host + ':' + uri.port);
 			uri.host.clear();
@@ -331,14 +331,14 @@ CRAB_INLINE URIParser::State URIParser::consume(char input) {
 			cur_path_.push_back(percent1_hex_sym);
 			cur_path_.push_back(input);
 		} else
-			cur_path_.push_back(static_cast<uint8_t>(from_hex_digit(percent1_hex_sym) * 16 + digit2));
+			cur_path_.push_back(static_cast<char>(static_cast<uint8_t>(from_hex_digit(percent1_hex_sym) * 16 + digit2)));
 		return PATH;
 	}
 	case QUERY:
 		uri.query.push_back(input);
 		return QUERY;
 	default:
-		throw std::logic_error("Invalid URI parser state at main consume");
+		throw std::logic_error{"Invalid URI parser state at main consume"};
 	}
 }
 
@@ -364,7 +364,7 @@ CRAB_INLINE URIParser::State URIParser::consume_end() {
 	case QUERY:
 		return GOOD;
 	default:
-		throw std::runtime_error("Invalid URI parser state at consume_last");
+		throw std::runtime_error{"Invalid URI parser state at consume_last"};
 	}
 }
 

@@ -1,4 +1,4 @@
-// Copyright (c) 2007-2020, Grigory Buteyko aka Hrissan
+// Copyright (c) 2007-2023, Grigory Buteyko aka Hrissan
 // Licensed under the MIT License. See LICENSE for details.
 
 #include <algorithm>
@@ -68,13 +68,13 @@ CRAB_INLINE bool Signal::running_under_debugger() { return false; }
 
 CRAB_INLINE RunLoop::RunLoop() : impl(new ev::dynamic_loop{}) {
 	if (CurrentLoop::instance)
-		throw std::runtime_error("RunLoop::RunLoop Only single RunLoop per thread is allowed");
+		throw std::runtime_error{"RunLoop::RunLoop Only single RunLoop per thread is allowed"};
 	CurrentLoop::instance = this;
 }
 
 CRAB_INLINE RunLoop::RunLoop(DefaultLoop) : impl(new ev::default_loop{}) {
 	if (CurrentLoop::instance)
-		throw std::runtime_error("RunLoop::RunLoop Only single RunLoop per thread is allowed");
+		throw std::runtime_error{"RunLoop::RunLoop only single RunLoop per thread is allowed"};
 	CurrentLoop::instance = this;
 }
 

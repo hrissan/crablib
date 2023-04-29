@@ -1,4 +1,4 @@
-// Copyright (c) 2007-2020, Grigory Buteyko aka Hrissan
+// Copyright (c) 2007-2023, Grigory Buteyko aka Hrissan
 // Licensed under the MIT License. See LICENSE for details.
 
 // Approach to removing arbitrary element from heap by Jim Mischel
@@ -39,7 +39,7 @@ public:
 
 	T &front() {
 		if (health_checks && (storage.size() <= 1 || (at(1)->*Index).heap_index != 1))
-			throw std::logic_error("Heap Index corrupted at front()");
+			throw std::logic_error{"Heap Index corrupted at front()"};
 		return *at(1);
 	}
 
@@ -47,7 +47,7 @@ public:
 		if ((node.*Index).heap_index != 0)
 			return false;
 		storage.push_back(&node);
-		moveup(storage.size() - 1);
+		move_up(storage.size() - 1);
 		check_heap();
 		return true;
 	}
@@ -56,9 +56,9 @@ public:
 		if (ind == 0)
 			return 0;
 		if (health_checks && ind >= storage.size())
-			throw std::logic_error("Heap Index corrupted at erase() 1");
+			throw std::logic_error{"Heap Index corrupted at erase() 1"};
 		if (health_checks && at(ind) != &node)
-			throw std::logic_error("Heap Index corrupted at erase() 2");
+			throw std::logic_error{"Heap Index corrupted at erase() 2"};
 		(node.*Index).heap_index = 0;
 		at(ind)                  = storage.back();
 		storage.pop_back();
@@ -70,14 +70,14 @@ public:
 	void pop_front() {
 		size_t ind = (at(1)->*Index).heap_index;
 		if (health_checks && ind != 1)
-			throw std::logic_error("Heap Index corrupted at pop_front() 1");
+			throw std::logic_error{"Heap Index corrupted at pop_front() 1"};
 		if (health_checks && 1 >= storage.size())
-			throw std::logic_error("Heap Index corrupted at pop_front() 2");
+			throw std::logic_error{"Heap Index corrupted at pop_front() 2"};
 		(at(1)->*Index).heap_index = 0;
 		at(1)                      = storage.back();
 		storage.pop_back();
 		if (1 < storage.size())
-			movedown(1);
+			move_down(1);
 		check_heap();
 	}
 
@@ -86,21 +86,21 @@ private:
 		if (!health_checks)
 			return;
 		if (storage.at(0))
-			throw std::logic_error("Heap Violation 1");
+			throw std::logic_error{"Heap Violation 1"};
 		if (!std::is_heap(storage.begin() + 1, storage.end(), [](T *a, T *b) -> bool { return Pred{}(*a, *b); }))
-			throw std::logic_error("Heap Violation 2");
+			throw std::logic_error{"Heap Violation 2"};
 		for (size_t ind = 1; ind < storage.size(); ++ind)
 			if ((storage.at(ind)->*Index).heap_index != ind)
-				throw std::logic_error("Heap Violation 3");
+				throw std::logic_error{"Heap Violation 3"};
 	}
 	T *&at(size_t ind) { return health_checks ? storage.at(ind) : storage[ind]; }
 	void adjust(size_t ind) {
 		if (ind > 1 && !Pred{}(*at(ind), *at(ind / 2)))
-			moveup(ind);
+			move_up(ind);
 		else
-			movedown(ind);
+			move_down(ind);
 	}
-	void movedown(size_t ind) {
+	void move_down(size_t ind) {
 		const size_t size = storage.size();
 		T *data           = at(ind);
 
@@ -125,7 +125,7 @@ private:
 		at(ind)                      = data;
 		(at(ind)->*Index).heap_index = ind;
 	}
-	void moveup(size_t ind) {
+	void move_up(size_t ind) {
 		T *data = at(ind);
 
 		while (true) {

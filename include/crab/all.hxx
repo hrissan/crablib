@@ -1,4 +1,4 @@
-// Copyright (c) 2007-2020, Grigory Buteyko aka Hrissan
+// Copyright (c) 2007-2023, Grigory Buteyko aka Hrissan
 // Licensed under the MIT License. See LICENSE for details.
 
 #pragma once
@@ -12,6 +12,7 @@
 #include "util.hxx"
 
 #include "crypto/base64.hxx"
+#include "crypto/crc32.hxx"
 #include "crypto/md5.hxx"
 #include "crypto/sha1.hxx"
 

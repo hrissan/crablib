@@ -1,4 +1,4 @@
-// Copyright (c) 2007-2020, Grigory Buteyko aka Hrissan
+// Copyright (c) 2007-2023, Grigory Buteyko aka Hrissan
 // Licensed under the MIT License. See LICENSE for details.
 
 #include <algorithm>
@@ -20,30 +20,31 @@ CRAB_INLINE void PerformanceStats::push_record(const char *event_type_literal, i
 }
 
 CRAB_INLINE void PerformanceStats::print_records(std::ostream &out) {
-	for (const auto &p : get_records()) {
+	for (const auto &p : performance) {
 		auto mksec = std::chrono::duration_cast<std::chrono::microseconds>(p.tm.time_since_epoch()).count();
 		auto sec   = mksec / 1000000;
 		out << "* " << sec << "." << mksec % 1000000 << " " << p.event_type << " " << p.count << std::endl;
 	}
+	out << "---- total records " << performance.size() << std::endl;
 	clear_records();
 }
 
 CRAB_INLINE Address::Address(const std::string &ip, uint16_t port) {
 	if (!parse(*this, ip, port))
 		if (!parse(*this, ip, port))
-			throw std::runtime_error("Address failed to parse, numeric_host='" + ip + "'");
+			throw std::runtime_error{"Address failed to parse, numeric_host='" + ip + "'"};
 }
 
 CRAB_INLINE Address::Address(const std::string &ip_port) {
 	if (!parse(*this, ip_port))
-		throw std::runtime_error("Address failed to parse, must be <ip>:<port> numeric_host_port='" + ip_port + "'");
+		throw std::runtime_error{"Address failed to parse, must be <ip>:<port> numeric_host_port='" + ip_port + "'"};
 }
 
 CRAB_INLINE bool Address::parse(Address &address, const std::string &ip_port) {
 	size_t pos = ip_port.find(':');
 	if (pos == std::string::npos)
 		return false;
-	uint16_t port = integer_cast<uint16_t>(ip_port.substr(pos + 1));
+	auto port = integer_cast<uint16_t>(ip_port.substr(pos + 1));
 	return parse(address, ip_port.substr(0, pos), port);
 }
 
@@ -145,8 +146,7 @@ CRAB_INLINE void RunLoop::cancel() {
 }
 
 CRAB_INLINE void RunLoop::run() {
-	links.quit = false;
-	links.now  = steady_clock::now();
+	links.now = steady_clock::now();
 	while (!links.quit) {
 		if (!links.triggered_callables.empty()) {
 			Callable &callable = links.triggered_callables.front();
@@ -174,9 +174,10 @@ CRAB_INLINE void RunLoop::run() {
 		links.now = steady_clock::now();
 		// Runloop optimizes # of calls to now() because those can be slow
 	}
+	links.quit = false;
 }
 
-CRAB_INLINE steady_clock::time_point RunLoop::now() { return links.now; }
+CRAB_INLINE steady_clock::time_point RunLoop::now() const { return links.now; }
 
 CRAB_INLINE Thread::Thread(std::function<void()> &&fun)
 #if __cplusplus >= 201402L
@@ -215,11 +216,11 @@ CRAB_INLINE void Thread::cancel() {
 
 CRAB_INLINE void Timer::once(double delay_seconds) {
 	const auto now = RunLoop::current()->links.now;
-	// We do not wish to overflow time point. Observation - chrono is a disaster, will do manually
+	// We do not wish to overflow time point. Observation - std::chrono is a disaster, will do manually
 	// once(double) is slower anyway, than once(duration), so couple extra checks
 	// Normally this code would be enough
 	// once_at(now + std::chrono::duration_cast<steady_clock::duration>(
-	//               std::chrono::duration<double>(after_seconds)));
+	//               std::chrono::duration<double>(delay_seconds)));
 	if (delay_seconds <= 0) {
 		once_at(now);
 		return;
@@ -398,7 +399,7 @@ CRAB_INLINE Address DNSResolver::sync_resolve_single(const std::string &host_nam
 	arr = sync_resolve(host_name, port, false, true);
 	if (!arr.empty())
 		return arr.front();
-	throw std::runtime_error("Failed to resolve host '" + host_name + "'");
+	throw std::runtime_error{"Failed to resolve host '" + host_name + "'"};
 }
 
 }  // namespace crab

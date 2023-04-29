@@ -1,4 +1,4 @@
-// Copyright (c) 2007-2020, Grigory Buteyko aka Hrissan
+// Copyright (c) 2007-2023, Grigory Buteyko aka Hrissan
 // Licensed under the MIT License. See LICENSE for details.
 
 #include <array>
@@ -199,6 +199,13 @@ struct HeapElement {
 	bool operator<(const HeapElement &other) const { return value < other.value; }
 };
 
+struct HeapElementSteadyTimer {
+	crab::IntrusiveHeapIndex heap_index;
+	std::chrono::steady_clock::time_point value{};
+
+	bool operator<(const HeapElementSteadyTimer &other) const { return value < other.value; }
+};
+
 // typical benchmark
 // skiplist insert of 1000000 hashes, inserted 632459, seconds=1.486
 // skiplist get of 1000000 hashes, hops 37.8428, seconds=1.428
@@ -279,12 +286,21 @@ void benchmark_sets() {
 	std::vector<HeapElement *> el_to_erase;
 
 	std::map<uint64_t, HeapElement> heap_storage;
-	for (auto s : to_insert)
-		el_to_insert.push_back(&heap_storage[s]);
-	for (auto s : to_count)
-		el_to_count.push_back(&heap_storage[s]);
-	for (auto s : to_erase)
-		el_to_erase.push_back(&heap_storage[s]);
+	for (auto s : to_insert) {
+		auto &v = heap_storage[s];
+		v.value = s;
+		el_to_insert.push_back(&v);
+	}
+	for (auto s : to_count) {
+		auto &v = heap_storage[s];
+		v.value = s;
+		el_to_count.push_back(&v);
+	}
+	for (auto s : to_erase) {
+		auto &v = heap_storage[s];
+		v.value = s;
+		el_to_erase.push_back(&v);
+	}
 
 	crab::IntrusiveHeap<HeapElement, &HeapElement::heap_index, std::less<HeapElement>> int_heap;
 	int_heap.reserve(1000000);
@@ -294,6 +310,40 @@ void benchmark_sets() {
 		if (int_heap.empty())
 			return 0;
 		int_heap.pop_front();
+		return 1;
+	});
+
+	std::vector<HeapElementSteadyTimer *> el_to_insert_st;
+	std::vector<HeapElementSteadyTimer *> el_to_count_st;
+	std::vector<HeapElementSteadyTimer *> el_to_erase_st;
+
+	std::map<uint64_t, HeapElementSteadyTimer> heap_storage_st;
+	for (auto s : to_insert) {
+		auto &v = heap_storage_st[s];
+		v.value = std::chrono::steady_clock::time_point{std::chrono::steady_clock::duration{s}};
+		el_to_insert_st.push_back(&v);
+	}
+	for (auto s : to_count) {
+		auto &v = heap_storage_st[s];
+		v.value = std::chrono::steady_clock::time_point{std::chrono::steady_clock::duration{s}};
+		el_to_count_st.push_back(&v);
+	}
+	for (auto s : to_erase) {
+		auto &v = heap_storage_st[s];
+		v.value = std::chrono::steady_clock::time_point{std::chrono::steady_clock::duration{s}};
+		el_to_erase_st.push_back(&v);
+	}
+
+	crab::IntrusiveHeap<HeapElementSteadyTimer, &HeapElementSteadyTimer::heap_index, std::less<HeapElementSteadyTimer>> steady_timer_heap;
+	int_heap.reserve(1000000);
+	benchmark_op("OurHeap ST insert ", el_to_insert_st,
+	    [&](HeapElementSteadyTimer *sample) -> size_t { return steady_timer_heap.insert(*sample); });
+	benchmark_op(
+	    "OurHeap ST erase ", el_to_erase_st, [&](HeapElementSteadyTimer *sample) -> size_t { return steady_timer_heap.erase(*sample); });
+	benchmark_op("OurHeap ST pop_front ", el_to_insert_st, [&](HeapElementSteadyTimer *sample) -> size_t {
+		if (steady_timer_heap.empty())
+			return 0;
+		steady_timer_heap.pop_front();
 		return 1;
 	});
 

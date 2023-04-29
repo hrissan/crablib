@@ -1,4 +1,4 @@
-// Copyright (c) 2007-2020, Grigory Buteyko aka Hrissan
+// Copyright (c) 2007-2023, Grigory Buteyko aka Hrissan
 // Licensed under the MIT License. See LICENSE for details.
 
 #pragma once
@@ -72,9 +72,9 @@ public:
 	using OStream::write_some;  // Version for other char types
 
 	void clear() { read_pos = write_pos = 0; }
-	void clear(size_t newsize) {
+	void clear(size_t new_size) {
 		clear();
-		impl.resize(newsize);
+		impl.resize(new_size);
 	}
 
 	bool full() const { return read_pos + impl.size() == write_pos; }

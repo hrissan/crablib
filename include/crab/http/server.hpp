@@ -1,4 +1,4 @@
-// Copyright (c) 2007-2020, Grigory Buteyko aka Hrissan
+// Copyright (c) 2007-2023, Grigory Buteyko aka Hrissan
 // Licensed under the MIT License. See LICENSE for details.
 
 #pragma once
@@ -29,7 +29,7 @@ namespace http {
 
 class ErrorAuthorization : public std::runtime_error {
 public:
-	explicit ErrorAuthorization(std::string realm) : std::runtime_error("Error Authorization Required"), realm(std::move(realm)) {}
+	explicit ErrorAuthorization(std::string realm) : std::runtime_error{"Error Authorization Required"}, realm(std::move(realm)) {}
 	std::string realm;
 };
 

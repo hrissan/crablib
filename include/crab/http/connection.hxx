@@ -1,4 +1,4 @@
-// Copyright (c) 2007-2020, Grigory Buteyko aka Hrissan
+// Copyright (c) 2007-2023, Grigory Buteyko aka Hrissan
 // Licensed under the MIT License. See LICENSE for details.
 
 #include <algorithm>
@@ -28,12 +28,12 @@ CRAB_INLINE std::string web_message_create_close_body(const std::string &reason,
 CRAB_INLINE BufferedTCPSocket::BufferedTCPSocket(Handler &&rwd_handler)
     : rwd_handler(std::move(rwd_handler)), sock([this]() { sock_handler(); }), shutdown_timer([this]() { shutdown_timer_handler(); }) {}
 
-CRAB_INLINE void BufferedTCPSocket::close() {
+CRAB_INLINE void BufferedTCPSocket::close(bool with_event) {
+	shutdown_timer.cancel();
 	data_to_write.clear();
 	total_data_to_write  = 0;
 	write_shutdown_asked = false;
-	sock.close();
-	shutdown_timer.cancel();
+	sock.close(with_event);
 }
 
 CRAB_INLINE size_t BufferedTCPSocket::read_some(uint8_t *val, size_t count) {
@@ -145,7 +145,7 @@ CRAB_INLINE ClientConnection::ClientConnection(Handler &&rwd_handler)
 CRAB_INLINE bool ClientConnection::connect(const std::string &h, uint16_t p, const std::string &pr) {
 	close();
 	if (pr != string_view{"http"} && pr != string_view{"https"})
-		throw std::runtime_error("ClientConnection unsupported protocol");
+		throw std::runtime_error{"ClientConnection unsupported protocol"};
 	dns.resolve(h, p, true, false);
 	host     = h;
 	port     = p;
@@ -232,7 +232,7 @@ CRAB_INLINE void ClientConnection::write(WebMessage &&message) {
 	    state == WEB_MESSAGE_HEADER || state == WEB_MESSAGE_BODY || state == WEB_MESSAGE_READY || state == WEB_UPGRADE_RESPONSE_HEADER,
 	    "Connection unexpected write");
 
-	uint32_t masking_key = rnd.pod<uint32_t>();
+	auto masking_key = RunLoop::current()->rnd.pod<uint32_t>();
 	if (message.opcode == WebMessageOpcode::TEXT || message.opcode == WebMessageOpcode::BINARY) {
 		// invariant(!writing_web_message_body, "Sending new message before previous one finished"); Future streaming
 		// plug
@@ -269,7 +269,7 @@ CRAB_INLINE void ClientConnection::web_socket_upgrade(const RequestHeader &rh) {
 	req.header.sec_websocket_version = "13";
 
 	uint8_t rdata[16]{};
-	rnd.bytes(rdata, sizeof(rdata));
+	RunLoop::current()->rnd.bytes(rdata, sizeof(rdata));
 	req.header.sec_websocket_key = base64::encode(rdata, sizeof(rdata));
 
 	write(std::move(req));
@@ -281,7 +281,7 @@ CRAB_INLINE void ClientConnection::dns_handler(const std::vector<Address> &names
 		rwd_handler();
 		return;
 	}
-	peer_address = names[rnd.pod<size_t>() % names.size()];  // non-zero chance with even single server up
+	peer_address = names[RunLoop::current()->rnd.pod<size_t>() % names.size()];  // non-zero chance with even single server up
 	if (protocol == string_view{"http"}) {
 		if (!sock.connect(peer_address)) {
 			close();
@@ -325,7 +325,7 @@ CRAB_INLINE bool ClientConnection::advance_state() {
 				if (!response_parser.is_good())
 					continue;
 				if (response_parser.req.is_websocket_upgrade())
-					throw std::runtime_error("Unexpected web upgrade header");
+					throw std::runtime_error{"Unexpected web upgrade header"};
 				http_body_parser = BodyParser{response_parser.req.content_length, response_parser.req.transfer_encoding_chunked};
 				state            = RESPONSE_BODY;
 				// Fall through (to correctly handle zero-length body). Next line is understood by GCC
@@ -341,11 +341,11 @@ CRAB_INLINE bool ClientConnection::advance_state() {
 				if (!response_parser.is_good())
 					continue;
 				if (!response_parser.req.is_websocket_upgrade())
-					throw std::runtime_error("Expecting web upgrade header");
+					throw std::runtime_error{"Expecting web upgrade header"};
 				if (response_parser.req.content_length || response_parser.req.transfer_encoding_chunked)
-					throw std::runtime_error("Web upgrade reponse cannot have body");
+					throw std::runtime_error{"Web upgrade reponse cannot have body"};
 				if (response_parser.req.sec_websocket_accept != ResponseHeader::generate_sec_websocket_accept(sec_websocket_key))
-					throw std::runtime_error("Wrong value of 'Sec-WebSocket-Accept' header");
+					throw std::runtime_error{"Wrong value of 'Sec-WebSocket-Accept' header"};
 				wm_header_parser = WebMessageHeaderParser{};
 				wm_body_parser   = WebMessageBodyParser{};
 				state            = WEB_MESSAGE_HEADER;
@@ -389,11 +389,11 @@ CRAB_INLINE bool ClientConnection::advance_state() {
 				}
 				if (!web_message) {
 					if (wm_header_parser.opcode == 0)
-						throw std::runtime_error("Continuation in the first chunk");
+						throw std::runtime_error{"Continuation in the first chunk"};
 					web_message.emplace(static_cast<WebMessageOpcode>(wm_header_parser.opcode), wm_body_parser.body.clear());
 				} else {
 					if (wm_header_parser.opcode != 0)
-						throw std::runtime_error("Non-continuation in the subsequent chunk");
+						throw std::runtime_error{"Non-continuation in the subsequent chunk"};
 					web_message->body += wm_body_parser.body.clear();
 				}
 				if (!wm_header_parser.fin) {
@@ -479,7 +479,7 @@ CRAB_INLINE void ServerConnection::web_socket_upgrade() {
 		return;  // This NOP simplifies state machines of connection users
 	invariant(state == RESPONSE_HEADER, "Connection unexpected write");
 	if (!request_parser.req.is_websocket_upgrade())
-		throw std::runtime_error("Attempt to upgrade non-upgradable connection");
+		throw std::runtime_error{"Attempt to upgrade non-upgradable connection"};
 
 	ResponseHeader response;  // HTTP/1.1, keep-alive
 
@@ -749,11 +749,11 @@ CRAB_INLINE bool ServerConnection::advance_state() {
 				}
 				if (!web_message) {
 					if (wm_header_parser.opcode == 0)
-						throw std::runtime_error("Continuation in the first chunk");
+						throw std::runtime_error{"Continuation in the first chunk"};
 					web_message.emplace(static_cast<WebMessageOpcode>(wm_header_parser.opcode), wm_body_parser.body.clear());
 				} else {
 					if (wm_header_parser.opcode != 0)
-						throw std::runtime_error("Non-continuation in the subsequent chunk");
+						throw std::runtime_error{"Non-continuation in the subsequent chunk"};
 					web_message->body += wm_body_parser.body.clear();
 				}
 				if (!wm_header_parser.fin) {

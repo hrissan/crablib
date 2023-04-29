@@ -1,4 +1,4 @@
-// Copyright (c) 2007-2020, Grigory Buteyko aka Hrissan
+// Copyright (c) 2007-2023, Grigory Buteyko aka Hrissan
 // Licensed under the MIT License. See LICENSE for details.
 
 #pragma once
@@ -17,7 +17,7 @@
 #include "streams.hpp"
 #include "util.hpp"
 
-// We use address_storage structucre in crab::Address
+// We use address_storage structure in crab::Address
 #if CRAB_IMPL_WINDOWS
 #include <winsock2.h>
 #include <ws2tcpip.h>

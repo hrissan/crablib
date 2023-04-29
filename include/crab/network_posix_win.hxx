@@ -1,4 +1,4 @@
-// Copyright (c) 2007-2020, Grigory Buteyko aka Hrissan
+// Copyright (c) 2007-2023, Grigory Buteyko aka Hrissan
 // Licensed under the MIT License. See LICENSE for details.
 
 #include "network_posix.hxx"
@@ -6,7 +6,7 @@
 
 #if CRAB_IMPL_KEVENT || CRAB_IMPL_EPOLL || CRAB_IMPL_LIBEV || CRAB_IMPL_WINDOWS || CRAB_IMPL_CF
 
-// Surprisngly, some code compiles without changes on all 3 systems
+// Surprisingly, some code compiles without changes on all 3 systems
 
 namespace crab {
 

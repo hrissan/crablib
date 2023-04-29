@@ -1,4 +1,4 @@
-// Copyright (c) 2007-2020, Grigory Buteyko aka Hrissan
+// Copyright (c) 2007-2023, Grigory Buteyko aka Hrissan
 // Licensed under the MIT License. See LICENSE for details.
 
 #include <sstream>
@@ -51,9 +51,9 @@ namespace details {
 
 CRAB_INLINE void check(bool cond, const char *msg) {
 	if (!cond) {
-		//	    if (errno == EADDRINUSE)
-		//            throw std::runtime_error(std::string(msg) + " errno= Address In Use");
-		throw std::runtime_error(std::string(msg) + " errno=" + std::to_string(errno) + ", " + strerror(errno));
+		//	    if (errno == EADDRINUSE) - strerror returned crap on older Mac OS X version. Can be removed?
+		//            throw std::runtime_error{std::string(msg) + " errno= Address In Use"};
+		throw std::runtime_error{std::string(msg) + " errno=" + std::to_string(errno) + ", " + strerror(errno)};
 	}
 }
 
@@ -90,9 +90,9 @@ CRAB_INLINE ip_mreqn fill_ip_mreqn(const std::string &adapter) {
 		return mreq;  // By network adapter name
 	Address adapter_address;
 	if (!Address::parse(adapter_address, adapter, 0))
-		throw std::runtime_error("Multicast Adapter must be specified either by interface name or by interface ip-address");
+		throw std::runtime_error{"Multicast Adapter must be specified either by interface name or by interface ip-address"};
 	if (adapter_address.impl_get_sockaddr()->sa_family != AF_INET)
-		throw std::runtime_error("IPv6 multicast not supported yet");
+		throw std::runtime_error{"IPv6 multicast not supported yet"};
 	auto adapter_sa  = reinterpret_cast<const sockaddr_in *>(adapter_address.impl_get_sockaddr());
 	mreq.imr_address = adapter_sa->sin_addr;
 	return mreq;
@@ -107,7 +107,7 @@ CRAB_INLINE bool write_datagram(const FileDescriptor &fd,
 		return false;
 	RunLoop::current()->stats.UDP_SEND_count += 1;
 	RunLoop::current()->stats.push_record("sendto", fd.get_value(), int(count));
-	auto addr      = peer_addr ? peer_addr->impl_get_sockaddr() : 0;
+	auto addr      = peer_addr ? peer_addr->impl_get_sockaddr() : nullptr;
 	auto addr_len  = peer_addr ? peer_addr->impl_get_sockaddr_length() : 0;
 	ssize_t result = ::sendto(fd.get_value(), data, count, details::CRAB_MSG_NOSIGNAL, addr, addr_len);
 	RunLoop::current()->stats.push_record("R(sendto)", fd.get_value(), int(result));
@@ -150,7 +150,7 @@ CRAB_INLINE optional<size_t> read_datagram(const FileDescriptor &fd,
 	    in_addr.impl_get_sockaddr(),
 	    &in_len);
 	if (result > static_cast<ssize_t>(count))  // Can only happen when reading into workaround_buffer
-		result = count;
+		result = static_cast<ssize_t>(count);
 	RunLoop::current()->stats.push_record("R(recvfrom)", fd.get_value(), int(result));
 	if (result < 0) {
 		if (errno == EAGAIN || errno == EWOULDBLOCK) {
@@ -168,7 +168,7 @@ CRAB_INLINE optional<size_t> read_datagram(const FileDescriptor &fd,
 			return {};
 		}
 		// Truncation is not an error, return true so clients continue reading
-		result = count;
+		result = static_cast<ssize_t>(count);
 	}
 	if (peer_addr) {
 		*peer_addr = in_addr;
@@ -190,7 +190,7 @@ constexpr int EVFILT_USER_WAKEUP = 111;
 CRAB_INLINE RunLoop::RunLoop()
     : efd(kqueue(), "crab::RunLoop kqeueu failed"), wake_callable([this]() { links.trigger_called_watchers(); }) {
 	if (CurrentLoop::instance)
-		throw std::runtime_error("RunLoop::RunLoop Only single RunLoop per thread is allowed");
+		throw std::runtime_error{"RunLoop::RunLoop Only single RunLoop per thread is allowed"};
 	struct kevent changes {
 		details::EVFILT_USER_WAKEUP, EVFILT_USER, EV_ADD | EV_CLEAR, 0, 0, nullptr
 	};
@@ -266,7 +266,7 @@ CRAB_INLINE RunLoop::RunLoop()
 	    links.trigger_called_watchers();
     }) {
 	if (CurrentLoop::instance)
-		throw std::runtime_error("RunLoop::RunLoop Only single RunLoop per thread is allowed");
+		throw std::runtime_error{"RunLoop::RunLoop Only single RunLoop per thread is allowed"};
 	details::check(efd.is_valid(), "crab::RunLoop epoll_create1 failed");
 	details::check(wake_fd.is_valid(), "crab::RunLoop eventfd failed");
 	impl_add_callable_fd(wake_fd.get_value(), &wake_callable, true, false);
@@ -296,7 +296,7 @@ CRAB_INLINE void RunLoop::step(int timeout_ms) {
 		auto &ev               = events[i];
 		auto impl              = static_cast<Callable *>(ev.data.ptr);
 		const auto read_events = EPOLLIN | EPOLLERR | EPOLLHUP | EPOLLRDHUP;
-		stats.push_record("  event", ev.data.fd, ev.events);
+		stats.push_record("  event", ev.data.fd, static_cast<int>(ev.events));
 		// Those events will trigger socket close after recv() returns -1 or 0
 		impl->add_pending_callable(ev.events & read_events, ev.events & EPOLLOUT);
 	}
@@ -307,7 +307,7 @@ CRAB_INLINE void RunLoop::wakeup() {
 	details::check(eventfd_write(wake_fd.get_value(), 1) >= 0, "crab::RunLoop wake_fd counter overflow");
 }
 
-CRAB_INLINE Signal::Signal(Handler &&cb, const std::vector<int> &ss)
+CRAB_INLINE Signal::Signal(Handler &&cb, std::vector<int> ss)
     : a_handler([&, cb]() {  // cb = std::move(cb) is C++14, we will keep C++11 compatibility for some time
 	    signalfd_siginfo info{};
 	    while (true) {
@@ -319,7 +319,7 @@ CRAB_INLINE Signal::Signal(Handler &&cb, const std::vector<int> &ss)
 	    }
 	    cb();
     })
-    , signals(ss) {
+    , signals(std::move(ss)) {
 	if (signals.empty()) {
 		signals.push_back(SIGINT);
 		signals.push_back(SIGTERM);
@@ -342,7 +342,7 @@ CRAB_INLINE Signal::~Signal() {
 	sigemptyset(&mask);
 	for (auto s : signals)
 		sigaddset(&mask, s);
-	if (pthread_sigmask(SIG_UNBLOCK, &mask, nullptr) < 0)
+	if (pthread_sigmask(SIG_UNBLOCK, &mask, nullptr) != 0)
 		std::cout << "crab::~Signal restoring pthread_sigmask failed" << std::endl;
 }
 
@@ -377,7 +377,9 @@ CRAB_INLINE TCPSocket::TCPSocket(Handler &&cb) : rwd_handler(std::move(cb)) {}
 
 CRAB_INLINE TCPSocket::~TCPSocket() { close(); }
 
-CRAB_INLINE void TCPSocket::close() {
+CRAB_INLINE void TCPSocket::close(bool with_event) {
+	if (!is_open())
+		return;
 #if CRAB_IMPL_LIBEV
 	io_read.stop();
 	io_write.stop();
@@ -385,6 +387,13 @@ CRAB_INLINE void TCPSocket::close() {
 #endif
 	rwd_handler.cancel_callable();
 	fd.reset();
+	if (with_event) {
+#if CRAB_IMPL_LIBEV
+		closed_event.once(0);
+#else
+		rwd_handler.add_pending_callable(true, false);
+#endif
+	}
 }
 
 CRAB_INLINE void TCPSocket::write_shutdown() {
@@ -456,7 +465,7 @@ CRAB_INLINE bool TCPSocket::connect(const Address &address, const Settings &sett
 
 CRAB_INLINE void TCPSocket::accept(TCPAcceptor &acceptor, Address *accepted_addr) {
 	if (!acceptor.accepted_fd.is_valid())
-		throw std::logic_error("TCPAcceptor::accept error, forgot if(can_accept())?");
+		throw std::logic_error{"TCPAcceptor::accept error, forgot if(can_accept())?"};
 	close();
 	if (accepted_addr)
 		*accepted_addr = acceptor.accepted_addr;
@@ -471,9 +480,8 @@ CRAB_INLINE void TCPSocket::accept(TCPAcceptor &acceptor, Address *accepted_addr
 	} catch (const std::exception &) {
 		// We cannot add to epoll/kevent in TCPAcceptor because we do not have
 		// TCPSocket yet, so we design accept to always succeeds, but trigger event,
-		// so that for use it will appear as socket was immediately disconnected
-		fd.reset();
-		rwd_handler.add_pending_callable(true, false);
+		// so that for user it will appear as socket was immediately disconnected
+		close(true);
 		return;
 	}
 #endif
@@ -488,22 +496,12 @@ CRAB_INLINE size_t TCPSocket::read_some(uint8_t *data, size_t count) {
 	ssize_t result = ::recv(fd.get_value(), data, count, details::CRAB_MSG_NOSIGNAL);
 	RunLoop::current()->stats.push_record("R(recv)", fd.get_value(), int(result));
 	if (result == 0) {  // remote closed
-		close();
-#if CRAB_IMPL_LIBEV
-		closed_event.once(0);
-#else
-		rwd_handler.add_pending_callable(true, false);
-#endif
+		close(true);
 		return 0;
 	}
 	if (result < 0) {
 		if (errno != EAGAIN && errno != EWOULDBLOCK) {  // some REAL error
-			close();
-#if CRAB_IMPL_LIBEV
-			closed_event.once(0);
-#else
-			rwd_handler.add_pending_callable(true, false);
-#endif
+			close(true);
 			return 0;
 		}
 		rwd_handler.can_read = false;
@@ -540,22 +538,12 @@ CRAB_INLINE size_t TCPSocket::read_some(uint8_t *val, size_t count, uint8_t *val
 	ssize_t result = ::recvmsg(fd.get_value(), &msg, details::CRAB_MSG_NOSIGNAL);
 	RunLoop::current()->stats.push_record("R(recv)", fd.get_value(), int(result));
 	if (result == 0) {  // remote closed
-		close();
-#if CRAB_IMPL_LIBEV
-		closed_event.once(0);
-#else
-		rwd_handler.add_pending_callable(true, false);
-#endif
+		close(true);
 		return 0;
 	}
 	if (result < 0) {
 		if (errno != EAGAIN && errno != EWOULDBLOCK) {  // some REAL error
-			close();
-#if CRAB_IMPL_LIBEV
-			closed_event.once(0);
-#else
-			rwd_handler.add_pending_callable(true, false);
-#endif
+			close(true);
 			return 0;
 		}
 		rwd_handler.can_read = false;
@@ -577,12 +565,7 @@ CRAB_INLINE size_t TCPSocket::write_some(const uint8_t *data, size_t count) {
 	RunLoop::current()->stats.push_record("R(send)", fd.get_value(), int(result));
 	if (result < 0) {
 		if (errno != EAGAIN && errno != EWOULDBLOCK) {  // some REAL error
-			close();
-#if CRAB_IMPL_LIBEV
-			closed_event.once(0);
-#else
-			rwd_handler.add_pending_callable(true, false);
-#endif
+			close(true);
 			return 0;
 		}
 		rwd_handler.can_write = false;
@@ -598,38 +581,38 @@ CRAB_INLINE size_t TCPSocket::write_some(const uint8_t *data, size_t count) {
 CRAB_INLINE size_t TCPSocket::write_some(std::deque<Buffer> &data) {
 	if (!fd.is_valid() || !rwd_handler.can_write || data.empty())
 		return 0;
-	enum { IOVEC_COUNT = 8 };
-	struct iovec iovec[IOVEC_COUNT];
+	enum { IOVEC_COUNT = 16 };        // Some tradeoff here
+	struct iovec iovec[IOVEC_COUNT];  // Uninitialized
 	auto iovec_count = 0;
+	size_t count     = 0;
 	for (const auto &d : data) {
 		if (d.read_count()) {
 			iovec[iovec_count].iov_base = const_cast<uint8_t *>(d.read_ptr());  // sendmsg promises not to modify data
 			iovec[iovec_count].iov_len  = d.read_count();
+			count += d.read_count();
 			iovec_count += 1;
+			if (iovec_count >= IOVEC_COUNT)
+				break;
 		}
 		if (d.read_count2()) {
 			iovec[iovec_count].iov_base = const_cast<uint8_t *>(d.read_ptr2());  // sendmsg promises not to modify data
 			iovec[iovec_count].iov_len  = d.read_count2();
+			count += d.read_count2();
 			iovec_count += 1;
+			if (iovec_count >= IOVEC_COUNT)
+				break;
 		}
-		if (iovec_count == IOVEC_COUNT)
-			break;
 	}
 	struct msghdr msg {};
 	msg.msg_iov    = iovec;
 	msg.msg_iovlen = iovec_count;
-	//	RunLoop::current()->stats.SEND_count += 1;
-	//	RunLoop::current()->stats.push_record("send", fd.get_value(), int(count));
+	RunLoop::current()->stats.SEND_count += 1;
+	RunLoop::current()->stats.push_record("sendV", fd.get_value(), int(count));
 	ssize_t result = ::sendmsg(fd.get_value(), &msg, details::CRAB_MSG_NOSIGNAL);
-	//	RunLoop::current()->stats.push_record("R(send)", fd.get_value(), int(result));
+	RunLoop::current()->stats.push_record("R(sendV)", fd.get_value(), int(result));
 	if (result < 0) {
 		if (errno != EAGAIN && errno != EWOULDBLOCK) {  // some REAL error
-			close();
-#if CRAB_IMPL_LIBEV
-			closed_event.once(0);
-#else
-			rwd_handler.add_pending_callable(true, false);
-#endif
+			close(true);
 			return 0;
 		}
 		rwd_handler.can_write = false;
@@ -694,7 +677,7 @@ CRAB_INLINE TCPAcceptor::TCPAcceptor(const Address &address, Handler &&cb, const
 		std::stringstream ss;
 		ss << "crab::TCPAcceptor bind failed, errno=" << errno << ", " << strerror(errno) << ", address=" << address.get_address() << ":"
 		   << address.get_port();
-		throw std::runtime_error(ss.str());
+		throw std::runtime_error{ss.str()};
 	}
 	details::set_nonblocking(tmp.get_value());
 	// Specifying 0 as a second param leads to RST to client on some systems when lots of clients rush in.
@@ -821,7 +804,7 @@ CRAB_INLINE UDPTransmitter::UDPTransmitter(const Address &address, Handler &&cb,
 }
 
 CRAB_INLINE bool UDPTransmitter::write_datagram(const uint8_t *data, size_t count) {
-	return details::write_datagram(fd, rw_handler, data, count, 0);
+	return details::write_datagram(fd, rw_handler, data, count, nullptr);
 }
 
 CRAB_INLINE optional<size_t> UDPTransmitter::read_datagram(uint8_t *data, size_t count, Address *peer_addr) {
@@ -869,7 +852,7 @@ CRAB_INLINE UDPReceiver::UDPReceiver(const Address &address, Handler &&cb, const
 	    ::bind(tmp.get_value(), address.impl_get_sockaddr(), address.impl_get_sockaddr_length()) >= 0, "crab::UDPReceiver bind() failed");
 	if (address.is_multicast()) {
 		if (address.impl_get_sockaddr()->sa_family != AF_INET)
-			throw std::runtime_error("IPv6 multicast not supported yet");
+			throw std::runtime_error{"IPv6 multicast not supported yet"};
 		auto sa = reinterpret_cast<const sockaddr_in *>(address.impl_get_sockaddr());
 		// TODO - handle IPv6 multicast
 		// On Linux, multicast is a bit broken. INADDR_ANY does not mean "any adapter", but "default one"
@@ -904,7 +887,7 @@ CRAB_INLINE optional<size_t> UDPReceiver::read_datagram(uint8_t *data, size_t co
 CRAB_INLINE size_t UDPReceiver::read_datagrams(DatagramBuffer *buffer, size_t buffer_len) {
 	// TODO - optimize with readmmsg
 	if (buffer_len == 0)
-	    return 0;
+		return 0;
 	auto result = details::read_datagram(fd, rw_handler, buffer->data, MAX_DATAGRAM_SIZE, &buffer->peer_addr);
 	if (!result) {
 		return 0;

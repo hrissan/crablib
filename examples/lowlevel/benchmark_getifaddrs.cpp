@@ -1,13 +1,14 @@
-// Copyright (c) 2007-2020, Grigory Buteyko aka Hrissan
+// Copyright (c) 2007-2023, Grigory Buteyko aka Hrissan
 // Licensed under the MIT License. See LICENSE for details.
 
 // This code is based on work of https://gist.github.com/alessandro40/7e24df0a17803b71bbdf
 
 // Answers the following question - will filling UDP buffer return EAGAIN from sendto (expected, allows 100% channel
-// utilisation) Or will simply drop packets (would be disastrous for design)
+// utilisation) Or will simply drop packets (would be disastrous for design of UDP streaming libraries)
 
 // Turns out, on both Linux, behaviour is correct
-// On Mac OSX, no EAGAIN returned, WireShark must be used to investigate dropped packets
+// On Mac OSX, no EAGAIN returned, WireShark must be used to investigate dropped packets.
+// Probably crab with CF backend must be recommended on Mac, unfortunately it is least developed.
 // TODO - test on Windows
 
 #if defined(_WIN32)
