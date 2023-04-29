@@ -6,9 +6,8 @@
 
 - close with event for `TCPSocket` is now publicly accessible
 - `RunLoop` instance now contains public instance of `Random` with the name `rnd`
-- now if you run `RunLoop` again after `cancel`, it will quit immediately
 - some linter warnings removed from code
-- CRC32 and CRC32C added to crypto algorithm
+- CRC32 and CRC32C added to crypto algorithms
 
 ### 0.9.2
 

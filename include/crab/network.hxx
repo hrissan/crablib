@@ -174,6 +174,7 @@ CRAB_INLINE void RunLoop::run() {
 		links.now = steady_clock::now();
 		// Runloop optimizes # of calls to now() because those can be slow
 	}
+	links.quit = false;
 }
 
 CRAB_INLINE steady_clock::time_point RunLoop::now() const { return links.now; }
